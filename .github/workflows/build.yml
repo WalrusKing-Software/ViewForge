@@ -5,9 +5,9 @@ name: build
 
 on:
   push:
-    branches: [develop, "feature/**", "bugfix/**", "chore/**", "docs/**", "refactor/**", "test/**"]
+    branches: [develop, "release/*", "feature/**", "bugfix/**", "chore/**", "docs/**", "refactor/**", "test/**"]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, "release/*", main]
 
 concurrency:
   group: build-${{ github.ref }}

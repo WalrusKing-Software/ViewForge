@@ -1,0 +1,18 @@
+# Gitleaks configuration for ViewForge.
+# Extends the upstream default ruleset. Add allowlist entries here only for known, intentional,
+# non-secret test fixtures so they do not bury real leaks in noise.
+#
+# Run locally:
+#   gitleaks detect --source=. --config=.gitleaks.toml --redact -v
+
+[extend]
+useDefault = true
+
+# When you need to allowlist a known, intentional, non-secret fixture, uncomment the block below
+# and add at least one matcher. Gitleaks rejects an allowlist that declares no checks, so keep at
+# least one of `paths`/`regexes` populated.
+#
+# [allowlist]
+# description = "Intentional, non-secret test fixtures and documentation placeholders"
+# paths   = [ '''samples/.*\.vforge''' ]
+# regexes = [ '''EXAMPLE_[A-Z0-9_]+''' ]

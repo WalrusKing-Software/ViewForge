@@ -10,9 +10,9 @@ name: codegen-verify
 
 on:
   push:
-    branches: [develop, "feature/**"]
+    branches: [develop, "release/*", "feature/**"]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, "release/*", main]
 
 concurrency:
   group: codegen-verify-${{ github.ref }}

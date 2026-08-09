@@ -7,13 +7,17 @@ name: matrix
 on:
   push:
     branches: ["release/**", "hotfix/**"]
+  pull_request:
+    # Cross-OS verification before a release/hotfix lands on main (BRANCHING.md §7). Job contexts
+    # are `cross-os (ubuntu-latest)` etc., required by the protect-main ruleset.
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  cross-os:
     strategy:
       fail-fast: false
       matrix:

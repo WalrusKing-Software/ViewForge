@@ -61,10 +61,12 @@ jobs:
               fi
               ;;
             develop)
-              if [[ "$HEAD" =~ ^(feature|bugfix|chore|docs|refactor|test)/.+ || "$HEAD" =~ $release_re || "$HEAD" =~ $hotfix_re ]]; then
-                echo "OK: '$HEAD' -> 'develop' (work branch or release/hotfix back-merge)."
+              # dependabot/* are Dependabot's dependency-bump branches (.github/dependabot.yml) —
+              # they integrate like work branches and pass the same CI gates.
+              if [[ "$HEAD" =~ ^(feature|bugfix|chore|docs|refactor|test|dependabot)/.+ || "$HEAD" =~ $release_re || "$HEAD" =~ $hotfix_re ]]; then
+                echo "OK: '$HEAD' -> 'develop' (work branch, dependabot, or release/hotfix back-merge)."
               else
-                fail "Only 'feature/*', 'bugfix/*', 'chore/*', 'docs/*', 'refactor/*', 'test/*', or a 'release/*'/'hotfix/*' back-merge may be merged into 'develop' (got head '$HEAD'). spike/* branches must never merge."
+                fail "Only 'feature/*', 'bugfix/*', 'chore/*', 'docs/*', 'refactor/*', 'test/*', 'dependabot/*', or a 'release/*'/'hotfix/*' back-merge may be merged into 'develop' (got head '$HEAD'). spike/* branches must never merge."
               fi
               ;;
             *)
