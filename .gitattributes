@@ -1,0 +1,20 @@
+# Enforce LF line endings across the repo. This matters on Windows where core.autocrlf may be
+# true — shell scripts and CI YAML with CRLF break on Linux runners ("bad interpreter").
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# The Gradle wrapper script must stay LF even on Windows checkouts.
+gradlew text eol=lf
+
+# Binary assets — never normalize.
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.keystore binary
+*.jks binary
