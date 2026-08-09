@@ -1,0 +1,41 @@
+# Primary build gate (PROJECT_PLAN §3.4 "build"): compile, lint, and unit-test on Linux.
+# GitHub copy — runs on the GitHub mirror. The Forgejo copy lives in .forgejo/workflows/build.yml
+# and is what runs on the homelab (Forgejo uses .forgejo/workflows/ exclusively when present).
+name: build
+
+on:
+  push:
+    branches: [develop, "feature/**", "bugfix/**", "chore/**", "docs/**", "refactor/**", "test/**"]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Spotless / ktlint check
+        run: ./gradlew spotlessCheck --no-daemon --stacktrace
+
+      - name: All tests
+        run: ./gradlew allTests --no-daemon --stacktrace
+
+      - name: Assemble
+        run: ./gradlew assemble --no-daemon --stacktrace
