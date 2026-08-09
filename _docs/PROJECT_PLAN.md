@@ -116,7 +116,7 @@ behind a stable SPI so non-Compose packages become possible. See `_docs/ARCHITEC
 | Language | Kotlin (JVM) | Same language as the output; enables sharing the component model between editor and codegen. |
 | UI framework | Compose Multiplatform (desktop/JVM) | The editor renders real Compose — dogfooding gives free WYSIWYG fidelity. |
 | Build | Gradle (Kotlin DSL), multi-module | Standard for KMP; required for the output projects anyway. |
-| JDK | **17+** | Compose Desktop requires JDK 11 minimum due to Skia binding memory management; **17+ is required to package native distributions.** Standardize on 17 to avoid a split. |
+| JDK | **21** (LTS ≥ 17) | Compose Desktop requires JDK 11 minimum due to Skia binding memory management; **17+ is required to package native distributions.** Standardized on 21 (installed toolchain) to avoid a split; pinned in the version catalog. |
 | Serialization | `kotlinx.serialization` (JSON) | Multiplatform-ready, schema-friendly, good default-value handling for forward compat. |
 | Codegen | **KotlinPoet 2.x** (`com.squareup:kotlinpoet`) | The mature, actively maintained Kotlin source generator. Produces structurally valid code rather than string-concatenated guesses. |
 | Concurrency | Kotlin Coroutines + `StateFlow` | Standard; integrates cleanly with Compose state. |

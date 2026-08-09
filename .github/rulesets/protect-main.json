@@ -1,0 +1,43 @@
+{
+  "name": "protect-main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "allowed_merge_methods": ["merge"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "validate-branch-flow" },
+          { "context": "build" },
+          { "context": "codegen-verify" },
+          { "context": "cross-os (ubuntu-latest)" },
+          { "context": "cross-os (windows-latest)" },
+          { "context": "cross-os (macos-latest)" },
+          { "context": "semgrep" },
+          { "context": "gitleaks" }
+        ]
+      }
+    }
+  ]
+}

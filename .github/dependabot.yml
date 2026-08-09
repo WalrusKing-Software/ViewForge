@@ -1,0 +1,31 @@
+# Automated dependency updates. PRs target `develop` (the integration branch — `main` only takes
+# release/hotfix PRs per _docs/BRANCHING.md) and flow through the normal CI gates (build,
+# codegen-verify, semgrep, gitleaks, validate-branch-flow). Nothing merges automatically. The
+# 7-day cooldown skips just-published versions — a compromised release is usually yanked within
+# days.
+#
+# GitHub-only: this is a GitHub feature. Note it runs on the GitHub mirror, so its PRs are
+# transient if/when the filtered mirror force-pushes; treat dependency review as a GitHub-side
+# activity and carry accepted bumps back to Forgejo like any other change.
+#
+# The gradle ecosystem reads gradle/libs.versions.toml (the single version catalog); the
+# build-logic composite build takes its plugin versions from that same catalog, so one entry at /
+# covers both. Version pins live there per CLAUDE.md rule 9.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

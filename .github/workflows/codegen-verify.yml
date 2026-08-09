@@ -1,0 +1,40 @@
+# Codegen verification gate (PROJECT_PLAN §3.4 "codegen-verify"): generated code must actually
+# COMPILE, not merely match a string (CLAUDE.md anti-pattern: "Testing codegen only by string
+# equality"). The golden-file suite in :packages:compose compiles its fixtures in CI.
+#
+# At M0 the package has only a smoke test; this workflow exists so the gate is wired from day one
+# and the real fixtures (M6) drop straight into it.
+#
+# GitHub copy — mirror of .forgejo/workflows/codegen-verify.yml.
+name: codegen-verify
+
+on:
+  push:
+    branches: [develop, "release/*", "feature/**"]
+  pull_request:
+    branches: [develop, "release/*", main]
+
+concurrency:
+  group: codegen-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codegen-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Compose package golden / codegen tests
+        run: ./gradlew :packages:compose:test --no-daemon --stacktrace

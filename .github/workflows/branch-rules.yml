@@ -1,0 +1,75 @@
+name: Branch Rules
+
+# Enforces the branching MODEL that native branch protection cannot: protection rules can require a
+# PR, but they cannot restrict which *source* branch a PR is allowed to come from. This check fails
+# the PR when the head -> base flow is not allowed. Model per _docs/BRANCHING.md / CLAUDE.md:
+#
+#   main        <-  release/x.y.z | hotfix/x.y.z            (releases + urgent fixes to released code)
+#   release/*   <-  develop (the cut) | hotfix/*            (fix into an in-flight release)
+#   develop     <-  feature|bugfix|chore|docs|refactor|test/*   (work branches)
+#                   + release/* | hotfix/* back-merges      (carry release/hotfix fixes back)
+#
+# spike/* is intentionally rejected everywhere — spikes are throwaway and must never merge
+# (BRANCHING.md §2). Adapted from homeflow-forgejo's branch-rules (which had a develop-* train and
+# dependabot branches ViewForge does not use).
+#
+# GitHub copy — identical to the Forgejo copy (pure bash, no marketplace actions).
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/*'
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  validate-branch-flow:
+    name: validate-branch-flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce source -> target branch policy
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          echo "Pull request: '$HEAD'  ->  '$BASE'"
+          fail() { echo "::error::$1"; exit 1; }
+
+          # release/x.y.z or hotfix/x.y.z, optional 'v' prefix and optional pre-release suffix
+          # (e.g. release/0.3.0, release/v0.3.0, hotfix/0.3.1, release/v0.4.0-alpha-1).
+          release_re='^release/v?[0-9]+\.[0-9]+\.[0-9]+(-.+)?$'
+          hotfix_re='^hotfix/v?[0-9]+\.[0-9]+\.[0-9]+(-.+)?$'
+
+          case "$BASE" in
+            main)
+              if [[ "$HEAD" =~ $release_re || "$HEAD" =~ $hotfix_re ]]; then
+                echo "OK: '$HEAD' -> 'main' (release or hotfix)."
+              else
+                fail "Only 'release/x.y.z' or 'hotfix/x.y.z' branches may be merged into 'main' (got head '$HEAD'). main must always reflect the latest stable release."
+              fi
+              ;;
+            release/*)
+              if [[ "$HEAD" == "develop" || "$HEAD" =~ ^hotfix/.+ ]]; then
+                echo "OK: '$HEAD' -> '$BASE' (release cut from develop, or hotfix into an open release)."
+              else
+                fail "Only 'develop' (the release cut) or 'hotfix/*' (a fix into an in-flight release) may be merged into '$BASE' (got head '$HEAD')."
+              fi
+              ;;
+            develop)
+              # dependabot/* are Dependabot's dependency-bump branches (.github/dependabot.yml) —
+              # they integrate like work branches and pass the same CI gates.
+              if [[ "$HEAD" =~ ^(feature|bugfix|chore|docs|refactor|test|dependabot)/.+ || "$HEAD" =~ $release_re || "$HEAD" =~ $hotfix_re ]]; then
+                echo "OK: '$HEAD' -> 'develop' (work branch, dependabot, or release/hotfix back-merge)."
+              else
+                fail "Only 'feature/*', 'bugfix/*', 'chore/*', 'docs/*', 'refactor/*', 'test/*', 'dependabot/*', or a 'release/*'/'hotfix/*' back-merge may be merged into 'develop' (got head '$HEAD'). spike/* branches must never merge."
+              fi
+              ;;
+            *)
+              echo "No branch-flow rule defined for base '$BASE'; nothing to enforce."
+              ;;
+          esac

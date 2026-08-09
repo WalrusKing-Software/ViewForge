@@ -178,7 +178,9 @@ conflate the two.
 
 - Compose Desktop requires **JDK 11+** due to memory management in the Skia bindings.
 - **JDK 17+ is required to package native distributions.**
-- Standardize on **JDK 17** for both development and CI to avoid a split-toolchain situation.
+- Standardize on **JDK 21** (an LTS ≥ 17) for both development and CI to avoid a split-toolchain
+  situation. Pinned in `gradle/libs.versions.toml` (`jdk = "21"`) and applied via `jvmToolchain`
+  in the `viewforge.kotlin-library` convention plugin (M0).
 - If Jewel is adopted for IDE-style chrome, it requires the **JetBrains Runtime (JBR)** specifically
   rather than a stock JDK — a real constraint on the build and distribution pipeline. Decide before
   adopting, not after.
