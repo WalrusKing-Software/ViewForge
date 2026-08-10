@@ -4,7 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import viewforge.model.Node
+import viewforge.model.NodeId
 import viewforge.model.Theme
 
 /**
@@ -17,9 +19,9 @@ import viewforge.model.Theme
  */
 object ComposeRenderer {
     @Composable
-    fun RenderScreen(root: Node, theme: Theme, dark: Boolean) {
+    fun RenderScreen(root: Node, theme: Theme, dark: Boolean, instrument: (NodeId) -> Modifier = { Modifier }) {
         MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-            RenderNode(root, RenderContext(theme = theme, dark = dark))
+            RenderNode(root, RenderContext(theme = theme, dark = dark, instrument = instrument))
         }
     }
 }
