@@ -9,3 +9,9 @@ dependencies {
     api(projects.core.model)
     implementation(libs.kotlinx.serialization.json)
 }
+
+// Expose the repo-root samples/ directory to tests via an absolute path, so the fixture load test
+// works regardless of the test's working directory.
+tasks.withType<Test>().configureEach {
+    systemProperty("viewforge.samplesDir", rootProject.file("samples").absolutePath)
+}
