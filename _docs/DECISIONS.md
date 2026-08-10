@@ -237,6 +237,62 @@ checklist rather than left to memory. Agents must be told to branch from `develo
 
 ---
 
+## ADR-013 — The `@Composable` renderer seam lives in `editor/canvas`, not `core/spi`
+
+**Status:** Accepted
+
+**Context.** ARCHITECTURE §6.2 sketches `ComponentRenderer` alongside the other SPI interfaces in
+`core/spi`. But a renderer that draws real Compose must be `@Composable`, and `@Composable` is a
+Compose type — putting it in `core/spi` would violate the non-negotiable rule that `core` never
+depends on Compose (CLAUDE.md rule 1, ADR-007), which an architecture test is meant to enforce. The
+docs already flag the split ("only the renderer half needs the framework"); M2 (the first UI code)
+forced the question of *where* that half lives.
+
+**Decision.** Keep `core/spi` Compose-free (schema/data only, still just a marker through M2). The
+Compose-typed rendering seam is a tiny `fun interface CanvasRenderer { @Composable fun Render(root:
+Node) }` in `editor/canvas`. The actual walk and per-component renderers live in `packages/compose`
+(`ComposeRenderer` / `RenderNode`). `:app` — the one module allowed to name the Compose package
+(ARCHITECTURE §3) — binds the two in `Main.kt`.
+
+**Rationale.** The editor drives rendering through a type it owns, and never imports the Compose
+package. `packages/compose` need not depend on the editor (avoiding a wrong-direction/cyclic
+dependency), because `:app` does the wiring. One implementation before one abstraction (ADR-007): no
+component/renderer *registry* SPI is introduced until it is actually needed (M3+), so the seam stays
+a single function.
+
+**Rejected.** (a) A `@Composable` interface in `core/spi` — impossible without a Compose dependency
+in core. (b) A registry interface in `editor/canvas` implemented by `packages/compose` — makes the
+framework package depend on the editor and pre-commits an abstraction shape M3 would rework.
+
+**Consequences.** When a second framework or dynamic package loading arrives (Phase 5), this seam
+grows into the richer `ComponentRenderer` registry the SPI sketch anticipates — revised against a
+real second implementation rather than guessed now. Until then, adding a component is a local change
+in `packages/compose`.
+
+---
+
+## ADR-014 — `@Composable` naming exemption for ktlint
+
+**Status:** Accepted
+
+**Context.** M2 introduced the first Compose UI code. Composable functions are PascalCase by Compose
+convention (they emit UI rather than compute values), which the standard ktlint `function-naming`
+rule rejects, failing `spotlessCheck`.
+
+**Decision.** Exempt `@Composable`-annotated functions from `function-naming` via
+`ktlint_function_naming_ignore_when_annotated_with = Composable`, set as an `editorConfigOverride`
+in the `viewforge.kotlin-library` convention plugin.
+
+**Rationale.** Matches the near-universal Compose convention. The override is set in the convention
+plugin rather than `.editorconfig` because spotless 6.x did not reliably load the property from
+`.editorconfig` in testing; the convention plugin is the authoritative place for lint rules anyway
+(it already pins the ktlint version). Harmless for `core/*`, which has no composables.
+
+**Consequences.** One override key to carry. If spotless/ktlint later load it cleanly from
+`.editorconfig`, this can move there for locality.
+
+---
+
 ## Template
 
 ```markdown
