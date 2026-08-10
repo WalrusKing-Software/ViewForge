@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8XABCDEF",
+  "name": "Demo",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "targets": ["desktop"],
+  "theme": {
+    "colors": {
+      "primary": { "light": "#6750A4", "dark": "#D0BCFF" }
+    }
+  },
+  "screens": [
+    {
+      "id": "scr_01",
+      "name": "HomeScreen",
+      "previewProfile": "desktop_1280x800",
+      "root": {
+        "id": "n_01",
+        "type": "compose.foundation.layout.Column",
+        "props": {
+          "horizontalAlignment": { "kind": "literal", "value": "CenterHorizontally" },
+          "verticalArrangement": { "kind": "literal", "value": "Center" }
+        },
+        "modifiers": [
+          { "id": "m_01", "type": "compose.fillMaxSize", "args": {} },
+          { "id": "m_02", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 24 } } }
+        ],
+        "children": [
+          {
+            "id": "n_02",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Welcome" },
+              "style": { "kind": "theme", "token": "typography.titleLarge" },
+              "color": { "kind": "theme", "token": "colors.primary" }
+            }
+          },
+          {
+            "id": "n_03",
+            "type": "compose.material3.Button",
+            "props": { "onClick": { "kind": "expression", "code": "{ /* TODO */ }" } },
+            "modifiers": [
+              { "id": "m_03", "type": "compose.padding", "args": { "top": { "kind": "literal", "value": 16 } } }
+            ],
+            "slots": {
+              "content": [
+                {
+                  "id": "n_04",
+                  "type": "compose.material3.Text",
+                  "props": { "text": { "kind": "literal", "value": "Get started" } }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

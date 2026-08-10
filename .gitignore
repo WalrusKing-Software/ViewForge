@@ -4,6 +4,9 @@
 !gradle/wrapper/gradle-wrapper.jar
 !src/**/build/
 
+# Kotlin build cache / daemon session dir
+.kotlin/
+
 # IDE
 .idea/
 *.iml
