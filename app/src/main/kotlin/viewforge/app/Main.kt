@@ -7,7 +7,11 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.shell.EditorShell
+import viewforge.editor.state.ComponentCatalog
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.PaletteEntry
+import viewforge.model.Node
+import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.render.ComposeRenderer
 
 /**
@@ -19,7 +23,7 @@ import viewforge.packages.compose.render.ComposeRenderer
  * open/save, packaging, and the rest of the shell arrive in later milestones.
  */
 fun main() = application {
-    val state = EditorState(sampleProject())
+    val state = EditorState(sampleProject(), ComposeCatalog)
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
     // instrumentation the canvas needs for hit-testing (ADR-009); the Compose package obliges,
@@ -29,7 +33,7 @@ fun main() = application {
         CanvasRenderer { root, instrument ->
             ComposeRenderer.RenderScreen(
                 root = root,
-                theme = state.project.theme,
+                theme = state.document.theme,
                 dark = false,
                 instrument = instrument,
             )
@@ -43,4 +47,21 @@ fun main() = application {
     ) {
         EditorShell(state, renderer)
     }
+}
+
+/**
+ * Adapts the Compose package's [ComposeComponents] catalog to the editor's Compose-free
+ * [ComponentCatalog] seam — the same bootstrapping role `Main` plays for `CanvasRenderer` (ADR-013).
+ * The editor consults this for the palette and drop validation without ever naming the package.
+ */
+private object ComposeCatalog : ComponentCatalog {
+    override val palette: List<PaletteEntry> =
+        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) }
+
+    override fun newNode(type: String): Node =
+        (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
+
+    override fun acceptsChildren(type: String): Boolean = ComposeComponents.specFor(type)?.acceptsChildren ?: false
+
+    override fun slotsOf(type: String): List<String> = ComposeComponents.specFor(type)?.slots ?: emptyList()
 }

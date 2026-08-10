@@ -1,7 +1,10 @@
 package viewforge.editor.shell
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,32 +17,59 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.Inspector
+import viewforge.editor.panels.Palette
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.EditorState
 
 /**
- * The top of the editor UI (ARCHITECTURE §2): a title bar, the tree panel, the canvas, and the
- * inspector. The component palette lands at M4 (it's a mutation surface); its rail is a placeholder
- * until then.
+ * The top of the editor UI (ARCHITECTURE §2): a toolbar plus the four working surfaces — palette,
+ * tree, canvas, inspector. From M4 the palette is a real mutation surface and the toolbar carries
+ * undo/redo/duplicate/delete; global keyboard shortcuts are wired at the focusable root.
  *
- * The shell wraps everything in its **own** `MaterialTheme` — the editor's chrome theme, kept
- * deliberately separate from the *project's* theme the canvas renders (FEATURES S3). Conflating the
- * two would let a project's colors restyle the editor.
+ * The shell wraps everything in its **own** `MaterialTheme` — the editor chrome theme, kept
+ * deliberately separate from the *project's* theme the canvas renders (FEATURES S3).
  */
 @Composable
 fun EditorShell(state: EditorState, renderer: CanvasRenderer) {
     MaterialTheme(colorScheme = darkColorScheme()) {
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+
         Surface(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                TitleBar(state)
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .focusRequester(focus)
+                    .focusable()
+                    // Root-level shortcuts use onKeyEvent (bubbling) so a focused text field — palette
+                    // search, inline rename — consumes its keys first and typing is never hijacked.
+                    .onKeyEvent { handleShortcut(it, state) },
+            ) {
+                Toolbar(state)
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
-                    TreePanel(state, Modifier.width(200.dp).fillMaxHeight())
+                    Palette(state, Modifier.width(180.dp).fillMaxHeight())
+                    VerticalDivider()
+                    TreePanel(state, Modifier.width(210.dp).fillMaxHeight())
                     VerticalDivider()
                     EditorCanvas(state, renderer, Modifier.weight(1f).fillMaxHeight())
                     VerticalDivider()
@@ -51,12 +81,82 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer) {
 }
 
 @Composable
-private fun TitleBar(state: EditorState) {
+private fun Toolbar(state: EditorState) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        Text(
-            text = "ViewForge — ${state.project.name}",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.titleSmall,
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "ViewForge — ${state.document.name}",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.weight(1f))
+            ToolbarButton("Undo", enabled = state.canUndo, onClick = state::undo)
+            ToolbarButton("Redo", enabled = state.canRedo, onClick = state::redo)
+            ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
+            ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
+        }
+    }
+}
+
+@Composable
+private fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+        },
+        modifier = Modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * The standard editing shortcuts (S2). Returns true when handled so the event stops here. Ctrl and
+ * Meta are both accepted so the same bindings work on macOS. Delete/Backspace remove the selection;
+ * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo/redo.
+ */
+private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val cmd = event.isCtrlPressed || event.isMetaPressed
+    return when {
+        !cmd && (event.key == Key.Delete || event.key == Key.Backspace) -> {
+            state.deleteSelected()
+            true
+        }
+        cmd && event.key == Key.Z && event.isShiftPressed -> {
+            state.redo()
+            true
+        }
+        cmd && event.key == Key.Z -> {
+            state.undo()
+            true
+        }
+        cmd && event.key == Key.Y -> {
+            state.redo()
+            true
+        }
+        cmd && event.key == Key.D -> {
+            state.duplicateSelected()
+            true
+        }
+        cmd && event.key == Key.C -> {
+            state.copySelected()
+            true
+        }
+        cmd && event.key == Key.X -> {
+            state.cut()
+            true
+        }
+        cmd && event.key == Key.V -> {
+            state.paste()
+            true
+        }
+        else -> false
     }
 }

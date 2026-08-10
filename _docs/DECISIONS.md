@@ -293,6 +293,44 @@ plugin rather than `.editorconfig` because spotless 6.x did not reliably load th
 
 ---
 
+## ADR-015 — Component catalog is an editor-owned seam; tree-panel DnD is M4's drag surface
+
+**Status:** Accepted
+
+**Context.** M4 (mutation & history) needs two framework-dependent facts the editor must not hardcode:
+the list of components to offer in the palette, and, per type, whether it accepts children / which
+slots it has (for drop validation). ARCHITECTURE §6.2 sketches this as `ComponentDefinition` in the
+SPI, but ADR-007/ADR-013 caution against putting framework abstractions in `core` prematurely or
+letting `packages/compose` depend on the editor. M4 also has to pick a *drag* surface for
+reorder/reparent: the canvas (C7, geometric) or the tree/layers panel (T2).
+
+**Decision.** (a) Define a minimal, Compose-free `ComponentCatalog` interface (+ `PaletteEntry`) in
+`editor/state` — palette list, `newNode(type)`, `acceptsChildren`, `slotsOf`. `packages/compose`
+exposes its catalog as plain data (`ComposeComponents`) using its own types; `:app` adapts that to
+`ComponentCatalog`, exactly as it adapts `ComposeRenderer` to `CanvasRenderer` (ADR-013). The catalog
+lists **only the currently renderable component set**, so the palette can never add a node the canvas
+can't draw. (b) M4 ships **tree-panel drag-and-drop** (T2) as the drag surface. Add-via-palette is
+**click-to-insert** into the current selection.
+
+**Rationale.** Keeps `core` free of framework knowledge and preserves the dependency direction
+(package never depends on the editor) without pre-committing the richer `PropDefinition` schema the
+inspector will need — that arrives at M5, revised against real use (ADR-007). Tree DnD gives
+unambiguous, well-defined drop targets (a flat row list with recorded bounds) and correct index
+semantics, where canvas geometric DnD would need drop-zone math that must also survive future
+zoom/pan — more risk for the same command/history core.
+
+**Rejected.** `ComponentDefinition` in `core/spi` now (premature abstraction with one implementation,
+ADR-007). `packages/compose` implementing the editor interface directly (wrong-direction dependency,
+ADR-013). Canvas geometric drag as M4's surface (heavier and riskier; deferred as a focused
+follow-up alongside palette-drag P2a).
+
+**Consequences.** The palette and drop validation are fully data-driven and grow automatically as the
+catalog grows (with the renderer, at M6). Canvas drag-to-reparent (C7) and drag-from-palette (P2a)
+remain open P0 items for a later milestone. When a second framework or the M5 inspector arrives, this
+seam grows into the fuller SPI schema — revised against real use, not guessed.
+
+---
+
 ## Template
 
 ```markdown
