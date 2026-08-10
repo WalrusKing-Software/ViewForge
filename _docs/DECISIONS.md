@@ -504,6 +504,69 @@ scaffold smoke build is a candidate for the M10 packaging matrix.
 
 ---
 
+## ADR-020 — Theming: theme-as-command, project-driven canvas scheme, `AppTheme` codegen
+
+**Status:** Accepted
+
+**Context.** M8 makes the project theme editable (H1), previewable in light/dark (H2), referable from
+props (H3, already shipped M5), rename-propagating (H5), and code-generatable (H4). Four things needed
+pinning: how theme edits enter the undo model, how the *canvas* reflects the theme (not just props that
+name a token), how a token rename reaches every reference, and how the generated `MaterialTheme`
+wrapper is produced and wired.
+
+**Decision.**
+- **Theme edits are commands.** The theme is a top-level `Project.theme`, so a whole-value `SetTheme`
+  (with the ADR-017 `coalesceKey` keyed by token field, so a hex scrub or size stepper is one undo
+  step) sits beside the M4/M5 node commands. Add/remove/rename never coalesce. `EditorState` exposes a
+  small typed API (`setColor`/`addColor`/`renameColor`, and typography/shape/spacing twins); the modal
+  `ThemeEditor` dialog is a pure data-driven view over it, so the canvas updates live because the
+  document is Compose state.
+- **The canvas MaterialTheme is built from the project theme.** `projectColorScheme`/`projectShapes`
+  (pure, in the render layer) overlay the project's Material-named `colors.*`/`shapes.*` tokens onto
+  the Material defaults. This is why editing `colors.primary` recolours even components that never
+  named the token (a Button's container) — the previous wrapper used stock `lightColorScheme()`, so
+  theme edits were invisible unless a prop referenced a token. `canvasDark` (transient view state,
+  toggled from the toolbar) picks which half of each pair to show.
+- **Rename propagation is one command.** `RenameThemeToken` renames the theme map key **and** rewrites
+  every `PropValue.ThemeRef` across all screens via the pure, identity-preserving `Node.mapThemeRefs`,
+  in a single undoable step. It is a no-op (never merges/clobbers) when the source is absent or the
+  target already exists.
+- **Theme codegen is a separate method, assembled by the target exporter.** `ThemeEmitter` builds
+  `Theme.kt` (a `@Composable AppTheme(darkTheme, content)` wrapper) with KotlinPoet's structural API —
+  the code twin of `projectColorScheme`/`projectShapes` (ADR-018), so canvas and compiled output
+  agree. It is exposed as `ComposeCodeGenerator.generateTheme(project)` (returns null for an empty
+  theme), **not** folded into the `CodeGenerator.generate()` SPI, which stays screens-only so the M6
+  golden suite's `generate().single()` contract is untouched. `DesktopExporter` emits `Theme.kt` into
+  the Gradle scaffold and wraps `Main` in `AppTheme` when the theme is non-empty — the same place
+  `Main.kt` and the wrapper already live (ADR-019). Loose-file export (G4) omits it: a pasted screen
+  uses the host project's own theme. Custom (non-Material-named) typography tokens, previously an M6
+  TODO, now emit an inline `TextStyle(...)` mirroring the renderer's `resolveTextStyle`; `spacing`
+  (not a Material concept) generates as a simple `AppSpacing` object (DATA_MODEL §8).
+
+**Rationale.** Routing theme edits through commands gives undo/redo and live update for free and keeps
+CLAUDE.md rule 3 intact. Building the canvas scheme from the theme is what makes H1's "edits apply live
+across the canvas" literally true rather than "true only for token-referenced props". Keeping
+`generate()` screens-only avoids disturbing every existing golden while still delivering H4 through the
+exporter, which is already the home of target-level assembly. Sharing the Material-slot set and color
+literal builder between render and codegen (one pure layer) keeps the two from drifting.
+
+**Rejected.** A per-field theme command set (needless surface for a small structure). Folding the theme
+file into `generate()` (breaks the `.single()` golden contract and the SPI's screens-only shape for no
+gain). A docked theme panel or an inspector tab (competes for the already-tight horizontal space at
+1280 px; a modal keeps the four working surfaces intact). Setting `MaterialTheme.typography` on the
+canvas wrapper (the per-`Text` `resolveTextStyle` path already themes token-referenced text identically
+to the generated output, so a second resolution path would only add drift risk). No schema change was
+needed — `Theme` already carries all four maps, so there is no migration.
+
+**Consequences.** Theming is end-to-end and dogfoodable. Adding a themeable modifier/prop picks up the
+token picker and codegen for free. The `AppTheme` wrapper's property initializers carry KotlinPoet's
+native 2-level continuation indent; normalising that is a future job for the `KotlinFormatter` seam
+(ADR-019), not baked into M8. Removing a token leaves any dangling references to fall back gracefully
+at render/codegen rather than being rewritten — a deliberate choice, since removal (unlike rename) has
+no obvious replacement target.
+
+---
+
 ## Template
 
 ```markdown

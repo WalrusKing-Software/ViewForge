@@ -30,6 +30,16 @@ class ComposeCodeGenerator : CodeGenerator {
         }
     }
 
+    /**
+     * The project theme's `Theme.kt` source (the reusable `AppTheme` wrapper, H4/M8), or null when the
+     * theme defines nothing. Kept off [generate] — which returns screen composables only, the stable
+     * SPI shape the golden suite asserts on — so the theme file is assembled by the target exporter
+     * alongside `Main.kt` and the scaffold (ADR-019). Loose-file export (G4) omits it: a pasted screen
+     * uses the host project's own theme.
+     */
+    fun generateTheme(project: Project): String? =
+        ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion)
+
     /** Generates the source text for a single [screen]; also the unit the golden tests assert on. */
     fun generateScreen(screen: Screen, theme: Theme, sourceName: String, schemaVersion: Int): String {
         val fnName = KotlinIdentifiers.requireFunctionName(screen.name)

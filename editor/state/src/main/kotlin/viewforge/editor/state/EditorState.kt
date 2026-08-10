@@ -9,11 +9,14 @@ import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
 import viewforge.command.RenameNode
+import viewforge.command.RenameThemeToken
 import viewforge.command.SetModifierArg
 import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
 import viewforge.command.SetProp
+import viewforge.command.SetTheme
 import viewforge.model.ChildAddress
+import viewforge.model.ColorPair
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -21,6 +24,9 @@ import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
 import viewforge.model.Screen
+import viewforge.model.Theme
+import viewforge.model.ThemeCategory
+import viewforge.model.TypographyToken
 import viewforge.model.Ulid
 import viewforge.model.findById
 import viewforge.model.locate
@@ -58,6 +64,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     val activeScreen: Screen?
         get() = document.screens.firstOrNull { it.id == activeScreenId } ?: document.screens.firstOrNull()
+
+    /**
+     * Whether the canvas previews the project theme's **dark** values (H2). Transient view state, not
+     * part of the document — the theme stores both light and dark; this only picks which half the
+     * canvas shows. The editor chrome's own theme is separate (FEATURES S3).
+     */
+    var canvasDark: Boolean by mutableStateOf(false)
+        private set
 
     /**
      * The selected node's id, or null. Shared, observable state so canvas and tree stay in sync (T1).
@@ -262,6 +276,100 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun setModifierArg(nodeId: NodeId, modifierId: String, key: String, value: PropValue?) {
         val screen = activeScreen ?: return
         execute(SetModifierArg(screen.id, nodeId, modifierId, key, value), selectAfter = selectedId)
+    }
+
+    // --- theme editing (M8) -----------------------------------------------------------------------
+
+    /** The project theme the editor edits and the canvas renders (H1). */
+    val theme: Theme get() = document.theme
+
+    /** Toggle the canvas between the theme's light and dark values (H2). View state, not an edit. */
+    fun toggleCanvasDark() {
+        canvasDark = !canvasDark
+    }
+
+    /**
+     * Apply a whole-theme edit through history (undoable, live). [coalesceKey] collapses a run of edits
+     * to the *same* token field (a hex scrub, a size stepper) into one undo step (ADR-017); null — used
+     * by add/remove/rename — never coalesces, so structural theme changes stay discrete.
+     */
+    private fun editTheme(coalesceKey: Any?, label: String, transform: (Theme) -> Theme) {
+        execute(SetTheme(transform(theme), coalesceKey, label), selectAfter = selectedId)
+    }
+
+    /** A stable coalesce key for continuous edits to one token's fields (e.g. scrubbing a hex value). */
+    private fun tokenKey(category: String, name: String): Any = "$category.$name"
+
+    // colors ---------------------------------------------------------------------------------------
+
+    /** Set a color token's light/dark pair (H1). Coalesces per token so scrubbing is one undo step. */
+    fun setColor(name: String, pair: ColorPair) = editTheme(tokenKey(ThemeCategory.COLORS, name), "Edit color $name") {
+        it.copy(colors = it.colors + (name to pair))
+    }
+
+    /** Add a new color token with a neutral default pair; a no-op if [name] is blank or already exists. */
+    fun addColor(name: String, pair: ColorPair = ColorPair("#000000", "#FFFFFF")) {
+        if (name.isBlank() || name in theme.colors) return
+        editTheme(null, "Add color $name") { it.copy(colors = it.colors + (name to pair)) }
+    }
+
+    /** Remove a color token. Existing references fall back gracefully at render/codegen (never crash). */
+    fun removeColor(name: String) = editTheme(null, "Remove color $name") { it.copy(colors = it.colors - name) }
+
+    /** Rename a color token, propagating to every reference across all screens (H5). */
+    fun renameColor(from: String, to: String) = renameToken(ThemeCategory.COLORS, from, to)
+
+    // typography -----------------------------------------------------------------------------------
+
+    fun setTypography(name: String, token: TypographyToken) =
+        editTheme(tokenKey(ThemeCategory.TYPOGRAPHY, name), "Edit type $name") {
+            it.copy(typography = it.typography + (name to token))
+        }
+
+    fun addTypography(name: String, token: TypographyToken = TypographyToken(fontSize = 16, lineHeight = 24)) {
+        if (name.isBlank() || name in theme.typography) return
+        editTheme(null, "Add type $name") { it.copy(typography = it.typography + (name to token)) }
+    }
+
+    fun removeTypography(name: String) =
+        editTheme(null, "Remove type $name") { it.copy(typography = it.typography - name) }
+
+    fun renameTypography(from: String, to: String) = renameToken(ThemeCategory.TYPOGRAPHY, from, to)
+
+    // shapes ---------------------------------------------------------------------------------------
+
+    fun setShape(name: String, corner: Int) = editTheme(tokenKey(ThemeCategory.SHAPES, name), "Edit shape $name") {
+        it.copy(shapes = it.shapes + (name to corner))
+    }
+
+    fun addShape(name: String, corner: Int = 8) {
+        if (name.isBlank() || name in theme.shapes) return
+        editTheme(null, "Add shape $name") { it.copy(shapes = it.shapes + (name to corner)) }
+    }
+
+    fun removeShape(name: String) = editTheme(null, "Remove shape $name") { it.copy(shapes = it.shapes - name) }
+
+    fun renameShape(from: String, to: String) = renameToken(ThemeCategory.SHAPES, from, to)
+
+    // spacing --------------------------------------------------------------------------------------
+
+    fun setSpacing(name: String, dp: Int) = editTheme(tokenKey(ThemeCategory.SPACING, name), "Edit spacing $name") {
+        it.copy(spacing = it.spacing + (name to dp))
+    }
+
+    fun addSpacing(name: String, dp: Int = 8) {
+        if (name.isBlank() || name in theme.spacing) return
+        editTheme(null, "Add spacing $name") { it.copy(spacing = it.spacing + (name to dp)) }
+    }
+
+    fun removeSpacing(name: String) = editTheme(null, "Remove spacing $name") { it.copy(spacing = it.spacing - name) }
+
+    fun renameSpacing(from: String, to: String) = renameToken(ThemeCategory.SPACING, from, to)
+
+    /** Rename a token in [category]; a no-op if the rename is invalid (source absent / target taken). */
+    private fun renameToken(category: String, from: String, to: String) {
+        if (from == to || to.isBlank()) return
+        execute(RenameThemeToken(category, from, to), selectAfter = selectedId)
     }
 
     // --- drop validation --------------------------------------------------------------------------

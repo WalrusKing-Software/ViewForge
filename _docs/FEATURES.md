@@ -94,11 +94,11 @@ into issues directly.
 
 | # | Feature | Pri | Acceptance |
 |---|---------|-----|------------|
-| H1 | Theme editor (colors/typography/shapes/spacing) | P0 | Edits apply live across the canvas. |
-| H2 | Light/dark pairs | P0 | Toggle canvas between modes; both values stored. |
-| H3 | Token references from props | P0 | See I4. |
-| H4 | Theme codegen | P0 | Emits a usable `MaterialTheme` wrapper. |
-| H5 | Token rename propagation | P1 | Renaming a token updates all references. |
+| H1 | Theme editor (colors/typography/shapes/spacing) | P0 | Edits apply live across the canvas. (M8: modal `ThemeEditor` dialog; every edit is a command, so it is undoable and the canvas — themed from the project via `projectColorScheme`/`projectShapes` — updates live. ADR-020.) |
+| H2 | Light/dark pairs | P0 | Toggle canvas between modes; both values stored. (M8: toolbar light/dark toggle drives `EditorState.canvasDark`; both halves of each `ColorPair` are always stored.) |
+| H3 | Token references from props | P0 | See I4. (Shipped M5: color token picker + typography picker.) |
+| H4 | Theme codegen | P0 | Emits a usable `MaterialTheme` wrapper. (M8: `ThemeEmitter` generates `Theme.kt` with `AppTheme(darkTheme, content)`; the Gradle scaffold's `Main` wraps the screen in it. ADR-020.) |
+| H5 | Token rename propagation | P1 | Renaming a token updates all references. (M8: `RenameThemeToken` rewrites the theme key **and** every `ThemeRef` across all screens in one undoable command.) |
 | H6 | Import theme from existing Kotlin | P3 | Requires parsing — deliberately deferred. |
 
 ## 7. Code generation & export

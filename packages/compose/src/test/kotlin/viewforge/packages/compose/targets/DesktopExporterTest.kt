@@ -43,6 +43,8 @@ class DesktopExporterTest {
         assertEquals(
             setOf(
                 "src/main/kotlin/HomeScreen.kt",
+                // Demo's theme defines colors.primary, so the project gains an AppTheme wrapper (M8/H4).
+                "src/main/kotlin/Theme.kt",
                 "src/main/kotlin/Main.kt",
                 "build.gradle.kts",
                 "settings.gradle.kts",
@@ -56,6 +58,14 @@ class DesktopExporterTest {
             ),
             files.map { it.path }.toSet(),
         )
+    }
+
+    @Test
+    fun `a project with no theme emits no Theme file and Main uses a default MaterialTheme`() {
+        val bare = ProjectCodec.decode(resourceText("/golden/RowBox.vforge")) // empty theme
+        val files = DesktopExporter.gradleProject(bare)
+        assertFalse(files.any { it.path == "src/main/kotlin/Theme.kt" })
+        assertContains(textOf(files, "src/main/kotlin/Main.kt"), "MaterialTheme {")
     }
 
     @Test
@@ -81,7 +91,8 @@ class DesktopExporterTest {
         assertContains(main, "fun main()")
         assertContains(main, "application {")
         assertContains(main, "Window(onCloseRequest = ::exitApplication, title = \"Demo\")")
-        assertContains(main, "MaterialTheme {")
+        // Demo has a theme, so Main wraps the screen in the generated AppTheme wrapper (M8/H4).
+        assertContains(main, "AppTheme {")
         assertContains(main, "HomeScreen()")
         assertFalse(
             main.lineSequence().any {

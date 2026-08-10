@@ -38,13 +38,13 @@ fun main() = application {
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
     // instrumentation the canvas needs for hit-testing (ADR-009); the Compose package obliges,
     // theming it with the project's own theme and applying that instrumentation to each node.
-    // `dark = false` until the canvas gains a mode toggle (FEATURES H2).
+    // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2).
     val renderer =
         CanvasRenderer { root, instrument ->
             ComposeRenderer.RenderScreen(
                 root = root,
                 theme = state.document.theme,
-                dark = false,
+                dark = state.canvasDark,
                 instrument = instrument,
             )
         }

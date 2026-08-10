@@ -63,7 +63,7 @@ internal class ComponentEmitter(private val theme: Theme) {
         add(named("text", CodegenValues.text(node.props["text"])))
         if (mod != null) add(named("modifier", mod))
         node.props["color"]?.let { add(named("color", CodegenValues.color(it, theme))) }
-        node.props["style"]?.let { add(named("style", CodegenValues.typography(it))) }
+        node.props["style"]?.let { add(named("style", CodegenValues.typography(it, theme))) }
     }
 
     // --- shape helpers ---------------------------------------------------------------------------

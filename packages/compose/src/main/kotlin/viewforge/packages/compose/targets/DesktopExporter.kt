@@ -34,15 +34,22 @@ object DesktopExporter {
     private val windowFn = MemberName("androidx.compose.ui.window", "Window")
     private val materialTheme = MemberName("androidx.compose.material3", "MaterialTheme")
 
+    /** The generated project theme wrapper (`Theme.kt`), in the same default package as `Main`/screens. */
+    private val appTheme = MemberName("", "AppTheme")
+
     /** The generated screen composables only (G4), each formatted, at top level (default package). */
     fun looseFiles(project: Project): List<ExportFile> = screenFiles(project, dir = "")
 
     /** A complete runnable Compose Desktop project (G5). */
     fun gradleProject(project: Project): List<ExportFile> {
         val slug = GradleScaffold.slug(project.name.ifBlank { "Project" })
+        val themeSource = ComposeCodeGenerator().generateTheme(project)
         return buildList {
             addAll(screenFiles(project, dir = "$SOURCE_DIR/"))
-            add(TextFile("$SOURCE_DIR/Main.kt", mainSource(project)))
+            // The project theme's AppTheme wrapper (H4), when the theme defines anything; Main wraps the
+            // screen in it so the compiled app is themed exactly like the canvas (ADR-018).
+            if (themeSource != null) add(TextFile("$SOURCE_DIR/Theme.kt", themeSource))
+            add(TextFile("$SOURCE_DIR/Main.kt", mainSource(project, themed = themeSource != null)))
             add(TextFile("build.gradle.kts", GradleScaffold.buildGradle()))
             add(TextFile("settings.gradle.kts", GradleScaffold.settingsGradle(slug)))
             add(TextFile("gradle.properties", GradleScaffold.gradleProperties()))
@@ -63,23 +70,25 @@ object DesktopExporter {
 
     /**
      * The scaffold's `main()` entry point, built structurally (CLAUDE.md rule 4): it opens a desktop
-     * [windowFn], wraps content in a default [materialTheme] (theme codegen is M8/H4), and renders the
-     * project's first screen. With no screens it opens an empty themed window rather than failing.
+     * [windowFn], wraps content in the project's [appTheme] wrapper when [themed] (else a default
+     * [materialTheme]), and renders the project's first screen. With no screens it opens an empty
+     * themed window rather than failing.
      */
-    private fun mainSource(project: Project): String {
+    private fun mainSource(project: Project, themed: Boolean): String {
         val firstScreen = project.screens.firstOrNull()
         val title = project.name.ifBlank { "ViewForge" }
+        val theme = if (themed) appTheme else materialTheme
         val body = CodeBlock.builder()
             .beginControlFlow("%M", application)
             .beginControlFlow("%M(onCloseRequest = ::exitApplication, title = %S)", windowFn, title)
             .apply {
                 if (firstScreen != null) {
                     val screenFn = MemberName("", KotlinIdentifiers.requireFunctionName(firstScreen.name))
-                    beginControlFlow("%M", materialTheme)
+                    beginControlFlow("%M", theme)
                     addStatement("%M()", screenFn)
                     endControlFlow()
                 } else {
-                    addStatement("%M { }", materialTheme)
+                    addStatement("%M { }", theme)
                 }
             }
             .endControlFlow()

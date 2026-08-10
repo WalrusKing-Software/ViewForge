@@ -2,6 +2,7 @@ package viewforge.editor.state
 
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.ChildAddress
+import viewforge.model.ColorPair
 import viewforge.model.FrameworkRef
 import viewforge.model.ModifierArg
 import viewforge.model.ModifierDefinition
@@ -287,6 +288,51 @@ class EditorStateTest {
         assertEquals(
             PropValue.Literal(JsonPrimitive(16)),
             s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].args["all"],
+        )
+    }
+
+    // --- theme editing (M8) -----------------------------------------------------------------------
+
+    @Test
+    fun `toggleCanvasDark flips the preview mode without touching the document`() {
+        val s = state()
+        val before = s.document
+        assertFalse(s.canvasDark)
+        s.toggleCanvasDark()
+        assertTrue(s.canvasDark)
+        assertEquals(before, s.document) // view state only
+    }
+
+    @Test
+    fun `addColor then setColor edits the theme and coalesces the scrub`() {
+        val s = state()
+        s.addColor("primary")
+        s.setColor("primary", ColorPair("#111111", "#222222"))
+        s.setColor("primary", ColorPair("#333333", "#444444"))
+        assertEquals(ColorPair("#333333", "#444444"), s.theme.colors["primary"])
+        // The two setColor edits coalesce (same token key); one undo reverts to the add-time default.
+        s.undo()
+        assertEquals(ColorPair("#000000", "#FFFFFF"), s.theme.colors["primary"])
+        // A second undo removes the token (the add was its own discrete step).
+        s.undo()
+        assertNull(s.theme.colors["primary"])
+    }
+
+    @Test
+    fun `renameColor propagates to references in one undoable step`() {
+        val s = state()
+        s.addColor("primary")
+        s.setProp(NodeId("a"), "color", PropValue.ThemeRef("colors.primary"))
+        s.renameColor("primary", "brand")
+        assertTrue("brand" in s.theme.colors)
+        assertEquals(
+            PropValue.ThemeRef("colors.brand"),
+            s.activeScreen!!.root.findById(NodeId("a"))!!.props["color"],
+        )
+        s.undo() // one undo reverts both the map key and the reference
+        assertEquals(
+            PropValue.ThemeRef("colors.primary"),
+            s.activeScreen!!.root.findById(NodeId("a"))!!.props["color"],
         )
     }
 }

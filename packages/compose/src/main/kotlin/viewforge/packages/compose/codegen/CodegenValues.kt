@@ -3,6 +3,8 @@ package viewforge.packages.compose.codegen
 import com.squareup.kotlinpoet.CodeBlock
 import viewforge.model.PropValue
 import viewforge.model.Theme
+import viewforge.model.TypographyToken
+import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
 import viewforge.packages.compose.render.boxAlign
 import viewforge.packages.compose.render.hAlign
 import viewforge.packages.compose.render.hArrange
@@ -21,14 +23,8 @@ import viewforge.packages.compose.render.vArrange
  * compile (ARCHITECTURE §7 "validate": codegen is never the first place an error surfaces silently).
  */
 internal object CodegenValues {
-    /** Material `colorScheme` slots codegen may reference as `MaterialTheme.colorScheme.<slot>`. */
-    private val MATERIAL_COLOR_SLOTS = setOf(
-        "primary", "onPrimary", "secondary", "onSecondary",
-        "background", "onBackground", "surface", "onSurface", "error", "onError",
-    )
-
     /** Material `typography` slots codegen may reference as `MaterialTheme.typography.<slot>`. */
-    private val MATERIAL_TYPO_SLOTS = setOf(
+    val MATERIAL_TYPO_SLOTS = setOf(
         "displayLarge", "displayMedium", "displaySmall",
         "headlineLarge", "headlineMedium", "headlineSmall",
         "titleLarge", "titleMedium", "titleSmall",
@@ -62,19 +58,46 @@ internal object CodegenValues {
         else -> throw CodegenException("Color prop must be a literal, theme ref, or expression, got $value")
     }
 
-    /** A typography-typed value: a Material `MaterialTheme.typography.<slot>` or a raw expression. */
-    fun typography(value: PropValue?): CodeBlock = when (value) {
+    /**
+     * A typography-typed value: a Material `MaterialTheme.typography.<slot>`, a **custom** project
+     * token emitted as an inline `TextStyle(...)` (M8 — mirrors the renderer's `resolveTextStyle`), or
+     * a raw expression. A custom token's values come from [theme], so a rename/edit stays consistent.
+     */
+    fun typography(value: PropValue?, theme: Theme): CodeBlock = when (value) {
         is PropValue.ThemeRef -> {
             val slot = value.token.removePrefix("typography.")
-            if (slot == value.token || slot !in MATERIAL_TYPO_SLOTS) {
-                // Custom (project-defined) typography tokens emit inline TextStyle — deferred to M8.
-                throw CodegenException("Unsupported typography token '${value.token}' (only Material slots in Phase 1)")
+            when {
+                slot == value.token ->
+                    throw CodegenException("Typography prop expects a 'typography.*' token, got '${value.token}'")
+                slot in MATERIAL_TYPO_SLOTS -> CodeBlock.of("%T.typography.%L", ComposeNames.MaterialTheme, slot)
+                else -> {
+                    val token = theme.typography[slot]
+                        ?: throw CodegenException(
+                            "Unresolved typography token '${value.token}' (not Material nor in theme)",
+                        )
+                    textStyle(token)
+                }
             }
-            CodeBlock.of("%T.typography.%L", ComposeNames.MaterialTheme, slot)
         }
         is PropValue.RawExpression -> raw(value)
         else -> throw CodegenException("Typography prop must be a theme ref or expression, got $value")
     }
+
+    /**
+     * An inline `TextStyle(...)` for a project typography [token] — the codegen twin of the renderer's
+     * `resolveTextStyle`, so a custom token renders and generates identically. `fontFamily` is omitted
+     * (Phase 1 only carries "default"); font size and line height are `sp`, weight a `FontWeight(Int)`.
+     */
+    fun textStyle(token: TypographyToken): CodeBlock = CodeBlock.of(
+        "%T(fontSize = %L.%M, fontWeight = %T(%L), lineHeight = %L.%M)",
+        ComposeNames.TextStyle,
+        token.fontSize,
+        ComposeNames.sp,
+        ComposeNames.FontWeight,
+        token.fontWeight,
+        token.lineHeight,
+        ComposeNames.sp,
+    )
 
     /**
      * An alignment/arrangement enum prop → `Alignment.<name>` / `Arrangement.<name>`. Normalizes
@@ -97,7 +120,8 @@ internal object CodegenValues {
         else -> throw CodegenException("Unknown enum prop '$propName'")
     }
 
-    private fun colorLiteral(hex: String): CodeBlock {
+    /** A `Color(0xAARRGGBB)` literal from a hex string — shared with [ThemeEmitter] so both agree. */
+    fun colorLiteral(hex: String): CodeBlock {
         val argb = parseColorArgb(hex) ?: throw CodegenException("Invalid color literal '$hex'")
         return CodeBlock.of("%T(0x%L)", ComposeNames.Color, "%08X".format(argb))
     }

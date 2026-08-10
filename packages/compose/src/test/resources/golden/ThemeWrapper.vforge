@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "01JTHEMEWRAPPER",
+  "name": "ThemeWrapper",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "theme": {
+    "colors": {
+      "primary":   { "light": "#6750A4", "dark": "#D0BCFF" },
+      "onPrimary": { "light": "#FFFFFF", "dark": "#381E72" },
+      "brand":     { "light": "#123456", "dark": "#654321" }
+    },
+    "typography": {
+      "titleLarge": { "fontFamily": "default", "fontSize": 22, "fontWeight": 400, "lineHeight": 28 },
+      "hero":       { "fontFamily": "default", "fontSize": 48, "fontWeight": 700, "lineHeight": 56 }
+    },
+    "shapes": { "small": 4, "medium": 8, "large": 16 },
+    "spacing": { "xs": 4, "sm": 8, "md": 16 }
+  },
+  "screens": [{
+    "id": "scr_01",
+    "name": "ThemeWrapperScreen",
+    "previewProfile": "desktop_1280x800",
+    "root": {
+      "id": "n_01",
+      "type": "compose.material3.Text",
+      "props": {
+        "text":  { "kind": "literal", "value": "Themed" },
+        "color": { "kind": "theme",   "token": "colors.primary" },
+        "style": { "kind": "theme",   "token": "typography.hero" }
+      }
+    }
+  }],
+  "components": [],
+  "assets": []
+}
