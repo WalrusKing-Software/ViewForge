@@ -6,7 +6,9 @@ plugins {
 // (ARCHITECTURE §2). The top of the editor UI; wired into an application by :app.
 dependencies {
     api(projects.editor.state)
-    implementation(projects.editor.canvas)
+    // api, not implementation: EditorShell's signature exposes CanvasRenderer (defined in canvas),
+    // so :app must see the type to construct one (ARCHITECTURE §3 wiring exception).
+    api(projects.editor.canvas)
     implementation(projects.editor.panels)
 
     implementation(libs.compose.runtime)

@@ -1,0 +1,217 @@
+package viewforge.packages.compose.render
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import viewforge.model.Node
+import viewforge.model.PropValue
+
+/**
+ * The interpreter walk (ARCHITECTURE §4.2): map a node's `type` to a real Compose composable, fold
+ * its modifiers, and recurse. Each component owns its own render here so adding one is a local
+ * change, never a change to the canvas.
+ *
+ * M2 renders the deliberately small subset needed for a real screen — `Column`/`Row`/`Box`/`Spacer`
+ * plus `Text`/`Button` (FEATURES §2 Phase-1 set). Anything else draws a visible placeholder rather
+ * than being dispatched by name (PF-6): failing loudly beats a silent wrong render (CLAUDE.md).
+ */
+@Composable
+fun RenderNode(node: Node, ctx: RenderContext) {
+    if (node.hidden) return // excluded from BOTH render and codegen (DATA_MODEL §5)
+
+    val modifier = buildModifier(node.modifiers, ctx)
+    when (node.type) {
+        "compose.foundation.layout.Column" -> RenderColumn(node, modifier, ctx)
+        "compose.foundation.layout.Row" -> RenderRow(node, modifier, ctx)
+        "compose.foundation.layout.Box" -> RenderBox(node, modifier, ctx)
+        "compose.foundation.layout.Spacer" -> Spacer(modifier)
+        "compose.material3.Text" -> RenderText(node, modifier, ctx)
+        "compose.material3.Button" -> RenderButton(node, modifier, ctx)
+        else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
+    }
+}
+
+@Composable
+private fun RenderChildren(nodes: List<Node>, ctx: RenderContext) {
+    // Key by stable node id so reorders move composables rather than recreating them (TECHNICAL_NOTES §4).
+    nodes.forEach { child -> key(child.id.value) { RenderNode(child, ctx) } }
+}
+
+@Composable
+private fun RenderColumn(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = vArrange(node.props["verticalArrangement"].literalString()).toCompose(),
+        horizontalAlignment = hAlign(node.props["horizontalAlignment"].literalString()).toCompose(),
+    ) {
+        RenderChildren(node.children, ctx)
+    }
+}
+
+@Composable
+private fun RenderRow(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = hArrange(node.props["horizontalArrangement"].literalString()).toCompose(),
+        verticalAlignment = vAlign(node.props["verticalAlignment"].literalString()).toCompose(),
+    ) {
+        RenderChildren(node.children, ctx)
+    }
+}
+
+@Composable
+private fun RenderBox(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Box(
+        modifier = modifier,
+        contentAlignment = boxAlign(node.props["contentAlignment"].literalString()).toCompose(),
+    ) {
+        RenderChildren(node.children, ctx)
+    }
+}
+
+@Composable
+private fun RenderText(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Text(
+        text = node.props["text"].literalString() ?: "",
+        modifier = modifier,
+        color = resolveColor(node.props["color"], ctx) ?: Color.Unspecified,
+        style = resolveTextStyle(node.props["style"], ctx),
+    )
+}
+
+@Composable
+private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // `onClick` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
+    Button(onClick = {}, modifier = modifier) {
+        RenderChildren(node.slots["content"].orEmpty(), ctx)
+    }
+}
+
+/** A visible marker for a node the canvas can't render — never a blank space (ARCHITECTURE §9). */
+@Composable
+private fun ErrorPlaceholder(message: String, modifier: Modifier) {
+    Box(
+        modifier
+            .border(1.dp, Color(0xFFB00020))
+            .padding(6.dp),
+    ) {
+        Text(text = message, color = Color(0xFFB00020), fontSize = 11.sp)
+    }
+}
+
+// --- Prop resolution needing composition (Material fallbacks read MaterialTheme) ------------------
+
+@Composable
+private fun resolveColor(value: PropValue?, ctx: RenderContext): Color? = when (value) {
+    is PropValue.Literal -> parseColorArgb(value.value.content)?.let { Color(it) }
+    is PropValue.ThemeRef -> {
+        val hex = resolveColorHex(ctx.theme, value.token, ctx.dark)
+        if (hex != null) parseColorArgb(hex)?.let { Color(it) } else materialColorToken(value.token)
+    }
+    else -> null // RawExpression/binding aren't evaluable on the canvas
+}
+
+@Composable
+private fun materialColorToken(token: String): Color? = when (token.removePrefix("colors.")) {
+    "primary" -> MaterialTheme.colorScheme.primary
+    "onPrimary" -> MaterialTheme.colorScheme.onPrimary
+    "secondary" -> MaterialTheme.colorScheme.secondary
+    "onSecondary" -> MaterialTheme.colorScheme.onSecondary
+    "background" -> MaterialTheme.colorScheme.background
+    "onBackground" -> MaterialTheme.colorScheme.onBackground
+    "surface" -> MaterialTheme.colorScheme.surface
+    "onSurface" -> MaterialTheme.colorScheme.onSurface
+    "error" -> MaterialTheme.colorScheme.error
+    else -> null
+}
+
+@Composable
+private fun resolveTextStyle(value: PropValue?, ctx: RenderContext): TextStyle {
+    if (value is PropValue.ThemeRef) {
+        val name = typographyTokenName(value.token) ?: return LocalTextStyle.current
+        val token = ctx.theme.typography[name]
+        if (token != null) {
+            return TextStyle(
+                fontSize = token.fontSize.sp,
+                fontWeight = FontWeight(token.fontWeight),
+                lineHeight = token.lineHeight.sp,
+            )
+        }
+        return materialTextStyle(name)
+    }
+    return LocalTextStyle.current
+}
+
+@Composable
+private fun materialTextStyle(name: String): TextStyle = when (name) {
+    "displayLarge" -> MaterialTheme.typography.displayLarge
+    "headlineLarge" -> MaterialTheme.typography.headlineLarge
+    "headlineMedium" -> MaterialTheme.typography.headlineMedium
+    "titleLarge" -> MaterialTheme.typography.titleLarge
+    "titleMedium" -> MaterialTheme.typography.titleMedium
+    "bodyLarge" -> MaterialTheme.typography.bodyLarge
+    "bodyMedium" -> MaterialTheme.typography.bodyMedium
+    "labelLarge" -> MaterialTheme.typography.labelLarge
+    else -> LocalTextStyle.current
+}
+
+// --- Alignment / arrangement enum → Compose (the one place these map) -----------------------------
+
+private fun HAlign.toCompose(): Alignment.Horizontal = when (this) {
+    HAlign.Start -> Alignment.Start
+    HAlign.CenterHorizontally -> Alignment.CenterHorizontally
+    HAlign.End -> Alignment.End
+}
+
+private fun VAlign.toCompose(): Alignment.Vertical = when (this) {
+    VAlign.Top -> Alignment.Top
+    VAlign.CenterVertically -> Alignment.CenterVertically
+    VAlign.Bottom -> Alignment.Bottom
+}
+
+private fun VArrange.toCompose(): Arrangement.Vertical = when (this) {
+    VArrange.Top -> Arrangement.Top
+    VArrange.Center -> Arrangement.Center
+    VArrange.Bottom -> Arrangement.Bottom
+    VArrange.SpaceBetween -> Arrangement.SpaceBetween
+    VArrange.SpaceAround -> Arrangement.SpaceAround
+    VArrange.SpaceEvenly -> Arrangement.SpaceEvenly
+}
+
+private fun HArrange.toCompose(): Arrangement.Horizontal = when (this) {
+    HArrange.Start -> Arrangement.Start
+    HArrange.Center -> Arrangement.Center
+    HArrange.End -> Arrangement.End
+    HArrange.SpaceBetween -> Arrangement.SpaceBetween
+    HArrange.SpaceAround -> Arrangement.SpaceAround
+    HArrange.SpaceEvenly -> Arrangement.SpaceEvenly
+}
+
+private fun BoxAlign.toCompose(): Alignment = when (this) {
+    BoxAlign.TopStart -> Alignment.TopStart
+    BoxAlign.TopCenter -> Alignment.TopCenter
+    BoxAlign.TopEnd -> Alignment.TopEnd
+    BoxAlign.CenterStart -> Alignment.CenterStart
+    BoxAlign.Center -> Alignment.Center
+    BoxAlign.CenterEnd -> Alignment.CenterEnd
+    BoxAlign.BottomStart -> Alignment.BottomStart
+    BoxAlign.BottomCenter -> Alignment.BottomCenter
+    BoxAlign.BottomEnd -> Alignment.BottomEnd
+}

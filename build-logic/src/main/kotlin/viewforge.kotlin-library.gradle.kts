@@ -30,10 +30,16 @@ tasks.withType<Test>().configureEach {
 }
 
 // Formatting is a project rule (risk 7.3): every module is linted the same way.
+// @Composable functions are PascalCase by Compose convention (they emit UI, not compute values),
+// which the standard ktlint function-naming rule rejects. Exempt them here — spotless 6.x does not
+// reliably pick this up from .editorconfig, so it is set as an explicit override. Applies from M2,
+// the first Compose UI code; harmless for core/* modules, which have no composables.
+val ktlintOverrides = mapOf("ktlint_function_naming_ignore_when_annotated_with" to "Composable")
+
 spotless {
     kotlin {
         target("src/**/*.kt")
-        ktlint(libs.versions.ktlint.get())
+        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintOverrides)
         endWithNewline()
         trimTrailingWhitespace()
     }
