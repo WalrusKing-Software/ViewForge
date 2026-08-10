@@ -83,6 +83,26 @@ fun Node.withFreshIds(): Node = copy(
 )
 
 /**
+ * A copy of this node with prop [key] set to [value], or **removed** when [value] is null (used to
+ * reset a prop to its default, I7). Returns the same instance if nothing changed. Only this node's
+ * [Node.props] map is rebuilt; children and modifiers keep identity.
+ */
+fun Node.withProp(key: String, value: PropValue?): Node {
+    val next = if (value == null) {
+        if (key !in props) return this
+        props - key
+    } else {
+        if (props[key] == value) return this
+        props + (key to value)
+    }
+    return copy(props = next)
+}
+
+/** A copy of this node with its ordered modifier chain replaced. Same instance if [modifiers] is unchanged. */
+fun Node.withModifiers(modifiers: List<ModifierEntry>): Node =
+    if (modifiers == this.modifiers) this else copy(modifiers = modifiers)
+
+/**
  * A copy of this [Project] with the screen [screenId]'s root transformed. Other screens keep their
  * identity, and if [transform] returns the same root instance the whole project is returned unchanged.
  */

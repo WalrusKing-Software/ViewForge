@@ -26,6 +26,13 @@ interface Command {
     /** A short human label for menus/history ("Add Text", "Delete Button"). */
     val label: String
 
+    /**
+     * A key that lets a run of like edits collapse into one undo step (D3, ADR-017). When non-null and
+     * equal to the previous command's key, [History] merges them — a stepper drag or hex typing becomes
+     * a single history entry instead of hundreds. Null (the default) never coalesces.
+     */
+    val coalesceKey: Any? get() = null
+
     /** The document after this command. Must not mutate [doc]. */
     fun apply(doc: Project): Project
 

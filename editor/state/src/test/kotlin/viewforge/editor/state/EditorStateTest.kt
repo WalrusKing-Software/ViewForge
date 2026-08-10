@@ -1,10 +1,17 @@
 package viewforge.editor.state
 
+import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.ChildAddress
 import viewforge.model.FrameworkRef
+import viewforge.model.ModifierArg
+import viewforge.model.ModifierDefinition
+import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
+import viewforge.model.PropDefinition
+import viewforge.model.PropType
+import viewforge.model.PropValue
 import viewforge.model.Screen
 import viewforge.model.findById
 import kotlin.test.Test
@@ -48,6 +55,26 @@ class EditorStateTest {
         } else {
             emptyList()
         }
+
+        override fun propsFor(type: String): List<PropDefinition> = if (type == "compose.material3.Text") {
+            listOf(
+                PropDefinition("text", PropType.String, default = PropValue.Literal(JsonPrimitive(""))),
+                PropDefinition("color", PropType.Color, themeable = true),
+            )
+        } else {
+            emptyList()
+        }
+
+        override val modifierCatalog: List<ModifierDefinition> = listOf(
+            ModifierDefinition("compose.fillMaxSize", "Fill Max Size"),
+            ModifierDefinition(
+                "compose.padding",
+                "Padding",
+                args = listOf(ModifierArg("all", PropType.Dp, default = PropValue.Literal(JsonPrimitive(16)))),
+            ),
+        )
+
+        override fun modifierDef(type: String): ModifierDefinition? = modifierCatalog.firstOrNull { it.type == type }
     }
 
     private val root = Node(
@@ -183,5 +210,83 @@ class EditorStateTest {
         s.moveNode(NodeId("root"), ChildAddress(NodeId("b"), "content", 0))
         // Root unchanged: still holds a and b.
         assertEquals(listOf(NodeId("a"), NodeId("b")), s.activeScreen!!.root.children.map { it.id })
+    }
+
+    // --- M5: property & modifier editing ----------------------------------------------------------
+
+    @Test
+    fun `setProp then resetProp round-trips through the default`() {
+        val s = state()
+        val v = PropValue.Literal(JsonPrimitive("Hello"))
+        s.setProp(NodeId("a"), "text", v)
+        assertEquals(v, s.activeScreen!!.root.findById(NodeId("a"))!!.props["text"])
+        // The Text 'text' def defaults to an empty literal; reset restores that.
+        val def = s.catalog.propsFor("compose.material3.Text").first { it.name == "text" }
+        s.resetProp(NodeId("a"), def)
+        assertEquals(def.default, s.activeScreen!!.root.findById(NodeId("a"))!!.props["text"])
+    }
+
+    @Test
+    fun `addModifier appends with schema-default args and undo removes it`() {
+        val s = state()
+        s.addModifier(NodeId("a"), "compose.padding")
+        val mods = s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers
+        assertEquals(1, mods.size)
+        assertEquals("compose.padding", mods[0].type)
+        assertEquals(PropValue.Literal(JsonPrimitive(16)), mods[0].args["all"]) // default applied
+        s.undo()
+        assertTrue(s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers.isEmpty())
+    }
+
+    @Test
+    fun `toggleModifier flips enabled without deleting`() {
+        val s = state()
+        s.addModifier(NodeId("a"), "compose.fillMaxSize")
+        val id = s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].id
+        s.toggleModifier(NodeId("a"), id)
+        assertFalse(s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].enabled)
+    }
+
+    @Test
+    fun `moveModifier reorders the chain`() {
+        val node = Node(
+            NodeId("m"),
+            "compose.foundation.layout.Box",
+            modifiers = listOf(
+                ModifierEntry("m1", "compose.padding"),
+                ModifierEntry("m2", "compose.fillMaxSize"),
+            ),
+        )
+        val s = EditorState(
+            Project(
+                id = "p",
+                name = "P",
+                framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+                screens = listOf(Screen("s1", "H", node)),
+            ),
+            FakeCatalog(),
+        )
+        s.moveModifier(NodeId("m"), from = 0, to = 1)
+        assertEquals(listOf("m2", "m1"), s.activeScreen!!.root.modifiers.map { it.id })
+    }
+
+    @Test
+    fun `setModifierArg edits a single arg and coalesced edits are one undo`() {
+        val s = state()
+        s.addModifier(NodeId("a"), "compose.padding")
+        val id = s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].id
+        // Two consecutive edits to the same arg coalesce.
+        s.setModifierArg(NodeId("a"), id, "all", PropValue.Literal(JsonPrimitive(20)))
+        s.setModifierArg(NodeId("a"), id, "all", PropValue.Literal(JsonPrimitive(24)))
+        assertEquals(
+            PropValue.Literal(JsonPrimitive(24)),
+            s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].args["all"],
+        )
+        // One undo reverts both arg edits back to the add-time default (16).
+        s.undo()
+        assertEquals(
+            PropValue.Literal(JsonPrimitive(16)),
+            s.activeScreen!!.root.findById(NodeId("a"))!!.modifiers[0].args["all"],
+        )
     }
 }

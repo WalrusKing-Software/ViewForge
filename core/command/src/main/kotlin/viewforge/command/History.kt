@@ -36,13 +36,27 @@ class History(private val limit: Int = DEFAULT_LIMIT) {
      * Apply [command] to [doc], record it for undo, and return the new document. Capturing the inverse
      * here — against [doc], the pre-apply image — is what lets [invert] read removed nodes / old
      * values. Clears the redo stack.
+     *
+     * **Coalescing (D3):** when [command] shares a non-null [Command.coalesceKey] with the top undo
+     * entry (and nothing has been undone), the two merge into one entry — the *original* inverse is
+     * kept (so undo reverts the whole run) while the latest command replaces it for redo. This turns a
+     * stepper drag or a burst of keystrokes into a single history step.
      */
     fun execute(command: Command, doc: Project): Project {
-        val inverse = command.invert(doc)
         val next = command.apply(doc)
-        redoStack.clear()
-        undoStack.addLast(Entry(command, inverse))
-        while (undoStack.size > limit) undoStack.removeFirst()
+        val top = undoStack.lastOrNull()
+        val coalesces = command.coalesceKey != null &&
+            redoStack.isEmpty() &&
+            top != null &&
+            top.command.coalesceKey == command.coalesceKey
+        if (coalesces) {
+            undoStack[undoStack.lastIndex] = top!!.copy(command = command)
+        } else {
+            val inverse = command.invert(doc)
+            redoStack.clear()
+            undoStack.addLast(Entry(command, inverse))
+            while (undoStack.size > limit) undoStack.removeFirst()
+        }
         return next
     }
 

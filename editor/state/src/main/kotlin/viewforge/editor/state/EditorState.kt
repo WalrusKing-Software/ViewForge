@@ -9,12 +9,19 @@ import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
 import viewforge.command.RenameNode
+import viewforge.command.SetModifierArg
+import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
+import viewforge.command.SetProp
 import viewforge.model.ChildAddress
+import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
+import viewforge.model.PropDefinition
+import viewforge.model.PropValue
 import viewforge.model.Screen
+import viewforge.model.Ulid
 import viewforge.model.findById
 import viewforge.model.locate
 import viewforge.model.subtreeContains
@@ -186,6 +193,75 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val screen = activeScreen ?: return
         if (!canDrop(id, target)) return
         execute(MoveNode(screen.id, id, target), selectAfter = id)
+    }
+
+    // --- property & modifier editing (M5) ---------------------------------------------------------
+
+    /** Set (or clear, when [value] is null) a node prop; live-updates the canvas. Coalesces per prop (D3). */
+    fun setProp(nodeId: NodeId, key: String, value: PropValue?) {
+        val screen = activeScreen ?: return
+        execute(SetProp(screen.id, nodeId, key, value), selectAfter = selectedId)
+    }
+
+    /** Reset a prop to its schema default (I7) — removes it when the default is absent. */
+    fun resetProp(nodeId: NodeId, def: PropDefinition) {
+        setProp(nodeId, def.name, def.default)
+    }
+
+    /**
+     * Append a modifier of [type] (with its schema defaults) to a node's chain. Ids are freshly
+     * generated; order is preserved, new entry last (the user reorders via drag).
+     */
+    fun addModifier(nodeId: NodeId, type: String) {
+        val screen = activeScreen ?: return
+        val node = screen.root.findById(nodeId) ?: return
+        val def = catalog.modifierDef(type) ?: return
+        val args = def.args.mapNotNull { arg -> arg.default?.let { arg.name to it } }.toMap()
+        val entry = ModifierEntry(id = Ulid.next(), type = type, args = args)
+        execute(SetModifiers(screen.id, nodeId, node.modifiers + entry), selectAfter = selectedId)
+    }
+
+    /** Remove the modifier [modifierId] from a node's chain. */
+    fun removeModifier(nodeId: NodeId, modifierId: String) {
+        val screen = activeScreen ?: return
+        val node = screen.root.findById(nodeId) ?: return
+        execute(
+            SetModifiers(
+                screen.id,
+                nodeId,
+                node.modifiers.filterNot {
+                    it.id == modifierId
+                },
+            ),
+            selectAfter = selectedId,
+        )
+    }
+
+    /** Enable/disable a modifier without deleting it (DATA_MODEL §7). */
+    fun toggleModifier(nodeId: NodeId, modifierId: String) {
+        val screen = activeScreen ?: return
+        val node = screen.root.findById(nodeId) ?: return
+        val updated = node.modifiers.map { if (it.id == modifierId) it.copy(enabled = !it.enabled) else it }
+        execute(SetModifiers(screen.id, nodeId, updated), selectAfter = selectedId)
+    }
+
+    /**
+     * Reorder a node's modifier chain, moving the entry at [from] to index [to]. Order is semantic
+     * (ADR-005), so this is a real edit, not cosmetic. Out-of-range indices are ignored.
+     */
+    fun moveModifier(nodeId: NodeId, from: Int, to: Int) {
+        val screen = activeScreen ?: return
+        val node = screen.root.findById(nodeId) ?: return
+        val list = node.modifiers
+        if (from !in list.indices || to !in list.indices || from == to) return
+        val reordered = list.toMutableList().apply { add(to, removeAt(from)) }
+        execute(SetModifiers(screen.id, nodeId, reordered), selectAfter = selectedId)
+    }
+
+    /** Set (or clear) one arg of a modifier; live-updates and coalesces per arg (D3). */
+    fun setModifierArg(nodeId: NodeId, modifierId: String, key: String, value: PropValue?) {
+        val screen = activeScreen ?: return
+        execute(SetModifierArg(screen.id, nodeId, modifierId, key, value), selectAfter = selectedId)
     }
 
     // --- drop validation --------------------------------------------------------------------------
