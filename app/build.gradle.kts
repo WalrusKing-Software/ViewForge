@@ -10,9 +10,14 @@ dependencies {
     implementation(projects.editor.shell)
     implementation(projects.editor.state)
 
-    // Bootstrapping wiring: statically link the Compose package (Phase 1, ADR-007 §6.3).
-    runtimeOnly(projects.packages.compose)
+    // Bootstrapping wiring: statically link the Compose package (Phase 1, ADR-007 §6.3). A
+    // compile-time dependency (not runtimeOnly) because Main.kt binds CanvasRenderer to
+    // ComposeRenderer directly — the one file allowed to name the package (ARCHITECTURE §3).
+    implementation(projects.packages.compose)
 
-    implementation(libs.compose.desktop)
+    // currentOs (not the bare desktop coordinate) so the OS-specific skiko native library is on the
+    // runtime classpath — without it `run` fails at startup with a skiko LibraryLoadException. This
+    // is the one place the compose DSL is used directly, as the catalog can't express currentOs.
+    implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
 }
