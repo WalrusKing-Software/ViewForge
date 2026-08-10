@@ -8,10 +8,11 @@ import viewforge.model.PropValue
 
 /**
  * The Compose package's modifier catalog: the schema for every modifier the inspector may add, with
- * its editable args. Like the component catalog it mirrors **only what the renderer can actually
- * apply** (`render/Modifiers.kt`) — offering a modifier the canvas ignores would make the editor lie
- * (ADR-015). The broader DATA_MODEL §7 allowlist (border, clip, alpha, …) joins this list as the
- * renderer and codegen gain support at M6.
+ * its editable args. Like the component catalog it mirrors **only what the renderer applies**
+ * (`render/Modifiers.kt`) *and* what codegen emits (`codegen/ModifierEmitter.kt`) — as of M6 the two
+ * cover this list in lockstep, so the editor never offers a modifier the canvas ignores or the
+ * emitter drops (ADR-015, ADR-018). The broader DATA_MODEL §7 allowlist (border, clip, alpha, …)
+ * joins this list one modifier at a time, each with render + codegen + a golden test; deferred past M6.
  *
  * Arg types match how `render/Values.kt` reads them: `padding`/`size`/`width`/`height` args are `Dp`
  * integers, `background`'s `color` is a themeable color.

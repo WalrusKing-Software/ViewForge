@@ -18,6 +18,12 @@ kotlinpoet = "2.1.0"            # ADR-010: 2.x structural API only
 kotlinxSerialization = "1.8.0"
 coroutines = "1.10.1"
 
+# Codegen verification (test-only): compile generated Kotlin in-process (G2/GC-6). kctfork is the
+# maintained kotlin-compile-testing fork; 0.7.0 tracks the Kotlin 2.1 line. The Kotlin
+# compiler/compose-compiler embeddables are forced to the pinned `kotlin` version so the Compose
+# compiler plugin registrar matches the compiler it runs in.
+kctfork = "0.7.0"
+
 # Logging (diagnosing codegen/package failures — PROJECT_PLAN §3.1)
 slf4j = "2.0.16"
 logback = "1.5.13"
@@ -60,6 +66,11 @@ konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 # --- Testing ---
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# --- Codegen compile gate (test-only, packages/compose) ---
+kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
+kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
+kotlin-compose-compiler-plugin-embeddable = { module = "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable", version.ref = "kotlin" }
 
 # --- Plugin artifacts consumed by build-logic convention plugins ---
 plugin-kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }

@@ -397,6 +397,51 @@ edits (e.g. cut); the two mechanisms are complementary.
 
 ---
 
+## ADR-018 — Codegen v1: golden file as contract, in-process compile gate, renderer-married emission
+
+**Status:** Accepted
+
+**Context.** M6 turns the IR into Kotlin/Compose source. Three things had to be pinned: how output is
+proven correct, how the emitter stays faithful to the canvas, and a few formatting/ordering choices
+that are otherwise arbitrary and would drift.
+
+**Decision.**
+- **Emission mirrors the renderer.** Codegen reuses the interpreter's *same* pure value layer
+  (`render/Values.kt` — the color parser, alignment/arrangement parsers, `paddingSpec`/`sizeSpec`),
+  and each component/modifier emitter is written beside its renderer with the same argument order.
+  The generated tree is the drawn tree (TECHNICAL_NOTES §2). A `CatalogConsistencyTest` fails the
+  build if a catalog enum value has no matching emission, so the three can't silently diverge.
+- **Golden file is the contract.** Every `.vforge` fixture under `resources/golden/` asserts
+  byte-for-byte against a committed `.kt`, covering every supported component and modifier plus a
+  modifier-order permutation. Fixtures are exempt from spotless (they are output, not source).
+- **Compilation is the real gate.** `CompilationTest` compiles the generated source in-process with
+  kotlin-compile-testing (kctfork) and the Compose compiler plugin registered, asserting `OK`
+  (G2/GC-6). This is what `codegen-verify.yml` runs; string equality alone can pass on uncompilable
+  output (TECHNICAL_NOTES §14).
+- **Root modifier order** = caller's `modifier` first, then the node's own chain
+  (`modifier.fillMaxSize()…`), resolving DATA_MODEL §12.1 the Compose-conventional way.
+- **KotlinPoet's explicit `public`** on generated functions is accepted as-is; KotlinPoet offers no
+  toggle. Final visibility/format normalization is the G7 formatting pass, which lands with export
+  (M7), not baked into M6 goldens.
+
+**Rationale.** Reusing the render value layer makes canvas/codegen divergence a compile error rather
+than a discipline problem. The layered golden + compile check catches the two distinct failure
+classes (formatting regression vs. invalid code) the milestone requires. In-process kctfork keeps the
+whole gate inside `:packages:compose:test`, so no separate CI job or Gradle fixtures module is needed.
+
+**Rejected.** A separate Gradle module that compiles emitted fixtures against real Compose Desktop —
+more faithful to a user build, but heavier and outside `:packages:compose:test`; revisit if kctfork's
+in-process classpath proves insufficient. Building code by string templates — a security anti-pattern
+(GC-1/GC-2). Emitting a broader component/modifier set now — deferred; depth over breadth until M9.
+
+**Consequences.** Adding a component/modifier is a renderer + emitter + golden-fixture triple, and the
+compile gate guarantees it actually builds. kctfork, the Kotlin compiler-embeddable, and the Compose
+compiler plugin embeddable are new **test-only** pinned dependencies, forced to the catalog `kotlin`
+version so the plugin matches the compiler it registers into. Generated output currently carries an
+explicit `public` and KotlinPoet's import block until the G7 pass normalizes it at export.
+
+---
+
 ## Template
 
 ```markdown
