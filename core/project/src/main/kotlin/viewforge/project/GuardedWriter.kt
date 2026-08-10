@@ -5,6 +5,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
 
 /** Raised when a write is refused because the destination path is unsafe (SECURITY §5). */
 class UnsafeWriteException(message: String) : RuntimeException(message)
@@ -36,7 +37,24 @@ object GuardedWriter {
 
     private const val MAX_FILENAME_LENGTH = 255
 
-    fun write(target: Path, content: String, root: Path? = null, backup: Boolean = false) {
+    /** Writes UTF-8 text. Convenience over [writeBytes] for the common case (project files, source). */
+    fun write(target: Path, content: String, root: Path? = null, backup: Boolean = false) =
+        writeBytes(target, content.toByteArray(StandardCharsets.UTF_8), root = root, backup = backup)
+
+    /**
+     * Writes raw [bytes] with the same guarantees as [write], for artifacts that are not text — e.g.
+     * the Gradle wrapper jar in an exported project scaffold (M7). When [executable] is set and the
+     * destination filesystem understands POSIX permissions, the owner/group/other execute bits are
+     * added after the move so a generated `gradlew` runs without a manual `chmod` (G5). On filesystems
+     * without POSIX permissions (Windows) the flag is a no-op — executability there is by extension.
+     */
+    fun writeBytes(
+        target: Path,
+        bytes: ByteArray,
+        root: Path? = null,
+        backup: Boolean = false,
+        executable: Boolean = false,
+    ) {
         val normalized = target.toAbsolutePath().normalize()
         val fileName = normalized.fileName?.toString()
             ?: throw UnsafeWriteException("Destination has no file name: $target")
@@ -56,7 +74,7 @@ object GuardedWriter {
 
         val temp = Files.createTempFile(parent, "$fileName.", ".tmp")
         try {
-            Files.write(temp, content.toByteArray(StandardCharsets.UTF_8))
+            Files.write(temp, bytes)
             try {
                 Files.move(temp, normalized, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             } catch (_: AtomicMoveNotSupportedException) {
@@ -64,9 +82,20 @@ object GuardedWriter {
                 // to a plain replace. Still far safer than writing the destination in place.
                 Files.move(temp, normalized, StandardCopyOption.REPLACE_EXISTING)
             }
+            if (executable) markExecutable(normalized)
         } finally {
             Files.deleteIfExists(temp)
         }
+    }
+
+    private fun markExecutable(path: Path) {
+        val view = Files.getFileAttributeView(path, java.nio.file.attribute.PosixFileAttributeView::class.java)
+            ?: return // Not a POSIX filesystem (e.g. Windows): nothing to do.
+        val perms = view.readAttributes().permissions()
+        perms += PosixFilePermission.OWNER_EXECUTE
+        perms += PosixFilePermission.GROUP_EXECUTE
+        perms += PosixFilePermission.OTHERS_EXECUTE
+        view.setPermissions(perms)
     }
 
     private fun validateFileName(fileName: String) {

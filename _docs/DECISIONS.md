@@ -442,6 +442,68 @@ explicit `public` and KotlinPoet's import block until the G7 pass normalizes it 
 
 ---
 
+## ADR-019 — Project export: bundled wrapper, lightweight formatter, split write path
+
+**Status:** Accepted
+
+**Context.** M7 exports a project two ways (FEATURES G4/G5): loose `.kt` files, and a full Compose
+Desktop scaffold that must run with `./gradlew run` **unmodified**. Three things needed pinning: how
+the scaffold supplies the binary Gradle wrapper, how the G7 formatting pass is done (ADR-018 deferred
+it here), and where the write orchestration lives without breaking the module boundaries.
+
+**Decision.**
+- **Bundle the verified wrapper.** The scaffold ships this repo's own checksum-verified
+  `gradle-wrapper.jar`, `gradlew`, and `gradlew.bat` as resources under `packages/compose`
+  (`/scaffold/*`), copied verbatim on export. `gradlew` is written with the POSIX execute bit set so
+  `./gradlew run` works on Unix without a manual `chmod`. Reusing our own wrapper satisfies "runs
+  unmodified" while keeping to a known-good artifact (SECURITY DS-5).
+- **A lightweight, deterministic G7 formatter**, not an embedded ktlint engine. KotlinPoet already
+  manages imports, 4-space indentation, and wrapping; the one non-idiomatic artifact it emits is an
+  explicit `public` (no toggle, per ADR-018). `KotlinFormatter` strips exactly that. It stays
+  golden-testable with **no new runtime dependency** (SECURITY DS-6). The formatter is a seam: a
+  richer implementation can replace `format()`'s body later.
+- **Split the pipeline across the modules that own each concern.** The Compose desktop *target
+  exporter* (`packages/compose/targets/DesktopExporter`) is pure — it assembles a bundle of
+  `ExportFile`s (formatted screens built with KotlinPoet, scaffold text from `GradleScaffold`, and the
+  wrapper binaries) and never touches disk. The *writer* (`core/project/ProjectExporter`) is
+  framework-agnostic and drives every write through the existing `GuardedWriter`, so export inherits
+  the same path-safety guarantees as project save (root confinement, traversal/symlink rejection,
+  reserved-name checks, atomic replace — SECURITY §5). The shell triggers export through a Compose-free
+  `ProjectExportService` seam in `editor/state` that `:app` binds to those two, exactly like the
+  renderer/catalog wiring (ADR-013).
+- **Scaffold build scripts are flat templates.** `build.gradle.kts`/`settings.gradle.kts` are Kotlin
+  DSL but carry **no user prop values** — the only user-derived datum is the project name, reduced to a
+  `[a-z0-9-]` slug — so KotlinPoet (CLAUDE.md rule 4, aimed at the generated *UI* Kotlin) is neither
+  necessary nor practical for them, and GC-2's injection concern does not arise. The generated screens
+  and `Main.kt`, which *do* derive identifiers from user input, are built structurally with KotlinPoet.
+- **Pinned scaffold versions are constants mirroring the catalog.** The version catalog is a
+  build-time artifact with no runtime accessor, so the emitted Kotlin/Compose/Gradle/JDK versions live
+  as constants in `GradleScaffold`, commented to be kept in lockstep with `libs.versions.toml`.
+
+**Rationale.** Reusing the guarded writer means export gets path safety for free rather than
+reimplementing it. Keeping the target exporter pure (bundle in, no I/O) matches the `CodeGenerator`
+SPI contract and keeps the framework package off the disk. A targeted formatter delivers the one
+normalization the emitter actually needs without dragging a CLI-oriented engine into the runtime.
+
+**Rejected.** Embedding `ktlint-rule-engine` at runtime (a large dependency tree for one `public`
+removal; DS-6). Synthesizing the wrapper jar or omitting it and telling users to run `gradle wrapper`
+(fails "runs unmodified"). Putting the write orchestration in `packages/compose` (would make the
+framework package do disk I/O, against the SPI's purity) or generalizing the SPI with target/export
+types now (ADR-007 — no second framework to shape them against). Full byte-for-byte goldens for
+`Main.kt` (asserted behaviorally instead; the screen files are pinned against the M6 golden minus
+`public`, and the compile gate proves both still build).
+
+**Consequences.** Export is end-to-end and dogfoodable from the toolbar. Adding a component/modifier
+still costs only its renderer + emitter + golden (ADR-018); export picks it up for free. The bundled
+wrapper artifacts must be refreshed when the repo's own wrapper is upgraded (they are byte-copies).
+The minimal export UI runs synchronously on the UI thread — fine for the small file counts of Phase 1;
+moving codegen/IO to `Dispatchers.IO` (ARCHITECTURE §8) is a later refinement. An actual
+`./gradlew run` of an exported project is **not** verified in CI (it needs network to resolve Compose
+artifacts); the in-process compile gate against real Compose (G2/GC-6) is the offline stand-in, and a
+scaffold smoke build is a candidate for the M10 packaging matrix.
+
+---
+
 ## Template
 
 ```markdown

@@ -4,7 +4,9 @@ import androidx.compose.compiler.plugins.kotlin.ComposePluginRegistrar
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
+import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.project.ProjectCodec
+import viewforge.project.TextFile
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import kotlin.test.Test
@@ -32,7 +34,22 @@ class CompilationTest {
             val generated = ComposeCodeGenerator().generate(ProjectCodec.decode(text)).single()
             SourceFile.kotlin(generated.path, generated.content)
         }
+        assertCompiles(sources, "generated Compose code did not compile")
+    }
 
+    @Test
+    fun `formatted export output still compiles`() {
+        // The G7 formatting pass (ADR-019) only removes redundant `public`; prove it never produces
+        // something that fails to compile — the whole point of the export path (G2/GC-6).
+        val sources = fixtures.map { name ->
+            val text = requireNotNull(javaClass.getResourceAsStream("/golden/$name.vforge")).bufferedReader().readText()
+            val exported = DesktopExporter.looseFiles(ProjectCodec.decode(text)).single() as TextFile
+            SourceFile.kotlin(exported.path, exported.content)
+        }
+        assertCompiles(sources, "formatted export output did not compile")
+    }
+
+    private fun assertCompiles(sources: List<SourceFile>, message: String) {
         val logs = ByteArrayOutputStream()
         val result = KotlinCompilation().apply {
             this.sources = sources
@@ -42,10 +59,6 @@ class CompilationTest {
             verbose = false
         }.compile()
 
-        assertEquals(
-            KotlinCompilation.ExitCode.OK,
-            result.exitCode,
-            "generated Compose code did not compile:\n$logs",
-        )
+        assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, "$message:\n$logs")
     }
 }

@@ -9,6 +9,11 @@ dependencies {
     api(projects.core.spi)
     implementation(projects.core.model)
 
+    // Export writer + file types (M7): the desktop target exporter assembles an ExportFile bundle
+    // that the guarded writer in core/project persists. core/project is framework-agnostic, so this
+    // keeps the dependency direction clean (package → core).
+    implementation(projects.core.project)
+
     // Codegen: KotlinPoet structural API only — never string concatenation (CLAUDE.md rule 4).
     implementation(libs.kotlinpoet)
 
