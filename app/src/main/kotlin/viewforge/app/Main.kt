@@ -10,8 +10,11 @@ import viewforge.editor.shell.EditorShell
 import viewforge.editor.state.ComponentCatalog
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.PaletteEntry
+import viewforge.model.ModifierDefinition
 import viewforge.model.Node
+import viewforge.model.PropDefinition
 import viewforge.packages.compose.catalog.ComposeComponents
+import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.render.ComposeRenderer
 
 /**
@@ -64,4 +67,10 @@ private object ComposeCatalog : ComponentCatalog {
     override fun acceptsChildren(type: String): Boolean = ComposeComponents.specFor(type)?.acceptsChildren ?: false
 
     override fun slotsOf(type: String): List<String> = ComposeComponents.specFor(type)?.slots ?: emptyList()
+
+    override fun propsFor(type: String): List<PropDefinition> = ComposeComponents.specFor(type)?.props ?: emptyList()
+
+    override val modifierCatalog: List<ModifierDefinition> = ComposeModifiers.definitions
+
+    override fun modifierDef(type: String): ModifierDefinition? = ComposeModifiers.definitionFor(type)
 }

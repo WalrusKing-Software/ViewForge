@@ -1,6 +1,8 @@
 package viewforge.editor.state
 
+import viewforge.model.ModifierDefinition
 import viewforge.model.Node
+import viewforge.model.PropDefinition
 
 /**
  * One selectable entry in the component palette (FEATURES P1a). Pure data — the palette UI is
@@ -34,4 +36,13 @@ interface ComponentCatalog {
 
     /** Convenience: does [type] hold children in the default region or any slot at all? */
     fun isContainer(type: String): Boolean = acceptsChildren(type) || slotsOf(type).isNotEmpty()
+
+    /** The editable prop schema for [type] — drives the data-driven inspector (M5, I1). Empty if unknown. */
+    fun propsFor(type: String): List<PropDefinition>
+
+    /** Every modifier the inspector may add, with its arg schema (the renderer-supported set). */
+    val modifierCatalog: List<ModifierDefinition>
+
+    /** The schema for one modifier [type] (for editing its args), or null if not in the catalog. */
+    fun modifierDef(type: String): ModifierDefinition?
 }

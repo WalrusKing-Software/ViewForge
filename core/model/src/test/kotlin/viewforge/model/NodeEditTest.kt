@@ -124,6 +124,27 @@ class NodeEditTest {
     }
 
     @Test
+    fun `withProp sets, overwrites, and removes a prop`() {
+        val text = Node(id = NodeId("t"), type = "compose.material3.Text")
+        val v = PropValue.Literal(kotlinx.serialization.json.JsonPrimitive("Hi"))
+        val set = text.withProp("text", v)
+        assertEquals(v, set.props["text"])
+        // Removing (null) drops the key; setting the identical value is a no-op (same instance).
+        assertSame(set, set.withProp("text", v))
+        assertTrue("text" !in set.withProp("text", null).props)
+        assertSame(text, text.withProp("text", null)) // removing an absent key changes nothing
+    }
+
+    @Test
+    fun `withModifiers replaces the ordered chain and no-ops when equal`() {
+        val m1 = ModifierEntry(id = "m1", type = "compose.padding")
+        val node = Node(id = NodeId("n"), type = "compose.foundation.layout.Box", modifiers = listOf(m1))
+        val m2 = ModifierEntry(id = "m2", type = "compose.fillMaxSize")
+        assertEquals(listOf(m1, m2), node.withModifiers(listOf(m1, m2)).modifiers)
+        assertSame(node, node.withModifiers(listOf(m1)))
+    }
+
+    @Test
     fun `updateScreenRoot shares other screens and no-ops when unchanged`() {
         val screenA = Screen(id = "s1", name = "A", root = root)
         val screenB = Screen(id = "s2", name = "B", root = a)

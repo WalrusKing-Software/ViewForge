@@ -331,6 +331,72 @@ seam grows into the fuller SPI schema — revised against real use, not guessed.
 
 ---
 
+## ADR-016 — `PropDefinition` schema lives in `core/model`; the inspector is fully data-driven
+
+**Status:** Accepted
+
+**Context.** M5 makes the inspector edit props and modifiers with typed controls, generated from a
+schema (`PropDefinition`/`PropType`, `ModifierDefinition`) rather than per-component UI (I1). That
+schema is framework knowledge, but it is also pure data that both the framework package (which
+authors it) and the editor (which renders controls from it) need. ADR-015 put the smaller
+`ComponentCatalog`/`PaletteEntry` seam in `editor/state` and had `:app` adapt the compose package's
+own plain data — which duplicated the shape. Where should the richer prop schema live?
+
+**Decision.** Put `PropType`, `PropDefinition`, `ModifierArg`, and `ModifierDefinition` in
+`core/model` as pure, non-serialized data. `packages/compose` builds real `PropDefinition`s (it
+already depends on `core/model`), the `ComponentCatalog` interface in `editor/state` returns them, and
+`:app`'s adapter passes them straight through with no mapping. The inspector iterates
+`catalog.propsFor(type)` and `catalog.modifierCatalog` and dispatches purely on `PropType` — **no
+per-component branching**.
+
+**Rationale.** These types reference `PropValue`, which is already in `core/model`, and DATA_MODEL §6
+sketches `PropDefinition` as core schema. Homing them there removes the ADR-015 duplication and keeps
+the dependency direction clean (package → core, editor → core; package never depends on the editor).
+They are **not** `@Serializable`: they describe the package's runtime capabilities, not the persisted
+document, so they never enter the `.vforge` format or need migration.
+
+**Rejected.** Duplicating the schema in `packages/compose` and mapping in `:app` (needless
+boilerplate, drift risk). Putting it in `core/spi` (still a marker module; would pull richer types
+into the SPI before a second framework justifies the shape, ADR-007).
+
+**Consequences.** Adding a component or modifier is data-only: author its schema in the compose
+catalog and the inspector picks it up. The editor-owned `ComponentCatalog` *interface* stays the seam
+(ADR-013/015); only the data types moved to core. Enum value lists in the catalog must stay in lockstep
+with the renderer's parsers (`render/Values.kt`), enforced by the honesty rule, not the compiler.
+
+---
+
+## ADR-017 — Undo coalescing via `Command.coalesceKey`
+
+**Status:** Accepted
+
+**Context.** A slider/stepper drag or typing into a text field emits many `SetProp`/`SetModifierArg`
+commands per second. Recording each as its own history entry (D3) makes undo useless — one Ctrl+Z
+should reverse the whole gesture, not one keystroke. The M4 `History` recorded every command
+verbatim.
+
+**Decision.** Add `val coalesceKey: Any? get() = null` to `Command`. When an executed command has a
+non-null key equal to the top undo entry's key **and the redo stack is empty**, `History.execute`
+merges them: it keeps the *original* entry's inverse (so undo reverts the entire run) and swaps in the
+latest command (so redo reaches the final state). `SetProp` keys on `(nodeId, "prop", key)`,
+`SetModifierArg` on `(nodeId, modifierId, key)`; structural commands leave the key null and never
+coalesce.
+
+**Rationale.** A single captured inverse plus the latest command is exactly the endpoints of the run,
+which is all a linear history needs. Keying by target means switching to a different prop/node/modifier
+naturally starts a fresh entry — no explicit begin/end transaction bracketing the gesture, which the
+inspector controls would otherwise have to signal on drag start/stop.
+
+**Rejected.** Explicit transactions (begin/commit around a gesture) — more plumbing through every
+control for the same result. Time-window coalescing — fragile and surprising across pauses.
+
+**Consequences.** Continuous edits are one undo step and the canvas still updates live per keystroke.
+Coalescing is deliberately conservative (interrupted by any differently-keyed command or an undo), so
+it never silently swallows a distinct edit. `CompositeCommand` remains for genuinely atomic multi-part
+edits (e.g. cut); the two mechanisms are complementary.
+
+---
+
 ## Template
 
 ```markdown

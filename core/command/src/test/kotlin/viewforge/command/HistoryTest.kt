@@ -1,13 +1,16 @@
 package viewforge.command
 
+import kotlinx.serialization.json.JsonPrimitive
 import viewforge.command.Fixtures.rootOf
 import viewforge.model.ChildAddress
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.PropValue
 import viewforge.model.findById
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HistoryTest {
@@ -18,6 +21,10 @@ class HistoryTest {
         ChildAddress(NodeId("root"), null, index),
         Node(NodeId(name), "compose.material3.Text"),
     )
+
+    private fun lit(s: String): PropValue = PropValue.Literal(JsonPrimitive(s))
+
+    private fun asString(value: PropValue?): String? = (value as? PropValue.Literal)?.value?.content
 
     @Test
     fun `undo then redo restores each state`() {
@@ -65,6 +72,41 @@ class HistoryTest {
         doc = history.undo(doc)
         assertFalse(history.canUndo)
         assertEquals("one", doc.rootOf().findById(NodeId("a"))!!.name) // "two"→"one", not back to null
+    }
+
+    @Test
+    fun `consecutive same-key edits coalesce into one undo step`() {
+        val history = History()
+        val id = NodeId("a")
+        var doc = doc0
+        // Simulate a scrub: three edits to the same prop in a row.
+        doc = history.execute(SetProp(Fixtures.SCREEN, id, "text", lit("a")), doc)
+        doc = history.execute(SetProp(Fixtures.SCREEN, id, "text", lit("ab")), doc)
+        doc = history.execute(SetProp(Fixtures.SCREEN, id, "text", lit("abc")), doc)
+        assertEquals("abc", doc.rootOf().findById(id)!!.props["text"].let(::asString))
+
+        // A single undo reverts the whole run back to the original (prop absent), not one keystroke.
+        doc = history.undo(doc)
+        assertNull(doc.rootOf().findById(id)!!.props["text"])
+        assertFalse(history.canUndo)
+
+        // Redo re-applies the latest state.
+        doc = history.redo(doc)
+        assertEquals("abc", doc.rootOf().findById(id)!!.props["text"].let(::asString))
+    }
+
+    @Test
+    fun `edits to different props do not coalesce`() {
+        val history = History()
+        val id = NodeId("a")
+        var doc = doc0
+        doc = history.execute(SetProp(Fixtures.SCREEN, id, "text", lit("x")), doc)
+        doc = history.execute(SetProp(Fixtures.SCREEN, id, "color", lit("#FFF")), doc)
+        // Two distinct entries: one undo removes only the color.
+        doc = history.undo(doc)
+        assertNull(doc.rootOf().findById(id)!!.props["color"])
+        assertEquals("x", doc.rootOf().findById(id)!!.props["text"].let(::asString))
+        assertTrue(history.canUndo)
     }
 
     @Test
