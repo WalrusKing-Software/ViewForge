@@ -21,12 +21,18 @@ import viewforge.packages.compose.render.ComposeRenderer
 fun main() = application {
     val state = EditorState(sampleProject())
 
-    // The wiring: the editor asks CanvasRenderer to draw a node; the Compose package obliges,
-    // theming it with the project's own theme. `dark = false` until the canvas gains a mode
-    // toggle (FEATURES H2).
+    // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
+    // instrumentation the canvas needs for hit-testing (ADR-009); the Compose package obliges,
+    // theming it with the project's own theme and applying that instrumentation to each node.
+    // `dark = false` until the canvas gains a mode toggle (FEATURES H2).
     val renderer =
-        CanvasRenderer { root ->
-            ComposeRenderer.RenderScreen(root = root, theme = state.project.theme, dark = false)
+        CanvasRenderer { root, instrument ->
+            ComposeRenderer.RenderScreen(
+                root = root,
+                theme = state.project.theme,
+                dark = false,
+                instrument = instrument,
+            )
         }
 
     val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))

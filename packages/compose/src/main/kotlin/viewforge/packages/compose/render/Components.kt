@@ -36,7 +36,9 @@ import viewforge.model.PropValue
 fun RenderNode(node: Node, ctx: RenderContext) {
     if (node.hidden) return // excluded from BOTH render and codegen (DATA_MODEL §5)
 
-    val modifier = buildModifier(node.modifiers, ctx)
+    // Fold the node's own (semantic, ordered) chain, then append the editor's instrumentation last so
+    // it observes the fully-modified node without altering its layout (ARCHITECTURE §4.2, ADR-009).
+    val modifier = buildModifier(node.modifiers, ctx).then(ctx.instrument(node.id))
     when (node.type) {
         "compose.foundation.layout.Column" -> RenderColumn(node, modifier, ctx)
         "compose.foundation.layout.Row" -> RenderRow(node, modifier, ctx)
