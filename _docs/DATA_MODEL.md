@@ -91,7 +91,7 @@ A user-defined composable, reusable across screens.
 ```
 
 Instances reference these via a node whose `type` is `"vforge.userComponent"` and whose props carry
-the component ID plus argument values.
+the referenced component ID under the `componentId` key (a `literal` string) plus argument values.
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
 itself. Validate on every mutation, not just on save — a cycle will hang the renderer.
