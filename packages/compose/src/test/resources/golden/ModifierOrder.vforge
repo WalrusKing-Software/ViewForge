@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8MODORDER",
+  "name": "ModifierOrder",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ord",
+      "name": "ModifierOrderScreen",
+      "root": {
+        "id": "oc_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "ob_01",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              { "id": "om_01", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 8 } } },
+              { "id": "om_02", "type": "compose.background", "args": { "color": { "kind": "literal", "value": "#00FF00" } } }
+            ]
+          },
+          {
+            "id": "ob_02",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              { "id": "om_03", "type": "compose.background", "args": { "color": { "kind": "literal", "value": "#00FF00" } } },
+              { "id": "om_04", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 8 } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

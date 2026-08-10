@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8MODIFIERS",
+  "name": "Modifiers",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "theme": { "colors": { "brand": { "light": "#123456", "dark": "#654321" } } },
+  "screens": [
+    {
+      "id": "scr_mod",
+      "name": "ModifiersScreen",
+      "root": {
+        "id": "mc_01",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [ { "id": "mm_00", "type": "compose.fillMaxSize", "args": {} } ],
+        "children": [
+          {
+            "id": "mb_01",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [ { "id": "mm_01", "type": "compose.background", "args": { "color": { "kind": "literal", "value": "#FF0000" } } } ]
+          },
+          {
+            "id": "mb_02",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [ { "id": "mm_02", "type": "compose.background", "args": { "color": { "kind": "theme", "token": "colors.primary" } } } ]
+          },
+          {
+            "id": "mb_03",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [ { "id": "mm_03", "type": "compose.background", "args": { "color": { "kind": "theme", "token": "colors.brand" } } } ]
+          },
+          {
+            "id": "mb_04",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              { "id": "mm_04", "type": "compose.padding", "args": { "start": { "kind": "literal", "value": 8 }, "top": { "kind": "literal", "value": 4 }, "end": { "kind": "literal", "value": 8 }, "bottom": { "kind": "literal", "value": 4 } } }
+            ]
+          },
+          {
+            "id": "mb_05",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [ { "id": "mm_05", "type": "compose.fillMaxWidth", "args": {} } ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

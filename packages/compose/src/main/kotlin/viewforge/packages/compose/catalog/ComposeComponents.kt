@@ -15,10 +15,13 @@ import viewforge.model.Ulid
  * instance of each, and each type's container facts (default children / named slots) for drop
  * validation.
  *
- * It deliberately mirrors **only the currently renderable set** (`RenderNode` in
- * `render/Components.kt`): Column, Row, Box, Spacer, Text, Button. The palette must never offer a node
- * the canvas can't draw — the two grow together, at M6. `:app` adapts this to the editor's
- * `ComponentCatalog` seam (ADR-013); nothing here depends on the editor or on Compose UI types.
+ * It deliberately mirrors **only the currently supported set** (Column, Row, Box, Spacer, Text,
+ * Button), which as of M6 the renderer (`render/Components.kt`) *and* codegen
+ * (`codegen/ComponentEmitter.kt`) both cover in lockstep — the palette never offers a node the canvas
+ * can't draw or the emitter can't generate. Growing the set (Card, TextField, …) is a
+ * renderer + emitter + golden-test triple per component, deferred past M6 (depth over breadth, M9).
+ * `:app` adapts this to the editor's `ComponentCatalog` seam (ADR-013); nothing here depends on the
+ * editor or on Compose UI types.
  */
 object ComposeComponents {
     /** One catalog entry: palette metadata, container facts, an editable prop schema, and a factory. */

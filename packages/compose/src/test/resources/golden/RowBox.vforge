@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8ROWBOX",
+  "name": "RowBox",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_rb",
+      "name": "RowBoxScreen",
+      "root": {
+        "id": "r_01",
+        "type": "compose.foundation.layout.Row",
+        "props": {
+          "horizontalArrangement": { "kind": "literal", "value": "SpaceBetween" },
+          "verticalAlignment": { "kind": "literal", "value": "CenterVertically" }
+        },
+        "modifiers": [ { "id": "rm_01", "type": "compose.fillMaxWidth", "args": {} } ],
+        "children": [
+          {
+            "id": "b_01",
+            "type": "compose.foundation.layout.Box",
+            "props": { "contentAlignment": { "kind": "literal", "value": "Center" } },
+            "modifiers": [
+              { "id": "bm_01", "type": "compose.size", "args": { "width": { "kind": "literal", "value": 120 }, "height": { "kind": "literal", "value": 40 } } }
+            ],
+            "children": [
+              {
+                "id": "s_01",
+                "type": "compose.foundation.layout.Spacer",
+                "modifiers": [ { "id": "sm_01", "type": "compose.size", "args": { "all": { "kind": "literal", "value": 8 } } } ]
+              }
+            ]
+          },
+          {
+            "id": "b_02",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              { "id": "bm_02", "type": "compose.width", "args": { "value": { "kind": "literal", "value": 100 } } },
+              { "id": "bm_03", "type": "compose.height", "args": { "value": { "kind": "literal", "value": 50 } } },
+              { "id": "bm_04", "type": "compose.fillMaxHeight", "args": {} }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}
