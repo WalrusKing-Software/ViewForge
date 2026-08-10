@@ -38,6 +38,23 @@ class CompilationTest {
     }
 
     @Test
+    fun `generated theme wrapper compiles with its screen`() {
+        // The AppTheme wrapper (H4) and a screen that emits an inline TextStyle for a custom typography
+        // token must compile against real Compose/Material3 — the H4 half of the compile gate (M8).
+        val text = requireNotNull(
+            javaClass.getResourceAsStream("/golden/ThemeWrapper.vforge"),
+        ).bufferedReader().readText()
+        val project = ProjectCodec.decode(text)
+        val theme = requireNotNull(ComposeCodeGenerator().generateTheme(project)) { "theme should be emitted" }
+        val screen = ComposeCodeGenerator().generate(project).single()
+        val sources = listOf(
+            SourceFile.kotlin("Theme.kt", theme),
+            SourceFile.kotlin(screen.path, screen.content),
+        )
+        assertCompiles(sources, "generated theme wrapper did not compile")
+    }
+
+    @Test
     fun `formatted export output still compiles`() {
         // The G7 formatting pass (ADR-019) only removes redundant `public`; prove it never produces
         // something that fails to compile — the whole point of the export path (G2/GC-6).

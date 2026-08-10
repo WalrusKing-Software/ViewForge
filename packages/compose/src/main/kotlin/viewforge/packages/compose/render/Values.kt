@@ -28,6 +28,22 @@ internal fun PropValue?.literalFloat(): Float? = asPrimitive()?.floatOrNull
 
 internal fun PropValue?.literalBoolean(): Boolean? = asPrimitive()?.booleanOrNull
 
+// --- Theme slots ---------------------------------------------------------------------------------
+
+/**
+ * The Material `colorScheme` slots a project theme may override by naming a `colors.<slot>` token —
+ * the canonical set shared by the canvas ([projectColorScheme]) and codegen (`CodegenValues`), so the
+ * two can never disagree about which tokens map onto the scheme (the ADR-018 render/codegen marriage).
+ * Ordered so generated `lightColorScheme(...)` args are deterministic for the golden tests.
+ */
+internal val MATERIAL_COLOR_SLOTS: List<String> = listOf(
+    "primary", "onPrimary", "secondary", "onSecondary",
+    "background", "onBackground", "surface", "onSurface", "error", "onError",
+)
+
+/** The Material `shapes` slots a project theme may override by naming a `shapes.<slot>` token. */
+internal val MATERIAL_SHAPE_SLOTS: List<String> = listOf("small", "medium", "large")
+
 // --- Colors --------------------------------------------------------------------------------------
 
 /**

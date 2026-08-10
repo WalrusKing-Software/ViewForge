@@ -18,8 +18,20 @@ internal object ComposeNames {
     val Color = ClassName("androidx.compose.ui.graphics", "Color")
     val MaterialTheme = ClassName("androidx.compose.material3", "MaterialTheme")
 
-    // Unit extension property: `16.dp`
+    // Theme wrapper types (M8 theme codegen)
+    val ColorScheme = ClassName("androidx.compose.material3", "ColorScheme")
+    val Shapes = ClassName("androidx.compose.material3", "Shapes")
+    val Typography = ClassName("androidx.compose.material3", "Typography")
+    val TextStyle = ClassName("androidx.compose.ui.text", "TextStyle")
+    val FontWeight = ClassName("androidx.compose.ui.text.font", "FontWeight")
+    val lightColorScheme = MemberName("androidx.compose.material3", "lightColorScheme")
+    val darkColorScheme = MemberName("androidx.compose.material3", "darkColorScheme")
+    val RoundedCornerShape = MemberName("androidx.compose.foundation.shape", "RoundedCornerShape")
+    val isSystemInDarkTheme = MemberName("androidx.compose.foundation", "isSystemInDarkTheme")
+
+    // Unit extension properties: `16.dp`, `22.sp`
     val dp = MemberName("androidx.compose.ui.unit", "dp")
+    val sp = MemberName("androidx.compose.ui.unit", "sp")
 
     // Composables
     val Column = MemberName("androidx.compose.foundation.layout", "Column")

@@ -18,7 +18,10 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -37,6 +40,7 @@ import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.Inspector
 import viewforge.editor.panels.Palette
+import viewforge.editor.panels.ThemeEditor
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
@@ -55,6 +59,11 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: Pro
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
 
+        // The theme editor is a modal dialog (M8), opened from the toolbar; its state lives here so it
+        // survives toolbar recomposition and can be dismissed from either the dialog or a re-click.
+        var showThemeEditor by remember { mutableStateOf(false) }
+        if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
+
         Surface(Modifier.fillMaxSize()) {
             Column(
                 Modifier
@@ -65,7 +74,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: Pro
                     // search, inline rename — consumes its keys first and typing is never hijacked.
                     .onKeyEvent { handleShortcut(it, state) },
             ) {
-                Toolbar(state, exportService)
+                Toolbar(state, exportService, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     Palette(state, Modifier.width(180.dp).fillMaxHeight())
@@ -82,7 +91,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: Pro
 }
 
 @Composable
-private fun Toolbar(state: EditorState, exportService: ProjectExportService) {
+private fun Toolbar(state: EditorState, exportService: ProjectExportService, onOpenThemeEditor: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -97,6 +106,13 @@ private fun Toolbar(state: EditorState, exportService: ProjectExportService) {
             ToolbarButton("Redo", enabled = state.canRedo, onClick = state::redo)
             ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
             ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
+            ToolbarButton("Theme…", enabled = true, onClick = onOpenThemeEditor)
+            // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
+            ToolbarButton(
+                if (state.canvasDark) "◐ Dark" else "◑ Light",
+                enabled = true,
+                onClick = state::toggleCanvasDark,
+            )
             ExportBar(state, exportService)
         }
     }
