@@ -9,13 +9,20 @@ import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.shell.EditorShell
 import viewforge.editor.state.ComponentCatalog
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.ExportMode
 import viewforge.editor.state.PaletteEntry
+import viewforge.editor.state.ProjectExportService
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
+import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.render.ComposeRenderer
+import viewforge.packages.compose.targets.DesktopExporter
+import viewforge.project.ExportFile
+import viewforge.project.ProjectExporter
+import java.nio.file.Path
 
 /**
  * Desktop entry point and the single bootstrapping site allowed a compile-time dependency on
@@ -48,7 +55,26 @@ fun main() = application {
         state = windowState,
         title = "ViewForge",
     ) {
-        EditorShell(state, renderer)
+        EditorShell(state, renderer, DesktopExportService)
+    }
+}
+
+/**
+ * Binds the editor's Compose-free [ProjectExportService] seam to the Compose desktop target exporter
+ * ([DesktopExporter], which builds the file bundle) and the guarded [ProjectExporter] in `core/project`
+ * (which writes it). The same bootstrapping role `Main` plays for the renderer and catalog (ADR-013) —
+ * the shell exports without ever naming the framework package.
+ */
+private object DesktopExportService : ProjectExportService {
+    override fun conflicts(project: Project, dir: Path, mode: ExportMode): List<String> =
+        ProjectExporter.conflicts(dir, bundle(project, mode))
+
+    override fun export(project: Project, dir: Path, mode: ExportMode): List<String> =
+        ProjectExporter.write(dir, bundle(project, mode))
+
+    private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
+        ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)
+        ExportMode.GRADLE_PROJECT -> DesktopExporter.gradleProject(project)
     }
 }
 

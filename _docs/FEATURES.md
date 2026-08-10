@@ -111,7 +111,7 @@ into issues directly.
 | G4 | Export loose `.kt` files | P0 | To a user-chosen directory, with overwrite confirmation. |
 | G5 | Export runnable Gradle project | P0 | Scaffolds a Compose Desktop project that runs with `./gradlew run` unmodified. |
 | G6 | Generated-file header | P0 | Names source file, schema version, and warns about hand-edits. |
-| G7 | Formatting pass on output | P0 | ktlint/spotless applied; output is idiomatic, not merely valid. |
+| G7 | Formatting pass on output | P0 | A formatting pass makes output idiomatic, not merely valid (M7: a deterministic normalizer strips KotlinPoet's redundant `public`; KotlinPoet handles imports/indent/wrap. ADR-019). |
 | G8 | Copy composable to clipboard | P1 | For pasting into an existing project. |
 | G9 | Per-target source-set routing | P1 | Phase 2+: files land in `commonMain` vs `androidMain` correctly. |
 | G10 | Regeneration into an owned directory | P1 | Wholesale regeneration is safe and doesn't clobber user files. |

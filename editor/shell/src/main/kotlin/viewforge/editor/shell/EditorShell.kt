@@ -39,6 +39,7 @@ import viewforge.editor.panels.Inspector
 import viewforge.editor.panels.Palette
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.ProjectExportService
 
 /**
  * The top of the editor UI (ARCHITECTURE §2): a toolbar plus the four working surfaces — palette,
@@ -49,7 +50,7 @@ import viewforge.editor.state.EditorState
  * deliberately separate from the *project's* theme the canvas renders (FEATURES S3).
  */
 @Composable
-fun EditorShell(state: EditorState, renderer: CanvasRenderer) {
+fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: ProjectExportService) {
     MaterialTheme(colorScheme = darkColorScheme()) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
@@ -64,7 +65,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer) {
                     // search, inline rename — consumes its keys first and typing is never hijacked.
                     .onKeyEvent { handleShortcut(it, state) },
             ) {
-                Toolbar(state)
+                Toolbar(state, exportService)
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     Palette(state, Modifier.width(180.dp).fillMaxHeight())
@@ -81,7 +82,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer) {
 }
 
 @Composable
-private fun Toolbar(state: EditorState) {
+private fun Toolbar(state: EditorState, exportService: ProjectExportService) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -96,12 +97,13 @@ private fun Toolbar(state: EditorState) {
             ToolbarButton("Redo", enabled = state.canRedo, onClick = state::redo)
             ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
             ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
+            ExportBar(state, exportService)
         }
     }
 }
 
 @Composable
-private fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelMedium,
