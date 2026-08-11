@@ -61,8 +61,10 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -187,8 +189,10 @@ private fun RenderText(node: Node, modifier: Modifier, ctx: RenderContext) {
         modifier = modifier,
         color = resolveColor(node.props["color"], ctx) ?: Color.Unspecified,
         fontSize = node.props["fontSize"].literalInt()?.sp ?: TextUnit.Unspecified,
+        fontStyle = node.props["fontStyle"].literalString()?.let { fontStyleOf(it) },
         fontWeight = node.props["fontWeight"].literalString()?.let { fontWeightOf(it) },
         letterSpacing = node.props["letterSpacing"].literalInt()?.sp ?: TextUnit.Unspecified,
+        textDecoration = node.props["textDecoration"].literalString()?.let { textDecorationOf(it) },
         textAlign = node.props["textAlign"].literalString()?.let { textAlignOf(it) },
         lineHeight = node.props["lineHeight"].literalInt()?.sp ?: TextUnit.Unspecified,
         overflow = node.props["overflow"].literalString()?.let { textOverflowOf(it) } ?: TextOverflow.Clip,
@@ -203,6 +207,17 @@ private fun fontWeightOf(name: String): FontWeight = when (fontWeightName(name))
     "SemiBold" -> FontWeight.SemiBold
     "Bold" -> FontWeight.Bold
     else -> FontWeight.Normal
+}
+
+private fun fontStyleOf(name: String): FontStyle = when (fontStyleName(name)) {
+    "Italic" -> FontStyle.Italic
+    else -> FontStyle.Normal
+}
+
+private fun textDecorationOf(name: String): TextDecoration = when (textDecorationName(name)) {
+    "Underline" -> TextDecoration.Underline
+    "LineThrough" -> TextDecoration.LineThrough
+    else -> TextDecoration.None
 }
 
 private fun textAlignOf(name: String): TextAlign = when (textAlignName(name)) {

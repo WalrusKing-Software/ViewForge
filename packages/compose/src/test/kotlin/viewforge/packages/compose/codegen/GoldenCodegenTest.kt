@@ -75,6 +75,9 @@ class GoldenCodegenTest {
     // Text sp spacing props: letterSpacing + lineHeight, completing the sp trio with fontSize (issue #17).
     @Test fun textSpacing() = assertGolden("TextSpacing")
 
+    // Text emphasis enums: fontStyle + textDecoration, completing Text's prop set (issue #17).
+    @Test fun textEmphasis() = assertGolden("TextEmphasis")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }
