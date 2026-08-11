@@ -72,6 +72,9 @@ class GoldenCodegenTest {
     // Image `alignment` (Alignment enum) + `alpha` (Float), each independently omittable (issue #17).
     @Test fun imageAdjust() = assertGolden("ImageAdjust")
 
+    // Text sp spacing props: letterSpacing + lineHeight, completing the sp trio with fontSize (issue #17).
+    @Test fun textSpacing() = assertGolden("TextSpacing")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

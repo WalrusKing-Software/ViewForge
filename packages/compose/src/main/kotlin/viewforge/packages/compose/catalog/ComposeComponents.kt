@@ -152,10 +152,13 @@ object ComposeComponents {
             props = listOf(
                 PropDefinition("text", PropType.String, default = stringLiteral("")),
                 PropDefinition("color", PropType.Color, themeable = true),
-                // fontSize is in sp (PropType.Int for now; a suffixed Sp control is a later inspector polish).
+                // fontSize/letterSpacing/lineHeight are all sp (PropType.Int for now; a suffixed Sp control
+                // is a later inspector polish). Ordered to mirror the Text composable signature.
                 PropDefinition("fontSize", PropType.Int),
                 enumProp("fontWeight", FONT_WEIGHTS, default = "Normal"),
+                PropDefinition("letterSpacing", PropType.Int),
                 enumProp("textAlign", TEXT_ALIGNS, default = "Start"),
+                PropDefinition("lineHeight", PropType.Int),
                 PropDefinition("maxLines", PropType.Int),
                 enumProp("overflow", TEXT_OVERFLOWS, default = "Clip"),
                 PropDefinition("style", PropType.Typography, themeable = true),

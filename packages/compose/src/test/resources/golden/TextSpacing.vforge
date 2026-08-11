@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8TEXTSPACING",
+  "name": "TextSpacing",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_tsp",
+      "name": "TextSpacingScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "t_01",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Spaced Heading" },
+              "fontSize": { "kind": "literal", "value": 20 },
+              "letterSpacing": { "kind": "literal", "value": 2 },
+              "lineHeight": { "kind": "literal", "value": 32 }
+            }
+          },
+          {
+            "id": "t_02",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "A body paragraph with generous line height" },
+              "lineHeight": { "kind": "literal", "value": 24 }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}
