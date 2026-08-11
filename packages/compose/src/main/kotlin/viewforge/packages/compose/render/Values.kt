@@ -170,6 +170,22 @@ internal val ICON_NAMES: List<String> = listOf(
 /** Normalizes an icon prop to a curated name, falling back to `Star` for anything unknown. */
 internal fun iconName(name: String?): String = if (name in ICON_NAMES) name!! else "Star"
 
+// --- Text styling enums (the value name is the Compose member name: `FontWeight.Bold` etc.) --------
+// Single source of truth: catalog advertises these, the renderer maps each to its Compose constant,
+// and codegen emits `<Type>.<name>` (kept honest by CatalogConsistencyTest).
+
+internal val FONT_WEIGHTS: List<String> = listOf("Light", "Normal", "Medium", "SemiBold", "Bold")
+
+internal fun fontWeightName(name: String?): String = if (name in FONT_WEIGHTS) name!! else "Normal"
+
+internal val TEXT_ALIGNS: List<String> = listOf("Start", "Center", "End", "Justify")
+
+internal fun textAlignName(name: String?): String = if (name in TEXT_ALIGNS) name!! else "Start"
+
+internal val TEXT_OVERFLOWS: List<String> = listOf("Clip", "Ellipsis", "Visible")
+
+internal fun textOverflowName(name: String?): String = if (name in TEXT_OVERFLOWS) name!! else "Clip"
+
 internal fun boxAlign(name: String?): BoxAlign = when (name) {
     "TopStart" -> BoxAlign.TopStart
     "TopCenter" -> BoxAlign.TopCenter

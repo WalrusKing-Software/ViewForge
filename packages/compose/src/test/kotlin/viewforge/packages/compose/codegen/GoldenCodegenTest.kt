@@ -63,6 +63,9 @@ class GoldenCodegenTest {
     // Scaffold: topBar/bottomBar named slots + a content lambda with its PaddingValues (issue #16).
     @Test fun scaffold() = assertGolden("Scaffold")
 
+    // Text styling props: fontSize (sp), fontWeight, textAlign, maxLines, overflow (issue #17).
+    @Test fun textStyling() = assertGolden("TextStyling")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

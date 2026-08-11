@@ -107,6 +107,11 @@ into issues directly.
 | I8 | Validation feedback | P1 | Invalid values are shown inline before codegen ever runs. |
 | I9 | Responsive overrides | P2 | Per-breakpoint prop values (needed for Phase 2). |
 
+> **Per-component prop coverage (issue #17):** fleshing out each component's editable props toward its
+> full idiomatic set — pure catalog schema + renderer/emitter/golden work, no inspector code (I1). New
+> value emitters (`sp`, `int`) and text enums (`FontWeight`/`TextAlign`/`TextOverflow`) land here.
+> - *Slice 1 — Text:* `fontSize` (sp) · `fontWeight` · `textAlign` · `maxLines` · `overflow`.
+
 ## 5. Document & history
 
 | # | Feature | Pri | Acceptance |

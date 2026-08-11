@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8TEXTSTYLING",
+  "name": "TextStyling",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ts",
+      "name": "TextStylingScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "t_01",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Heading" },
+              "fontSize": { "kind": "literal", "value": 24 },
+              "fontWeight": { "kind": "literal", "value": "Bold" },
+              "textAlign": { "kind": "literal", "value": "Center" }
+            }
+          },
+          {
+            "id": "t_02",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "A long body that may not fit on one line" },
+              "maxLines": { "kind": "literal", "value": 1 },
+              "overflow": { "kind": "literal", "value": "Ellipsis" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}
