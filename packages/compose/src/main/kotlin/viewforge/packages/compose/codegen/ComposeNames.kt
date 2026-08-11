@@ -47,6 +47,11 @@ internal object ComposeNames {
     val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")
     val Text = MemberName("androidx.compose.material3", "Text")
     val Button = MemberName("androidx.compose.material3", "Button")
+
+    // The filled Button's styling factories (issue #17): `ButtonDefaults.buttonColors(...)` /
+    // `.buttonElevation(...)`, and `PaddingValues(...)` for contentPadding.
+    val ButtonDefaults = ClassName("androidx.compose.material3", "ButtonDefaults")
+    val PaddingValues = ClassName("androidx.compose.foundation.layout", "PaddingValues")
     val OutlinedButton = MemberName("androidx.compose.material3", "OutlinedButton")
     val TextButton = MemberName("androidx.compose.material3", "TextButton")
     val Slider = MemberName("androidx.compose.material3", "Slider")

@@ -177,9 +177,15 @@ object ComposeComponents {
             acceptsChildren = false,
             slots = listOf("content"),
             // onClick is an expression prop — never evaluated on the canvas (PF-4); edited via the
-            // raw-expression hatch, so its control renders whatever RawExpression it holds.
+            // raw-expression hatch, so its control renders whatever RawExpression it holds. The styling
+            // props (container/content color, elevation, contentPadding) map onto ButtonDefaults; they
+            // live on the filled Button only (the outlined/text variants have different color factories).
             props = listOf(
                 PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition("containerColor", PropType.Color, themeable = true),
+                PropDefinition("contentColor", PropType.Color, themeable = true),
+                PropDefinition("elevation", PropType.Dp),
+                PropDefinition("contentPadding", PropType.Dp),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
         ) {
