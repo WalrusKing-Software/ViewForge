@@ -10,11 +10,33 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -74,6 +97,7 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.Checkbox" -> RenderCheckbox(node, modifier)
         "compose.material3.Switch" -> RenderSwitch(node, modifier)
         "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
+        "compose.material3.Icon" -> RenderIcon(node, modifier)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -230,6 +254,39 @@ private fun RenderSwitch(node: Node, modifier: Modifier) {
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,
     )
+}
+
+@Composable
+private fun RenderIcon(node: Node, modifier: Modifier) {
+    Icon(
+        imageVector = iconVector(node.props["icon"].literalString()),
+        contentDescription = node.props["contentDescription"].literalString(),
+        modifier = modifier,
+    )
+}
+
+/** Maps a curated icon name to its `Icons.Filled` vector — kept in lockstep with [ICON_NAMES]. */
+private fun iconVector(name: String?): ImageVector = when (iconName(name)) {
+    "Home" -> Icons.Filled.Home
+    "Settings" -> Icons.Filled.Settings
+    "Search" -> Icons.Filled.Search
+    "Menu" -> Icons.Filled.Menu
+    "Close" -> Icons.Filled.Close
+    "Check" -> Icons.Filled.Check
+    "Add" -> Icons.Filled.Add
+    "Delete" -> Icons.Filled.Delete
+    "Edit" -> Icons.Filled.Edit
+    "Favorite" -> Icons.Filled.Favorite
+    "Info" -> Icons.Filled.Info
+    "Warning" -> Icons.Filled.Warning
+    "ArrowBack" -> Icons.Filled.ArrowBack
+    "ArrowForward" -> Icons.Filled.ArrowForward
+    "Person" -> Icons.Filled.Person
+    "Share" -> Icons.Filled.Share
+    "ShoppingCart" -> Icons.Filled.ShoppingCart
+    "Refresh" -> Icons.Filled.Refresh
+    "MoreVert" -> Icons.Filled.MoreVert
+    else -> Icons.Filled.Star
 }
 
 @Composable

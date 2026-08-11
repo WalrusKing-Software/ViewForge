@@ -50,6 +50,14 @@ object ComposeComponents {
     // emits as `ContentScale.<value>`.
     private val CONTENT_SCALE = listOf("Fit", "Crop", "FillBounds", "Inside", "None")
 
+    // The curated `Icon` set — must be a subset of `render/Values.kt`'s ICON_NAMES (CatalogConsistencyTest
+    // fails otherwise). Each maps to `Icons.Filled.<name>` in both the renderer and codegen.
+    private val ICONS = listOf(
+        "Home", "Settings", "Search", "Menu", "Close", "Check", "Add", "Delete", "Edit", "Favorite",
+        "Star", "Info", "Warning", "ArrowBack", "ArrowForward", "Person", "Share", "ShoppingCart",
+        "Refresh", "MoreVert",
+    )
+
     val specs: List<Spec> = listOf(
         Spec(
             "compose.foundation.layout.Column",
@@ -187,6 +195,23 @@ object ComposeComponents {
             ),
         ) {
             Node(id = NodeId.random(), type = "compose.foundation.Image")
+        },
+        Spec(
+            "compose.material3.Icon",
+            "Icon",
+            CATEGORY_CONTENT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            props = listOf(
+                enumProp("icon", ICONS, default = "Star"),
+                PropDefinition("contentDescription", PropType.String),
+            ),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.Icon",
+                props = mapOf("icon" to stringLiteral("Favorite")),
+            )
         },
         Spec(
             "compose.material3.Card",

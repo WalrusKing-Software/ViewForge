@@ -65,9 +65,12 @@ into issues directly.
 > - *Slice 2:* `OutlinedButton` · `TextButton` (Button's `onClick` + content shape) · `Slider`
 >   (`value`/`enabled` + a raw `onValueChange`) · `CircularProgressIndicator` · `LinearProgressIndicator`
 >   (indeterminate).
+> - *Slice 3:* `Icon` — a curated Material-icon `Enum` (`icon`) emitted as `Icons.Filled.<name>` from
+>   `material-icons-core` (already on the classpath; no new dependency). The allowlist lives once in
+>   `render/Values.kt` (`ICON_NAMES`).
 >
-> Still to come one triple at a time: `Icon`, `TextField`/`OutlinedTextField`, `Scaffold`, and the
-> structural app-bars.
+> Still to come one triple at a time: `TextField`/`OutlinedTextField`, `Scaffold`, and the structural
+> app-bars.
 
 ## 3. Tree / layers panel
 

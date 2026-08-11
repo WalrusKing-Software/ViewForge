@@ -55,6 +55,13 @@ internal object ComposeNames {
     val Switch = MemberName("androidx.compose.material3", "Switch")
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
+    val Icon = MemberName("androidx.compose.material3", "Icon")
+
+    // The `Icons.Filled` receiver object; each icon is an extension property in the `.filled` package,
+    // so an icon reference emits `%T.%M` — `Icons.Filled` (imports Icons) then the property (imports it).
+    val IconsFilled = ClassName("androidx.compose.material.icons", "Icons", "Filled")
+
+    fun iconMember(name: String): MemberName = MemberName("androidx.compose.material.icons.filled", name)
 
     // Modifier factories (layout live in foundation.layout; background in foundation)
     val fillMaxSize = MemberName("androidx.compose.foundation.layout", "fillMaxSize")

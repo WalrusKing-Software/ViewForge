@@ -12,6 +12,7 @@ import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
 import viewforge.packages.compose.render.boxAlign
 import viewforge.packages.compose.render.hAlign
 import viewforge.packages.compose.render.hArrange
+import viewforge.packages.compose.render.iconName
 import viewforge.packages.compose.render.imageScale
 import viewforge.packages.compose.render.parseColorArgb
 import viewforge.packages.compose.render.vAlign
@@ -188,6 +189,8 @@ internal object CodegenValues {
         "verticalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, vArrange(name).name)
         "horizontalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, hArrange(name).name)
         "contentScale" -> CodeBlock.of("%T.%L", ComposeNames.ContentScale, imageScale(name).name)
+        // An icon extension property: `Icons.Filled` receiver (imports Icons) + the property (imports it).
+        "icon" -> CodeBlock.of("%T.%M", ComposeNames.IconsFilled, ComposeNames.iconMember(iconName(name)))
         else -> throw CodegenException("Unknown enum prop '$propName'")
     }
 
