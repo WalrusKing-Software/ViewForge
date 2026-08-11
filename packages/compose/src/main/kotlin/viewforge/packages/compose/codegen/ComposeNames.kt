@@ -58,6 +58,13 @@ internal object ComposeNames {
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
     val Icon = MemberName("androidx.compose.material3", "Icon")
+    val TopAppBar = MemberName("androidx.compose.material3", "TopAppBar")
+    val BottomAppBar = MemberName("androidx.compose.material3", "BottomAppBar")
+
+    // Opt-in plumbing for experimental Material3 APIs (TopAppBar): the generated screen function is
+    // annotated `@OptIn(ExperimentalMaterial3Api::class)` when its tree uses one.
+    val OptIn = ClassName("kotlin", "OptIn")
+    val ExperimentalMaterial3Api = ClassName("androidx.compose.material3", "ExperimentalMaterial3Api")
 
     // The `Icons.Filled` receiver object; each icon is an extension property in the `.filled` package,
     // so an icon reference emits `%T.%M` — `Icons.Filled` (imports Icons) then the property (imports it).

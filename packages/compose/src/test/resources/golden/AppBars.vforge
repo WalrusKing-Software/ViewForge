@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8APPBARS",
+  "name": "AppBars",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ab",
+      "name": "AppBarsScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "tab_01",
+            "type": "compose.material3.TopAppBar",
+            "slots": {
+              "title": [
+                { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Home" } } }
+              ]
+            }
+          },
+          {
+            "id": "bab_01",
+            "type": "compose.material3.BottomAppBar",
+            "children": [
+              {
+                "id": "ib_01",
+                "type": "compose.material3.Icon",
+                "props": { "icon": { "kind": "literal", "value": "Home" }, "contentDescription": { "kind": "literal", "value": "Home" } }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

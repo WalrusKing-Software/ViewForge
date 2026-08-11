@@ -28,7 +28,7 @@ class CompilationTest {
     private val fixtures =
         listOf(
             "Demo", "RowBox", "Modifiers", "ModifierOrder", "Lazy", "Image",
-            "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "Gallery",
+            "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Gallery",
         )
 
     @Test

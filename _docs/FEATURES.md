@@ -71,8 +71,11 @@ into issues directly.
 > - *Slice 4:* `TextField` · `OutlinedTextField` — `value` (String) + a raw `onValueChange`
 >   (no-op on the canvas, PF-4; edit `value` in the inspector). `label`/`placeholder` (composable slots)
 >   deferred.
+> - *Slice 5:* `TopAppBar` (a named `title` slot; **experimental Material3**, so the generated screen is
+>   annotated `@OptIn(ExperimentalMaterial3Api::class)`) · `BottomAppBar` (RowScope content). Introduces
+>   named-slot → named-lambda-arg emission and the opt-in plumbing.
 >
-> Still to come one triple at a time: `Scaffold` and the structural app-bars.
+> Still to come: `Scaffold` (multi-slot: `topBar`/`bottomBar`/`content` with its `PaddingValues`).
 
 ## 3. Tree / layers panel
 

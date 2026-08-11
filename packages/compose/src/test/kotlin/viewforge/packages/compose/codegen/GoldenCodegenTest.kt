@@ -57,6 +57,9 @@ class GoldenCodegenTest {
     // TextField + OutlinedTextField: String value + a raw onValueChange (issue #16).
     @Test fun textFields() = assertGolden("TextFields")
 
+    // TopAppBar (named title slot + @OptIn) and BottomAppBar (RowScope content) (issue #16).
+    @Test fun appBars() = assertGolden("AppBars")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }
