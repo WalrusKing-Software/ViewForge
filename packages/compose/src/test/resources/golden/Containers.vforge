@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8CONTAINERS",
+  "name": "Containers",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ct",
+      "name": "ContainersScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [ { "id": "cm_01", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 16 } } } ],
+        "children": [
+          {
+            "id": "card_01",
+            "type": "compose.material3.Card",
+            "children": [
+              { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "In a card" } } }
+            ]
+          },
+          {
+            "id": "div_01",
+            "type": "compose.material3.HorizontalDivider",
+            "props": { "thickness": { "kind": "literal", "value": 2 } }
+          },
+          {
+            "id": "surf_01",
+            "type": "compose.material3.Surface",
+            "children": [
+              { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "On a surface" } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

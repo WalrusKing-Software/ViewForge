@@ -8,9 +8,8 @@ import viewforge.model.Theme
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
- * component: same set (Column/Row/Box/Spacer/LazyColumn/LazyRow/Text/Button/Image), same argument
- * order as each renderer's Composable call, so the drawn tree and generated tree are the same tree
- * (TECHNICAL_NOTES §2).
+ * component: the same supported set, with the same argument order as each renderer's Composable call,
+ * so the drawn tree and generated tree are the same tree (TECHNICAL_NOTES §2).
  *
  * Each component owns its emitter here, so adding one is a local change beside its renderer — never a
  * change to the pipeline. An unsupported type fails loudly (CLAUDE.md: a visible error beats a silent
@@ -37,6 +36,15 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node))
             "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod), content = null)
             "compose.material3.Button" -> button(node, mod)
+            "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, emptyList())
+            "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, emptyList())
+            "compose.material3.HorizontalDivider" -> call(
+                ComposeNames.HorizontalDivider,
+                dividerArgs(node, mod),
+                content = null,
+            )
+            "compose.material3.Checkbox" -> call(ComposeNames.Checkbox, toggleArgs(node, mod), content = null)
+            "compose.material3.Switch" -> call(ComposeNames.Switch, toggleArgs(node, mod), content = null)
             "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod), content = null)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
@@ -80,6 +88,19 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
         if (mod != null) add(named("modifier", mod))
         node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
+    }
+
+    private fun dividerArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        if (mod != null) add(named("modifier", mod))
+        node.props["thickness"]?.let { add(named("thickness", CodegenValues.dpProp(it))) }
+    }
+
+    /** `Checkbox`/`Switch` share a signature: checked, onCheckedChange, modifier, enabled (order mirrors the renderer). */
+    private fun toggleArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        add(named("checked", CodegenValues.bool(node.props["checked"])))
+        add(named("onCheckedChange", CodegenValues.lambda(node.props["onCheckedChange"])))
+        if (mod != null) add(named("modifier", mod))
+        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
     }
 
     // --- shape helpers ---------------------------------------------------------------------------

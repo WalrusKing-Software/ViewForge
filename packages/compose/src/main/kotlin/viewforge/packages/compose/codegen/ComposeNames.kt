@@ -43,6 +43,11 @@ internal object ComposeNames {
     val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")
     val Text = MemberName("androidx.compose.material3", "Text")
     val Button = MemberName("androidx.compose.material3", "Button")
+    val Card = MemberName("androidx.compose.material3", "Card")
+    val Surface = MemberName("androidx.compose.material3", "Surface")
+    val HorizontalDivider = MemberName("androidx.compose.material3", "HorizontalDivider")
+    val Checkbox = MemberName("androidx.compose.material3", "Checkbox")
+    val Switch = MemberName("androidx.compose.material3", "Switch")
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
 

@@ -38,6 +38,13 @@ class GoldenCodegenTest {
 
     @Test fun image() = assertGolden("Image")
 
+    // Card + Surface containers and a HorizontalDivider (Dp arg) — the layout/content half of the
+    // post-Phase-1 catalog expansion (issue #16).
+    @Test fun containers() = assertGolden("Containers")
+
+    // Checkbox + Switch: Bool props and a raw onCheckedChange lambda — the input half (issue #16).
+    @Test fun toggles() = assertGolden("Toggles")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

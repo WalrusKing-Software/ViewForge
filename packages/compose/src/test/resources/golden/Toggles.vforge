@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8TOGGLES",
+  "name": "Toggles",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_tg",
+      "name": "TogglesScreen",
+      "root": {
+        "id": "row_01",
+        "type": "compose.foundation.layout.Row",
+        "children": [
+          {
+            "id": "cb_01",
+            "type": "compose.material3.Checkbox",
+            "props": {
+              "checked": { "kind": "literal", "value": true },
+              "enabled": { "kind": "literal", "value": false },
+              "onCheckedChange": { "kind": "expression", "code": "{ checked -> }" }
+            }
+          },
+          {
+            "id": "sw_01",
+            "type": "compose.material3.Switch",
+            "props": {
+              "checked": { "kind": "literal", "value": false },
+              "onCheckedChange": { "kind": "expression", "code": "{ checked -> }" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}
