@@ -1,6 +1,7 @@
 package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
+import viewforge.model.Asset
 import viewforge.model.PropValue
 import viewforge.model.Theme
 import viewforge.model.TypographyToken
@@ -8,6 +9,7 @@ import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
 import viewforge.packages.compose.render.boxAlign
 import viewforge.packages.compose.render.hAlign
 import viewforge.packages.compose.render.hArrange
+import viewforge.packages.compose.render.imageScale
 import viewforge.packages.compose.render.parseColorArgb
 import viewforge.packages.compose.render.vAlign
 import viewforge.packages.compose.render.vArrange
@@ -41,6 +43,33 @@ internal object CodegenValues {
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
         else -> throw CodegenException("Text 'text' must be a string literal or expression, got $value")
+    }
+
+    /**
+     * A nullable string prop (e.g. an `Image`'s `contentDescription`): a string literal (escaped by
+     * KotlinPoet, GC-2), an explicit `null` when absent, or a raw expression (GC-4).
+     */
+    fun nullableString(value: PropValue?): CodeBlock = when (value) {
+        null -> CodeBlock.of("null")
+        is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
+        is PropValue.RawExpression -> raw(value)
+        else -> throw CodegenException("Expected a string literal, null, or expression, got $value")
+    }
+
+    /**
+     * An `Image`'s `painter`: a `ResourceRef` resolved to its asset's project-relative path, emitted as
+     * `painterResource("<path>")` (the Phase-1 desktop resource API — ADR-021), or a raw expression.
+     * Fails loudly on a reference to an asset the project doesn't list, so codegen never emits a path
+     * that isn't in the exported bundle.
+     */
+    fun painter(value: PropValue?, assets: Map<String, Asset>): CodeBlock = when (value) {
+        is PropValue.ResourceRef -> {
+            val asset = assets[value.assetId]
+                ?: throw CodegenException("Image references unknown asset '${value.assetId}'")
+            CodeBlock.of("%M(%S)", ComposeNames.painterResource, asset.path)
+        }
+        is PropValue.RawExpression -> raw(value)
+        else -> throw CodegenException("Image 'source' must be a resource reference or expression, got $value")
     }
 
     /** A lambda-valued prop such as `onClick` — only an expression is meaningful; absent → no-op `{}`. */
@@ -117,6 +146,7 @@ internal object CodegenValues {
         "contentAlignment" -> CodeBlock.of("%T.%L", ComposeNames.Alignment, boxAlign(name).name)
         "verticalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, vArrange(name).name)
         "horizontalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, hArrange(name).name)
+        "contentScale" -> CodeBlock.of("%T.%L", ComposeNames.ContentScale, imageScale(name).name)
         else -> throw CodegenException("Unknown enum prop '$propName'")
     }
 

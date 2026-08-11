@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import viewforge.model.Asset
 import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Theme
@@ -52,6 +53,7 @@ internal fun ValueControl(
     enumValues: List<String>? = null,
     range: ClosedFloatingPointRange<Float>? = null,
     themeable: Boolean = false,
+    assets: List<Asset> = emptyList(),
 ) {
     // An expression value overrides the typed control — it's the escape hatch (I6).
     if (value is PropValue.RawExpression) {
@@ -67,6 +69,7 @@ internal fun ValueControl(
         PropType.Int -> NumberField(value.literalText(), range, isInt = true, onChange = onChange)
         PropType.Float -> NumberField(value.literalText(), range, isInt = false, onChange = onChange)
         PropType.String -> StringField(value.literalText() ?: "", onChange)
+        PropType.Resource -> ResourceDropdown(assets, (value as? PropValue.ResourceRef)?.assetId, onChange)
     }
 }
 
@@ -171,6 +174,40 @@ private fun EnumDropdown(options: List<String>, current: String?, onChange: (Pro
                     text = { Text(option, style = MaterialTheme.typography.bodySmall) },
                     onClick = {
                         onChange(stringValue(option))
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Picks an [Image] source from the project's already-imported [assets] (I2, data-driven). Importing
+ * files from disk into the project is a focused follow-up (see FEATURES §5 / ADR-021); this control
+ * assigns among assets the project already carries and shows a hint when there are none.
+ */
+@Composable
+private fun ResourceDropdown(assets: List<Asset>, currentId: String?, onChange: (PropValue?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val current = assets.firstOrNull { it.id == currentId }
+    val label = current?.originalName ?: current?.path ?: currentId ?: "—"
+    Box {
+        FieldBox(onClick = { open = true }) {
+            Text(
+                text = if (assets.isEmpty()) "No assets imported" else label,
+                style = fieldStyle(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            assets.forEach { asset ->
+                DropdownMenuItem(
+                    text = { Text(asset.originalName ?: asset.path, style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        onChange(resourceValue(asset.id))
                         open = false
                     },
                 )

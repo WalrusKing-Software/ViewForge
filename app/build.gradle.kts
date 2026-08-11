@@ -20,4 +20,16 @@ dependencies {
     // is the one place the compose DSL is used directly, as the catalog can't express currentOs.
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
+
+    // The M9 fidelity test renders a hand-written Material3 composable twin beside the interpreter and
+    // pixel-compares them (exit criterion #3); it needs material3/foundation directly on the test
+    // classpath (they reach the app only transitively, as `implementation` of packages/compose).
+    testImplementation(libs.compose.material3)
+    testImplementation(libs.compose.foundation)
+}
+
+// Expose the repo-root samples/ directory so the sample-coherence test can assert the in-code
+// sampleProject() stays byte-identical to the committed samples/Gallery.vforge (M9).
+tasks.withType<Test>().configureEach {
+    systemProperty("viewforge.samplesDir", rootProject.file("samples").absolutePath)
 }

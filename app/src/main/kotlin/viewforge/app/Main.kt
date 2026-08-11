@@ -34,11 +34,13 @@ import java.nio.file.Path
  */
 fun main() = application {
     val state = EditorState(sampleProject(), ComposeCatalog)
+    val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
     // instrumentation the canvas needs for hit-testing (ADR-009); the Compose package obliges,
     // theming it with the project's own theme and applying that instrumentation to each node.
-    // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2).
+    // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
+    // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
         CanvasRenderer { root, instrument ->
             ComposeRenderer.RenderScreen(
@@ -46,6 +48,7 @@ fun main() = application {
                 theme = state.document.theme,
                 dark = state.canvasDark,
                 instrument = instrument,
+                imageLoader = images::load,
             )
         }
 

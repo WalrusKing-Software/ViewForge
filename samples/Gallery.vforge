@@ -1,0 +1,412 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8GALLERY",
+  "name": "Gallery",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "theme": {
+    "colors": {
+      "primary": {
+        "light": "#6750A4",
+        "dark": "#D0BCFF"
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "scr_gallery",
+      "name": "GalleryScreen",
+      "root": {
+        "id": "n_root",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "m_fill",
+            "type": "compose.fillMaxSize"
+          },
+          {
+            "id": "m_pad",
+            "type": "compose.padding",
+            "args": {
+              "all": {
+                "kind": "literal",
+                "value": 24
+              }
+            }
+          }
+        ],
+        "children": [
+          {
+            "id": "n_title",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "literal",
+                "value": "Photo Gallery"
+              },
+              "style": {
+                "kind": "theme",
+                "token": "typography.titleLarge"
+              },
+              "color": {
+                "kind": "theme",
+                "token": "colors.primary"
+              }
+            }
+          },
+          {
+            "id": "n_actions",
+            "type": "compose.foundation.layout.Row",
+            "props": {
+              "horizontalArrangement": {
+                "kind": "literal",
+                "value": "SpaceBetween"
+              }
+            },
+            "modifiers": [
+              {
+                "id": "m_actions",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "m_actions_pad",
+                "type": "compose.padding",
+                "args": {
+                  "top": {
+                    "kind": "literal",
+                    "value": 16
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_add",
+                "type": "compose.material3.Button",
+                "props": {
+                  "onClick": {
+                    "kind": "expression",
+                    "code": "{ /* TODO */ }"
+                  }
+                },
+                "slots": {
+                  "content": [
+                    {
+                      "id": "n_add_label",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "Add"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "n_sort",
+                "type": "compose.material3.Button",
+                "props": {
+                  "onClick": {
+                    "kind": "expression",
+                    "code": "{ /* TODO */ }"
+                  }
+                },
+                "slots": {
+                  "content": [
+                    {
+                      "id": "n_sort_label",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "Sort"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "n_list",
+            "type": "compose.foundation.lazy.LazyColumn",
+            "modifiers": [
+              {
+                "id": "m_list",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "m_list_pad",
+                "type": "compose.padding",
+                "args": {
+                  "top": {
+                    "kind": "literal",
+                    "value": 16
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_row_a",
+                "type": "compose.foundation.layout.Row",
+                "props": {
+                  "verticalAlignment": {
+                    "kind": "literal",
+                    "value": "CenterVertically"
+                  }
+                },
+                "modifiers": [
+                  {
+                    "id": "n_row_a_pad",
+                    "type": "compose.padding",
+                    "args": {
+                      "all": {
+                        "kind": "literal",
+                        "value": 8
+                      }
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "n_row_a_img",
+                    "type": "compose.foundation.Image",
+                    "props": {
+                      "source": {
+                        "kind": "resource",
+                        "assetId": "asset_hero"
+                      },
+                      "contentDescription": {
+                        "kind": "literal",
+                        "value": "Sunset"
+                      },
+                      "contentScale": {
+                        "kind": "literal",
+                        "value": "Crop"
+                      }
+                    },
+                    "modifiers": [
+                      {
+                        "id": "n_row_a_size",
+                        "type": "compose.size",
+                        "args": {
+                          "all": {
+                            "kind": "literal",
+                            "value": 64
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "n_row_a_text",
+                    "type": "compose.foundation.layout.Column",
+                    "modifiers": [
+                      {
+                        "id": "n_row_a_text_pad",
+                        "type": "compose.padding",
+                        "args": {
+                          "start": {
+                            "kind": "literal",
+                            "value": 12
+                          }
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "n_row_a_title",
+                        "type": "compose.material3.Text",
+                        "props": {
+                          "text": {
+                            "kind": "literal",
+                            "value": "Sunset"
+                          },
+                          "style": {
+                            "kind": "theme",
+                            "token": "typography.titleMedium"
+                          }
+                        }
+                      },
+                      {
+                        "id": "n_row_a_sub",
+                        "type": "compose.material3.Text",
+                        "props": {
+                          "text": {
+                            "kind": "literal",
+                            "value": "Beach at dusk"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "n_row_b",
+                "type": "compose.foundation.layout.Row",
+                "props": {
+                  "verticalAlignment": {
+                    "kind": "literal",
+                    "value": "CenterVertically"
+                  }
+                },
+                "modifiers": [
+                  {
+                    "id": "n_row_b_pad",
+                    "type": "compose.padding",
+                    "args": {
+                      "all": {
+                        "kind": "literal",
+                        "value": 8
+                      }
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "n_row_b_img",
+                    "type": "compose.foundation.Image",
+                    "props": {
+                      "source": {
+                        "kind": "resource",
+                        "assetId": "asset_icon"
+                      },
+                      "contentDescription": {
+                        "kind": "literal",
+                        "value": "Mountains"
+                      },
+                      "contentScale": {
+                        "kind": "literal",
+                        "value": "Crop"
+                      }
+                    },
+                    "modifiers": [
+                      {
+                        "id": "n_row_b_size",
+                        "type": "compose.size",
+                        "args": {
+                          "all": {
+                            "kind": "literal",
+                            "value": 64
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "n_row_b_text",
+                    "type": "compose.foundation.layout.Column",
+                    "modifiers": [
+                      {
+                        "id": "n_row_b_text_pad",
+                        "type": "compose.padding",
+                        "args": {
+                          "start": {
+                            "kind": "literal",
+                            "value": 12
+                          }
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "n_row_b_title",
+                        "type": "compose.material3.Text",
+                        "props": {
+                          "text": {
+                            "kind": "literal",
+                            "value": "Mountains"
+                          },
+                          "style": {
+                            "kind": "theme",
+                            "token": "typography.titleMedium"
+                          }
+                        }
+                      },
+                      {
+                        "id": "n_row_b_sub",
+                        "type": "compose.material3.Text",
+                        "props": {
+                          "text": {
+                            "kind": "literal",
+                            "value": "Alpine trail"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "n_more",
+                "type": "compose.foundation.layout.Box",
+                "props": {
+                  "contentAlignment": {
+                    "kind": "literal",
+                    "value": "Center"
+                  }
+                },
+                "modifiers": [
+                  {
+                    "id": "m_more",
+                    "type": "compose.size",
+                    "args": {
+                      "all": {
+                        "kind": "literal",
+                        "value": 80
+                      }
+                    }
+                  },
+                  {
+                    "id": "m_more_pad",
+                    "type": "compose.padding",
+                    "args": {
+                      "top": {
+                        "kind": "literal",
+                        "value": 8
+                      }
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "n_more_text",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "literal",
+                        "value": "More coming soon"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "previewProfile": "desktop_1280x800"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_hero",
+      "type": "image/png",
+      "path": "assets/hero.png",
+      "originalName": "hero.png"
+    },
+    {
+      "id": "asset_icon",
+      "type": "image/png",
+      "path": "assets/icon.png",
+      "originalName": "icon.png"
+    }
+  ]
+}

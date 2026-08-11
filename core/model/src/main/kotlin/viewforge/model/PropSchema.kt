@@ -22,6 +22,9 @@ enum class PropType {
     Dp,
     Enum,
     Typography,
+
+    /** An imported asset, edited as a [PropValue.ResourceRef] via an asset picker (e.g. `Image.source`). */
+    Resource,
 }
 
 /**

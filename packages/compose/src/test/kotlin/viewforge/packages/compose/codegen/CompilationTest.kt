@@ -25,7 +25,7 @@ import kotlin.test.assertEquals
  */
 @OptIn(ExperimentalCompilerApi::class)
 class CompilationTest {
-    private val fixtures = listOf("Demo", "RowBox", "Modifiers", "ModifierOrder")
+    private val fixtures = listOf("Demo", "RowBox", "Modifiers", "ModifierOrder", "Lazy", "Image", "Gallery")
 
     @Test
     fun `generated golden output compiles against Compose`() {

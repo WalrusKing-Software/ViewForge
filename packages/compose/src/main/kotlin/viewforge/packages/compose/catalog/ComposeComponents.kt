@@ -15,11 +15,12 @@ import viewforge.model.Ulid
  * instance of each, and each type's container facts (default children / named slots) for drop
  * validation.
  *
- * It deliberately mirrors **only the currently supported set** (Column, Row, Box, Spacer, Text,
- * Button), which as of M6 the renderer (`render/Components.kt`) *and* codegen
- * (`codegen/ComponentEmitter.kt`) both cover in lockstep — the palette never offers a node the canvas
- * can't draw or the emitter can't generate. Growing the set (Card, TextField, …) is a
- * renderer + emitter + golden-test triple per component, deferred past M6 (depth over breadth, M9).
+ * It mirrors **only the currently supported set** — Column, Row, Box, Spacer, LazyColumn, LazyRow,
+ * Text, Button, Image (the Phase-1 set M9 completes for exit criterion #1) — which the renderer
+ * (`render/Components.kt`) *and* codegen (`codegen/ComponentEmitter.kt`) both cover in lockstep, so the
+ * palette never offers a node the canvas can't draw or the emitter can't generate. Growing the set
+ * further (Card, TextField, …) is a renderer + emitter + golden-test triple per component (depth over
+ * breadth).
  * `:app` adapts this to the editor's `ComponentCatalog` seam (ADR-013); nothing here depends on the
  * editor or on Compose UI types.
  */
@@ -46,6 +47,10 @@ object ComposeComponents {
         "CenterStart", "Center", "CenterEnd",
         "BottomStart", "BottomCenter", "BottomEnd",
     )
+
+    // Kept in lockstep with the `ImageScale` enum the renderer parses in `render/Values.kt` and codegen
+    // emits as `ContentScale.<value>`.
+    private val CONTENT_SCALE = listOf("Fit", "Crop", "FillBounds", "Inside", "None")
 
     val specs: List<Spec> = listOf(
         Spec(
@@ -101,6 +106,32 @@ object ComposeComponents {
             )
         },
         Spec(
+            "compose.foundation.lazy.LazyColumn",
+            "LazyColumn",
+            CATEGORY_LAYOUT,
+            acceptsChildren = true,
+            slots = emptyList(),
+            props = listOf(
+                enumProp("verticalArrangement", V_ARRANGE, default = "Top"),
+                enumProp("horizontalAlignment", H_ALIGN, default = "Start"),
+            ),
+        ) {
+            Node(id = NodeId.random(), type = "compose.foundation.lazy.LazyColumn")
+        },
+        Spec(
+            "compose.foundation.lazy.LazyRow",
+            "LazyRow",
+            CATEGORY_LAYOUT,
+            acceptsChildren = true,
+            slots = emptyList(),
+            props = listOf(
+                enumProp("horizontalArrangement", H_ARRANGE, default = "Start"),
+                enumProp("verticalAlignment", V_ALIGN, default = "Top"),
+            ),
+        ) {
+            Node(id = NodeId.random(), type = "compose.foundation.lazy.LazyRow")
+        },
+        Spec(
             "compose.material3.Text",
             "Text",
             CATEGORY_CONTENT,
@@ -142,6 +173,22 @@ object ComposeComponents {
                     ),
                 ),
             )
+        },
+        Spec(
+            "compose.foundation.Image",
+            "Image",
+            CATEGORY_CONTENT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            // `source` is a ResourceRef picked from the project's assets (PropType.Resource); a fresh
+            // Image has none, so it draws a "Missing image" placeholder until one is assigned.
+            props = listOf(
+                PropDefinition("source", PropType.Resource),
+                PropDefinition("contentDescription", PropType.String),
+                enumProp("contentScale", CONTENT_SCALE, default = "Fit"),
+            ),
+        ) {
+            Node(id = NodeId.random(), type = "compose.foundation.Image")
         },
     )
 

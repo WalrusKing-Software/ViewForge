@@ -33,4 +33,11 @@ class GoldenCodegenTest {
     @Test fun modifiers() = assertGolden("Modifiers")
 
     @Test fun modifierOrder() = assertGolden("ModifierOrder")
+
+    @Test fun lazy() = assertGolden("Lazy")
+
+    @Test fun image() = assertGolden("Image")
+
+    // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
+    @Test fun gallery() = assertGolden("Gallery")
 }

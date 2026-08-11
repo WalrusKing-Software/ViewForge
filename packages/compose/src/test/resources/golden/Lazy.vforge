@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8LAZY",
+  "name": "Lazy",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_lz",
+      "name": "LazyScreen",
+      "root": {
+        "id": "lc_01",
+        "type": "compose.foundation.lazy.LazyColumn",
+        "props": {
+          "verticalArrangement": { "kind": "literal", "value": "SpaceBetween" },
+          "horizontalAlignment": { "kind": "literal", "value": "CenterHorizontally" }
+        },
+        "modifiers": [ { "id": "lm_01", "type": "compose.fillMaxSize", "args": {} } ],
+        "children": [
+          {
+            "id": "t_01",
+            "type": "compose.material3.Text",
+            "props": { "text": { "kind": "literal", "value": "Header" } }
+          },
+          {
+            "id": "lr_01",
+            "type": "compose.foundation.lazy.LazyRow",
+            "props": { "horizontalArrangement": { "kind": "literal", "value": "SpaceEvenly" } },
+            "children": [
+              { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "A" } } },
+              { "id": "t_03", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "B" } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

@@ -51,6 +51,13 @@ into issues directly.
 
 > Resist expanding this list before M9. Breadth is easy and shallow; the exit criteria demand depth.
 
+> **Shipped for Phase 1 (M9):** `Column` · `Row` · `Box` · `Spacer` · `LazyColumn` · `LazyRow`
+> (static children only) · `Text` · `Button` · `Image` — the set exit criterion #1 requires (nested
+> layout, text, buttons, images, a scrollable list), each with a renderer + emitter + golden triple in
+> lockstep. `Image` sources are `ResourceRef`s picked from the project's assets; disk import and
+> copying assets into an exported project are the tracked follow-up (ADR-021). The remaining
+> Content/Input/Navigation entries above join the set one triple at a time.
+
 ## 3. Tree / layers panel
 
 | # | Feature | Pri | Acceptance |
