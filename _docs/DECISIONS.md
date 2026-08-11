@@ -612,6 +612,62 @@ pasted screen has no canonical resources dir — its assets are the host project
 
 ---
 
+## ADR-022 — Packaging: vanilla jpackage over Conveyor; per-OS signing in a tagged release workflow
+
+**Status:** Accepted
+
+**Context.** M10 (packaging) must produce installers for at least Windows and Linux, signed, with a
+documented install path (PROJECT_PLAN §8; SECURITY §9 DI-1…DI-5). Open question #3 explicitly deferred
+"Conveyor vs vanilla Compose packaging" to this milestone. Two things needed pinning: the packaging
+toolchain, and how signing/checksums/release-cutting happen given the project's no-network posture
+(ADR-011) and CI topology (matrix.yml: cross-OS jobs are GitHub-only because the homelab Forgejo has
+no Windows/macOS runners).
+
+**Decision.**
+- **Vanilla jpackage via Compose Desktop's `nativeDistributions`.** Configured in `:app`'s own build
+  script (not the `viewforge.compose-app` convention plugin — it is metadata for one concrete
+  artifact). Target formats are **Windows Msi/Exe and Linux Deb/Rpm**. The Compose Gradle plugin
+  unpacks its own WiX, so the Windows MSI builds with no extra toolchain — **verified locally**
+  (`ViewForge-0.1.0.msi`). The Linux Deb/Rpm build on a Linux runner (needs `fakeroot`/`rpm`
+  installed) and are **not** verifiable on the Windows dev box — the release workflow is their gate.
+- **Version is single-sourced** in `gradle.properties` (`viewforge.version`), read config-cache-safely
+  via `providers.gradleProperty`, so installer version can't drift.
+- **`includeAllModules = true`** rather than jlink module detection. A missing module manifests only
+  as a crash in the *installed* app, which no test in this repo can catch; shipping the full runtime
+  guarantees the packaged classpath matches the verified `run`/`createDistributable` build. The ~96 MB
+  installer size is the accepted cost; trimming via `suggestRuntimeModules` is a post-M10 follow-up.
+- **Signing is a per-OS post-build step in a tagged release workflow** (`.github/workflows/release.yml`,
+  GitHub-only), never in Gradle: the Compose plugin only wires *macOS* signing. Windows Authenticode
+  (`Set-AuthenticodeSignature`) signs the msi/exe; a detached GPG `.asc` signs the Linux deb/rpm. Both
+  are **gated on CI secrets** and warn loudly (not fail) when absent, so the pipeline runs before certs
+  exist while a real public release must supply them (DI-1). SHA-256 `.sha256` sidecars accompany every
+  artifact (DI-2). Artifacts are cut **from the pushed `v*` tag** in CI (DI-3), attached to a draft
+  GitHub Release that is published only after all jobs succeed. Releases never trigger on
+  `pull_request`, so fork PRs can't reach the signing secrets (DS-7).
+
+**Rationale.** jpackage is already in the Compose Desktop plugin, needs no paid product, and makes **no
+network calls in the app** — Conveyor's headline feature (auto-update) is precisely the network channel
+ADR-011 excludes, and reversing that would need its own threat-model change. Uploading via the
+preinstalled `gh` CLI instead of a third-party release action keeps the supply-chain surface to actions
+already pinned elsewhere in the repo (checkout/setup-java/setup-gradle at their existing SHAs).
+
+**Rejected.** **Conveyor** — nicer cross-OS packaging and delta auto-update, but a paid product above a
+usage threshold and its auto-update contradicts ADR-011; deferred unless a network decision is
+revisited. **Packaging config in the convention plugin** — it is per-artifact metadata, not shared
+policy. **macOS (Dmg)** in this milestone — jpackage rejects a major-version 0, so a pre-1.0 mac package
+can't carry an honest version, and it needs a Mac runner plus a branded `.icns` to verify; it is a
+localised follow-up (add the format + `macOS { }` block + a mac-valid version). **A branded `.ico`/
+`.icns` toolchain** — the committed icons are generated placeholders (indigo "VF"); a real icon set is a
+follow-up. **jlink module trimming now** — correctness of the installed app over installer size for v1.
+
+**Consequences.** `./gradlew :app:packageMsi`/`packageExe`/`packageDeb`/`packageRpm` produce installers;
+a tag push cuts a signed, checksummed GitHub Release. The MSI is verified; Deb/Rpm are exercised only in
+CI (honesty: not run on the dev box). The installer is large until modules are trimmed. macOS packaging
+and branded icons remain open follow-ups. Any future auto-update remains a documented, network-relevant
+decision (ADR-011/DI-4), not a packaging afterthought. Install steps per OS live in `_docs/INSTALL.md`.
+
+---
+
 ## Template
 
 ```markdown

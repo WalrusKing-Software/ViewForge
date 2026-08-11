@@ -2,10 +2,10 @@
 // application. `compose.desktop.application { mainClass = ... }` provides the `run` task the editor
 // is launched with (CLAUDE.md build section) — needed from M2, when there is finally a window to run.
 //
-// Native packaging (nativeDistributions { ... }, packageDistributionForCurrentOS) is milestone M10
-// and requires the JDK 21 toolchain for jpackage (PROJECT_PLAN §8 M10; TECHNICAL_NOTES §12). It is
-// intentionally NOT configured here yet — wiring it untested would violate "don't claim something
-// works without verifying" (CLAUDE.md). Add it in the M10 change, in :app, against a real build.
+// Native packaging (nativeDistributions { ... }, packageDistributionForCurrentOS) requires the
+// JDK 21 toolchain for jpackage (TECHNICAL_NOTES §12). It lives in `:app`'s own build script, not
+// here: it is metadata for one concrete artifact (formats, version, icons, installer identity),
+// verified against a real build (M10, ADR-022), so it does not belong in a shared convention.
 
 import org.jetbrains.compose.ComposeExtension
 import org.jetbrains.compose.desktop.DesktopExtension
