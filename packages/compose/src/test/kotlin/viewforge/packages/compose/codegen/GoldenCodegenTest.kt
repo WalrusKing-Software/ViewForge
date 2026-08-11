@@ -66,6 +66,12 @@ class GoldenCodegenTest {
     // Text styling props: fontSize (sp), fontWeight, textAlign, maxLines, overflow (issue #17).
     @Test fun textStyling() = assertGolden("TextStyling")
 
+    // Button `enabled` across the three button variants (Bool prop; issue #17).
+    @Test fun buttonStates() = assertGolden("ButtonStates")
+
+    // Image `alignment` (Alignment enum) + `alpha` (Float), each independently omittable (issue #17).
+    @Test fun imageAdjust() = assertGolden("ImageAdjust")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

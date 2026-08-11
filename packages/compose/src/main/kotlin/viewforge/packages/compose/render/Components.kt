@@ -219,21 +219,21 @@ private fun textOverflowOf(name: String): TextOverflow = when (textOverflowName(
 @Composable
 private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
     // `onClick` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    Button(onClick = {}, modifier = modifier) {
+    Button(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
 
 @Composable
 private fun RenderOutlinedButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    OutlinedButton(onClick = {}, modifier = modifier) {
+    OutlinedButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
 
 @Composable
 private fun RenderTextButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    TextButton(onClick = {}, modifier = modifier) {
+    TextButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
@@ -393,11 +393,16 @@ private fun RenderImage(node: Node, modifier: Modifier, ctx: RenderContext) {
         ErrorPlaceholder("Missing image", modifier)
         return
     }
+    // Each optional arg falls back to the same default the Image composable uses when omitted, so an
+    // unset prop renders identically to codegen omitting it (TECHNICAL_NOTES §2): alignment→Center,
+    // alpha→1f (Compose's DefaultAlpha).
     Image(
         painter = BitmapPainter(bitmap),
         contentDescription = node.props["contentDescription"].literalString(),
         modifier = modifier,
+        alignment = node.props["alignment"].literalString()?.let { boxAlign(it).toCompose() } ?: Alignment.Center,
         contentScale = imageScale(node.props["contentScale"].literalString()).toCompose(),
+        alpha = node.props["alpha"].literalFloat() ?: 1f,
     )
 }
 

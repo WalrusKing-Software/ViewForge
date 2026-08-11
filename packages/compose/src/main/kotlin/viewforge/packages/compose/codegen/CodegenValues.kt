@@ -216,6 +216,8 @@ internal object CodegenValues {
         "horizontalAlignment" -> CodeBlock.of("%T.%L", ComposeNames.Alignment, hAlign(name).name)
         "verticalAlignment" -> CodeBlock.of("%T.%L", ComposeNames.Alignment, vAlign(name).name)
         "contentAlignment" -> CodeBlock.of("%T.%L", ComposeNames.Alignment, boxAlign(name).name)
+        // `Image`'s alignment shares the Box alignment set (`Alignment.<name>`) and its parser.
+        "alignment" -> CodeBlock.of("%T.%L", ComposeNames.Alignment, boxAlign(name).name)
         "verticalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, vArrange(name).name)
         "horizontalArrangement" -> CodeBlock.of("%T.%L", ComposeNames.Arrangement, hArrange(name).name)
         "contentScale" -> CodeBlock.of("%T.%L", ComposeNames.ContentScale, imageScale(name).name)

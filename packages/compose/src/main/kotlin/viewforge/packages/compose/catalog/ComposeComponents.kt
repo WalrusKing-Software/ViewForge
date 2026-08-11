@@ -172,6 +172,7 @@ object ComposeComponents {
             // onClick is an expression prop — never evaluated on the canvas (PF-4); edited via the
             // raw-expression hatch, so its control renders whatever RawExpression it holds.
             props = listOf(
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
         ) {
@@ -203,7 +204,10 @@ object ComposeComponents {
             props = listOf(
                 PropDefinition("source", PropType.Resource),
                 PropDefinition("contentDescription", PropType.String),
+                enumProp("alignment", BOX_ALIGN, default = "Center"),
                 enumProp("contentScale", CONTENT_SCALE, default = "Fit"),
+                // alpha is a 0f..1f opacity multiplier; the range drives the inspector slider (DATA_MODEL §6).
+                PropDefinition("alpha", PropType.Float, default = floatLiteral(1f), range = 0f..1f),
             ),
         ) {
             Node(id = NodeId.random(), type = "compose.foundation.Image")
@@ -314,6 +318,7 @@ object ComposeComponents {
             acceptsChildren = false,
             slots = listOf("content"),
             props = listOf(
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
         ) {
@@ -326,6 +331,7 @@ object ComposeComponents {
             acceptsChildren = false,
             slots = listOf("content"),
             props = listOf(
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
         ) {
