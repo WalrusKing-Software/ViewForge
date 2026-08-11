@@ -101,6 +101,17 @@ class AppMenuBarTest {
     }
 
     @Test
+    fun `save is disabled until there are unsaved edits`() {
+        val s = state()
+        assertFalse(s.fileMenuModel().canSave) // a fresh, clean document
+        s.select(NodeId("a"))
+        s.deleteSelected()
+        assertTrue(s.fileMenuModel().canSave)
+        s.markSaved(java.nio.file.Path.of("P.vforge"))
+        assertFalse(s.fileMenuModel().canSave)
+    }
+
+    @Test
     fun `a fresh view can zoom either way but not reset`() {
         val model = state().viewMenuModel()
         assertTrue(model.canZoomIn)

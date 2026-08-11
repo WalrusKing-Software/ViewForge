@@ -65,8 +65,18 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
     var showThemeEditor by remember { mutableStateOf(false) }
     // Export is driven from both the toolbar and the File menu, so its flow is hoisted to a controller.
     val export = rememberExportController(state, exportService)
+    // .vforge New/Open/Save/Save As (#37): its own controller, shared by the File menu and shortcuts.
+    val document = rememberDocumentController(state)
 
-    AppMenuBar(state, onExport = export::start, onOpenThemeEditor = { showThemeEditor = true })
+    AppMenuBar(
+        state,
+        onExport = export::start,
+        onOpenThemeEditor = { showThemeEditor = true },
+        onNew = document::newDocument,
+        onOpen = document::open,
+        onSave = document::save,
+        onSaveAs = document::saveAs,
+    )
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         val focus = remember { FocusRequester() }
@@ -74,6 +84,7 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
 
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
         ExportDialogs(export)
+        DocumentDialogs(document)
 
         Surface(Modifier.fillMaxSize()) {
             Column(
@@ -83,7 +94,8 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
                     .focusable()
                     // Root-level shortcuts use onKeyEvent (bubbling) so a focused text field — palette
                     // search, inline rename — consumes its keys first and typing is never hijacked.
-                    .onKeyEvent { handleShortcut(it, state) },
+                    // Editing shortcuts first, then the File-menu document shortcuts (New/Open/Save).
+                    .onKeyEvent { handleShortcut(it, state) || handleDocumentShortcut(it, document) },
             ) {
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
@@ -109,7 +121,8 @@ private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEdi
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "ViewForge — ${state.document.name}",
+                // A trailing • marks unsaved edits (D1), the same cue the window title conventions use.
+                text = "ViewForge — ${state.document.name}${if (state.isDirty) " •" else ""}",
                 style = MaterialTheme.typography.titleSmall,
             )
             Spacer(Modifier.weight(1f))
@@ -208,6 +221,36 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
         }
         cmd && event.key == Key.V -> {
             state.paste()
+            true
+        }
+        else -> false
+    }
+}
+
+/**
+ * The File-menu document shortcuts (D1), kept separate from [handleShortcut] because they act on the
+ * [DocumentController] rather than [EditorState]. Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+Shift+S
+ * save as. As with the editing shortcuts, this is the real binder — the menu accelerators only display.
+ */
+private fun handleDocumentShortcut(event: KeyEvent, document: DocumentController): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val cmd = event.isCtrlPressed || event.isMetaPressed
+    if (!cmd) return false
+    return when {
+        event.key == Key.N -> {
+            document.newDocument()
+            true
+        }
+        event.key == Key.O -> {
+            document.open()
+            true
+        }
+        event.key == Key.S && event.isShiftPressed -> {
+            document.saveAs()
+            true
+        }
+        event.key == Key.S -> {
+            document.save()
             true
         }
         else -> false
