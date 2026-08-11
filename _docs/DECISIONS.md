@@ -598,10 +598,17 @@ A placeholder-only Image (no real bitmap) was rejected as not honestly satisfyin
 **Consequences.** Phase-1 image output compiles and the sample renders on the canvas. **Migration to
 `Res.drawable` is a Phase-2 task**, taken up with per-target source-set routing (G9) — it will rewrite
 the `Image` emitter and regenerate the image goldens, a localised change beside the renderer.
-**Deferred, tracked as the asset pipeline follow-up:** (1) importing asset files from disk into a
-project (an "Assets" surface + guarded copy), and (2) copying asset bytes into an exported Gradle
-project so it *runs* (not merely compiles) with images — `DesktopExporter` is byte-pure and currently
-receives only asset metadata, so this needs a source-of-bytes seam through the guarded reader.
+
+*Update (M9 follow-up):* the **Gradle export now ships referenced assets**, so an exported project
+*runs* unmodified, not merely compiles. `DesktopExporter.gradleProject(project, assetBytes)` takes an
+`(Asset) -> ByteArray?` resolver and emits each asset as a `BinaryFile` under `src/main/resources/`
+(on the `kotlin("jvm")` runtime classpath, so `painterResource("assets/…")` resolves); `:app` backs
+the resolver from the same classpath source the canvas loads from. An earlier symptom — a `LazyColumn`
+of `Image` rows rendering blank in an exported app — was this gap: the missing resource made
+`painterResource` throw during the list's lazy layout, dropping the whole subtree while the
+already-placed title/buttons survived. **Still deferred:** importing asset files from disk into a
+project (an "Assets" surface + guarded copy); and loose-file export (G4) stays screens-only, since a
+pasted screen has no canonical resources dir — its assets are the host project's responsibility.
 
 ---
 

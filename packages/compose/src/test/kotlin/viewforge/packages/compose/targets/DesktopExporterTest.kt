@@ -103,6 +103,29 @@ class DesktopExporterTest {
     }
 
     @Test
+    fun `gradle export ships referenced assets under resources so it runs unmodified`() {
+        // Image.vforge references two assets (paths assets/hero.png, assets/icon.png).
+        val project = ProjectCodec.decode(resourceText("/golden/Image.vforge"))
+        val bytesByPath = mapOf(
+            "assets/hero.png" to byteArrayOf(1, 2, 3),
+            "assets/icon.png" to byteArrayOf(4, 5),
+        )
+        val files = DesktopExporter.gradleProject(project) { bytesByPath[it.path] }
+
+        val hero = files.single { it.path == "src/main/resources/assets/hero.png" } as BinaryFile
+        assertTrue(hero.bytes.contentEquals(byteArrayOf(1, 2, 3)), "hero.png bytes must be copied verbatim")
+        assertTrue(files.any { it.path == "src/main/resources/assets/icon.png" }, "icon.png must be exported")
+    }
+
+    @Test
+    fun `gradle export omits assets when their bytes cannot be resolved`() {
+        // The default resolver yields nothing: a caller that doesn't wire assets exports source only.
+        val project = ProjectCodec.decode(resourceText("/golden/Image.vforge"))
+        val files = DesktopExporter.gradleProject(project)
+        assertFalse(files.any { it.path.startsWith("src/main/resources/") }, "no bytes → no asset files")
+    }
+
+    @Test
     fun `wrapper jar and scripts are copied verbatim with gradlew marked executable`() {
         val files = DesktopExporter.gradleProject(demoProject())
         val jar = files.single { it.path == "gradle/wrapper/gradle-wrapper.jar" } as BinaryFile

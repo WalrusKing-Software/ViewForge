@@ -19,7 +19,14 @@ internal class AssetImageLoader(private val assets: () -> List<Asset>) {
 
     fun load(assetId: String): ImageBitmap? = cache.getOrPut(assetId) {
         val path = assets().firstOrNull { it.id == assetId }?.path ?: return@getOrPut null
-        val stream = javaClass.getResourceAsStream("/" + path.trimStart('/')) ?: return@getOrPut null
-        stream.use { runCatching { loadImageBitmap(it) }.getOrNull() }
+        classpathAssetBytes(path)?.let { bytes -> runCatching { loadImageBitmap(bytes.inputStream()) }.getOrNull() }
     }
 }
+
+/**
+ * Reads an asset's raw bytes from the classpath by its project-relative [path] (e.g. `assets/hero.png`),
+ * or null when absent. Shared by the canvas loader and the export path so both key off the same source
+ * — the bundled classpath assets in Phase 1; a project's on-disk asset store once import lands (ADR-021).
+ */
+internal fun classpathAssetBytes(path: String): ByteArray? =
+    AssetImageLoader::class.java.getResourceAsStream("/" + path.trimStart('/'))?.use { it.readBytes() }

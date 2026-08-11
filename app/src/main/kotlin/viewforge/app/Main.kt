@@ -77,7 +77,9 @@ private object DesktopExportService : ProjectExportService {
 
     private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
         ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)
-        ExportMode.GRADLE_PROJECT -> DesktopExporter.gradleProject(project)
+        // Gradle export ships the referenced image assets so it runs unmodified (ADR-021); bytes come
+        // from the same classpath source the canvas loads from.
+        ExportMode.GRADLE_PROJECT -> DesktopExporter.gradleProject(project) { asset -> classpathAssetBytes(asset.path) }
     }
 }
 
