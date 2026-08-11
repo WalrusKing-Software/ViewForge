@@ -23,6 +23,13 @@ enum class PropType {
     Enum,
     Typography,
 
+    /**
+     * A Material shape, edited as either a literal corner radius ([PropValue.Literal], dp →
+     * `RoundedCornerShape`) or a `shapes.small|medium|large` theme token ([PropValue.ThemeRef] →
+     * `MaterialTheme.shapes.<slot>`). Themeable, like [Color] (e.g. `Button.shape`).
+     */
+    Shape,
+
     /** An imported asset, edited as a [PropValue.ResourceRef] via an asset picker (e.g. `Image.source`). */
     Resource,
 }

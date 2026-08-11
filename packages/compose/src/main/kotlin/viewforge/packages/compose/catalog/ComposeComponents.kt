@@ -182,6 +182,7 @@ object ComposeComponents {
             // live on the filled Button only (the outlined/text variants have different color factories).
             props = listOf(
                 PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition("shape", PropType.Shape, themeable = true),
                 PropDefinition("containerColor", PropType.Color, themeable = true),
                 PropDefinition("contentColor", PropType.Color, themeable = true),
                 PropDefinition("elevation", PropType.Dp),

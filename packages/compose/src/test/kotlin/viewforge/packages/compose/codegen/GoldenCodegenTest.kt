@@ -81,6 +81,9 @@ class GoldenCodegenTest {
     // Button styling via ButtonDefaults: themeable container/content colors, elevation, contentPadding (issue #17).
     @Test fun buttonStyling() = assertGolden("ButtonStyling")
 
+    // Button shape: a literal corner radius (RoundedCornerShape) and a shapes.* Material token (issue #17).
+    @Test fun buttonShape() = assertGolden("ButtonShape")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

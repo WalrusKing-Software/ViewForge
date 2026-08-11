@@ -65,6 +65,7 @@ internal fun ValueControl(
         PropType.Enum -> EnumDropdown(enumValues.orEmpty(), value.literalText(), onChange)
         PropType.Color -> ColorControl(value, theme, themeable, onChange)
         PropType.Typography -> TypographyDropdown(value.themeToken(), theme, onChange)
+        PropType.Shape -> ShapeControl(value, onChange)
         PropType.Dp -> NumberField(value.literalText(), range, isInt = true, suffix = "dp", onChange = onChange)
         PropType.Int -> NumberField(value.literalText(), range, isInt = true, onChange = onChange)
         PropType.Float -> NumberField(value.literalText(), range, isInt = false, onChange = onChange)
@@ -339,6 +340,67 @@ private fun TypographyDropdown(current: String?, theme: Theme, onChange: (PropVa
     }
 }
 
+// --- shape -------------------------------------------------------------------------------------
+
+/**
+ * A Material shape: a literal corner radius (dp) or a `shapes.small|medium|large` theme token. Mirrors
+ * [ColorControl] — a value field when unbound, a `→ token` label when bound, and a 🔷 toggle to switch
+ * between the two (I4). The three Material slots always resolve via `MaterialTheme.shapes`, so they are
+ * always offered (like the Material typography names).
+ */
+@Composable
+private fun ShapeControl(value: PropValue?, onChange: (PropValue?) -> Unit) {
+    val token = value.themeToken()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) {
+            if (token != null) {
+                Text("→ $token", style = fieldStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                NumberField(value.literalText(), range = null, isInt = true, suffix = "dp corner", onChange = onChange)
+            }
+        }
+        ShapeTokenToggle(boundToken = token, onChange = onChange)
+    }
+}
+
+/** Binds this shape to a Material shape token (I4), or unbinds back to a literal corner radius. */
+@Composable
+private fun ShapeTokenToggle(boundToken: String?, onChange: (PropValue?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Text(
+            text = "🔷",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (boundToken != null) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(start = 4.dp).clickable { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            MATERIAL_SHAPES.forEach { name ->
+                DropdownMenuItem(
+                    text = { Text("shapes.$name", style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        onChange(themeValue("shapes.$name"))
+                        open = false
+                    },
+                )
+            }
+            if (boundToken != null) {
+                DropdownMenuItem(
+                    text = { Text("Use a literal radius", style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        onChange(intValue(8))
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
 // --- expression (escape hatch, I6) --------------------------------------------------------------
 
 @Composable
@@ -397,6 +459,9 @@ private fun previewArgb(value: PropValue?, theme: Theme): Long? = when (value) {
     is PropValue.ThemeRef -> theme.colors[value.token.removePrefix("colors.")]?.let { hexToArgb(it.light) }
     else -> null
 }
+
+/** The Material shape slots, always resolvable via `MaterialTheme.shapes` (see `render/Components.kt`). */
+private val MATERIAL_SHAPES = listOf("small", "medium", "large")
 
 /** Material typography names the renderer understands as fallbacks (see `render/Components.kt`). */
 private val MATERIAL_TYPOGRAPHY = listOf(

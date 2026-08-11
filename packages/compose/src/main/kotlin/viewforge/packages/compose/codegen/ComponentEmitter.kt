@@ -195,8 +195,8 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         .build()
 
     /**
-     * `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, enabled, colors,
-     * elevation, contentPadding, then a content slot. The styling args come from props only the filled
+     * `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, enabled, shape,
+     * colors, elevation, contentPadding, then a content slot. The styling args come from props only the filled
      * `Button` advertises (issue #17), so the `ButtonDefaults.button*` factories are correct here; the
      * outlined/text variants would need their own factories if ever extended.
      */
@@ -205,6 +205,7 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             add(named("onClick", CodegenValues.lambda(node.props["onClick"])))
             if (mod != null) add(named("modifier", mod))
             node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+            node.props["shape"]?.let { add(named("shape", CodegenValues.shape(it, theme))) }
             CodegenValues.buttonColors(node.props["containerColor"], node.props["contentColor"], theme)
                 ?.let { add(named("colors", it)) }
             node.props["elevation"]?.let { add(named("elevation", CodegenValues.buttonElevation(it))) }

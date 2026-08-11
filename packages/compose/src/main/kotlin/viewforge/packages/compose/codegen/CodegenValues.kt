@@ -10,6 +10,7 @@ import viewforge.model.PropValue
 import viewforge.model.Theme
 import viewforge.model.TypographyToken
 import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
+import viewforge.packages.compose.render.MATERIAL_SHAPE_SLOTS
 import viewforge.packages.compose.render.boxAlign
 import viewforge.packages.compose.render.fontStyleName
 import viewforge.packages.compose.render.fontWeightName
@@ -173,6 +174,29 @@ internal object CodegenValues {
         null -> CodeBlock.of("{}")
         is PropValue.RawExpression -> raw(value)
         else -> throw CodegenException("Expected a lambda expression, got $value")
+    }
+
+    /**
+     * A shape-typed value: a literal corner radius → `RoundedCornerShape(N.dp)`, a
+     * `shapes.small|medium|large` token → `MaterialTheme.shapes.<slot>`, a custom project shape token →
+     * its resolved `RoundedCornerShape`, or a raw expression. The codegen twin of the renderer's
+     * `resolveShape`, so canvas and output agree (ADR-018).
+     */
+    fun shape(value: PropValue?, theme: Theme): CodeBlock = when (value) {
+        is PropValue.Literal -> CodeBlock.of("%M(%L)", ComposeNames.RoundedCornerShape, dpProp(value))
+        is PropValue.ThemeRef -> shapeTheme(value.token, theme)
+        is PropValue.RawExpression -> raw(value)
+        else -> throw CodegenException("Shape prop must be a literal, theme ref, or expression, got $value")
+    }
+
+    private fun shapeTheme(token: String, theme: Theme): CodeBlock {
+        val slot = token.removePrefix("shapes.")
+        if (slot == token) throw CodegenException("Shape prop expects a 'shapes.*' token, got '$token'")
+        if (slot in MATERIAL_SHAPE_SLOTS) return CodeBlock.of("%T.shapes.%L", ComposeNames.MaterialTheme, slot)
+        // A custom (non-Material) project shape: emit its resolved corner radius so output still compiles.
+        val size = theme.shapes[slot]
+            ?: throw CodegenException("Unresolved shape token '$token' (not a Material slot nor in the theme)")
+        return CodeBlock.of("%M(%L.%M)", ComposeNames.RoundedCornerShape, size, ComposeNames.dp)
     }
 
     /** A color-typed value: `Color(0x..)` literal, a Material scheme slot, or a themed literal. */

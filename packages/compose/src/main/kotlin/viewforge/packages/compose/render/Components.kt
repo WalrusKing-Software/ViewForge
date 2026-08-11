@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -60,6 +61,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -245,6 +247,7 @@ private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
         onClick = {},
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,
+        shape = resolveShape(node.props["shape"], ctx) ?: ButtonDefaults.shape,
         colors = buttonColorsFor(node, ctx),
         elevation = node.props["elevation"].literalInt()
             ?.let { ButtonDefaults.buttonElevation(defaultElevation = it.dp) }
@@ -479,6 +482,33 @@ private fun resolveColor(value: PropValue?, ctx: RenderContext): Color? = when (
         if (hex != null) parseColorArgb(hex)?.let { Color(it) } else materialColorToken(value.token)
     }
     else -> null // RawExpression/binding aren't evaluable on the canvas
+}
+
+/**
+ * Resolves a `shape` prop to a Compose [Shape], mirroring codegen's `CodegenValues.shape`: a literal
+ * corner radius → `RoundedCornerShape(N.dp)`, a `shapes.small|medium|large` token → the Material slot
+ * (already carrying any project override via `projectShapes`, ADR-018), a custom project shape token →
+ * its `RoundedCornerShape`. Null (unset/expression) lets the caller fall back to the composable default.
+ */
+@Composable
+private fun resolveShape(value: PropValue?, ctx: RenderContext): Shape? = when (value) {
+    is PropValue.Literal -> value.literalInt()?.let { RoundedCornerShape(it.dp) }
+    is PropValue.ThemeRef -> {
+        val slot = value.token.removePrefix("shapes.")
+        when {
+            slot == value.token -> null // not a shapes.* token
+            slot in MATERIAL_SHAPE_SLOTS -> materialShapeToken(slot)
+            else -> ctx.theme.shapes[slot]?.let { RoundedCornerShape(it.dp) }
+        }
+    }
+    else -> null // Literal-less kinds (RawExpression/binding) aren't resolvable on the canvas
+}
+
+@Composable
+private fun materialShapeToken(slot: String): Shape = when (slot) {
+    "small" -> MaterialTheme.shapes.small
+    "large" -> MaterialTheme.shapes.large
+    else -> MaterialTheme.shapes.medium
 }
 
 @Composable
