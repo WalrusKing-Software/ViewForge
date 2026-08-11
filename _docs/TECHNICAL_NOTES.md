@@ -86,6 +86,17 @@ works perfectly at 100% zoom and silently breaks everywhere else.
 - Bounds must be invalidated on recomposition — a stale index selects the wrong node after a layout
   change.
 
+**Implemented (C5, issue #38):** the transform is a single `graphicsLayer` on the rendered frame,
+driven by the pure `CanvasViewport(zoom, panX, panY)` view state (`editor/state`). Because
+`graphicsLayer` participates in Compose's layout-coordinate chain, `boundsInWindow` returns node
+bounds already scaled/panned, and the `SelectionOverlay` — left *unscaled* on top so its outlines
+keep constant thickness — reconciles pointer events against them in **window space**. That is why
+`hitTest` needed no change: window space is the common frame both sides already agree in. The pure
+`CanvasViewport` math (clamp/step/pan) is unit-tested (`CanvasViewportTest`); end-to-end zoom
+hit-testing rests on Compose's layer-aware coordinates and is best confirmed with a UI/screenshot
+test (not yet added). Gestures live only in the overlay (scroll → zoom, space-drag → pan); the shell's
+`handleShortcut` tracks the space bar and binds Ctrl +/−/0.
+
 ---
 
 ## 6. Drag-and-drop validity rules

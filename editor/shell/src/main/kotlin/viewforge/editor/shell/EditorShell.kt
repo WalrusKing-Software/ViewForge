@@ -148,14 +148,38 @@ internal fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit)
 /**
  * The standard editing shortcuts (S2). Returns true when handled so the event stops here. Ctrl and
  * Meta are both accepted so the same bindings work on macOS. Delete/Backspace remove the selection;
- * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo/redo.
+ * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo/redo;
+ * Ctrl +/−/0 zoom the canvas (C5). Holding the space bar puts the canvas in pan mode (space-drag).
  */
 private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
+    // Space is the one shortcut that cares about key-up: it's a held modifier for pan mode, not an
+    // action. Tracked on both edges before the KeyDown gate below. Because this handler is bubbling,
+    // a focused text field consumes its own space first — we only see it when the canvas has focus.
+    if (event.key == Key.Spacebar) {
+        when (event.type) {
+            KeyEventType.KeyDown -> state.isSpaceHeld = true
+            KeyEventType.KeyUp -> state.isSpaceHeld = false
+            else -> {}
+        }
+        return state.isSpaceHeld
+    }
     if (event.type != KeyEventType.KeyDown) return false
     val cmd = event.isCtrlPressed || event.isMetaPressed
     return when {
         !cmd && (event.key == Key.Delete || event.key == Key.Backspace) -> {
             state.deleteSelected()
+            true
+        }
+        cmd && (event.key == Key.Equals || event.key == Key.Plus) -> {
+            state.zoomIn()
+            true
+        }
+        cmd && event.key == Key.Minus -> {
+            state.zoomOut()
+            true
+        }
+        cmd && event.key == Key.Zero -> {
+            state.resetZoom()
             true
         }
         cmd && event.key == Key.Z && event.isShiftPressed -> {

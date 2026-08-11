@@ -74,6 +74,21 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * The canvas zoom & pan (C5). Transient view state — where the editor is looking, never part of
+     * the document. The menu, keyboard shortcuts and canvas gestures all mutate this one value; the
+     * canvas realises it as a single `graphicsLayer`, so hit-testing stays correct at every level.
+     */
+    var viewport: CanvasViewport by mutableStateOf(CanvasViewport())
+        private set
+
+    /**
+     * Whether the space bar is held, i.e. the canvas is in pan mode (C5, space-drag to pan). The
+     * shell's focus-aware key handler owns this — it's the one place that knows the space bar isn't
+     * being typed into a field — and the canvas reads it to switch a drag from select to pan.
+     */
+    var isSpaceHeld: Boolean by mutableStateOf(false)
+
+    /**
      * The selected node's id, or null. Shared, observable state so canvas and tree stay in sync (T1).
      * Selection is transient view state — it lives here, never in the IR.
      */
@@ -286,6 +301,33 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the canvas between the theme's light and dark values (H2). View state, not an edit. */
     fun toggleCanvasDark() {
         canvasDark = !canvasDark
+    }
+
+    // --- canvas viewport (C5) ---------------------------------------------------------------------
+
+    /** Zoom the canvas in one step (View → Zoom In / Ctrl +). */
+    fun zoomIn() {
+        viewport = viewport.zoomedIn()
+    }
+
+    /** Zoom the canvas out one step (View → Zoom Out / Ctrl −). */
+    fun zoomOut() {
+        viewport = viewport.zoomedOut()
+    }
+
+    /** Multiply the zoom by [factor] (scroll-wheel zoom), clamped. */
+    fun zoomBy(factor: Float) {
+        viewport = viewport.zoomedBy(factor)
+    }
+
+    /** Reset the canvas to 100% at the origin (View → Reset Zoom / Ctrl 0). */
+    fun resetZoom() {
+        viewport = viewport.reset()
+    }
+
+    /** Pan the canvas by a window-space delta (space-drag). */
+    fun panBy(dx: Float, dy: Float) {
+        viewport = viewport.pannedBy(dx, dy)
     }
 
     /**

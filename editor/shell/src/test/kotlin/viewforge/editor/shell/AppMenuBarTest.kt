@@ -99,4 +99,28 @@ class AppMenuBarTest {
     fun `withAccel shows the shortcut in the label without a binding`() {
         assertEquals("Undo   (Ctrl+Z)", withAccel("Undo", "Ctrl+Z"))
     }
+
+    @Test
+    fun `a fresh view can zoom either way but not reset`() {
+        val model = state().viewMenuModel()
+        assertTrue(model.canZoomIn)
+        assertTrue(model.canZoomOut)
+        assertFalse(model.canResetZoom) // already at the default 100% / origin
+    }
+
+    @Test
+    fun `zooming enables reset`() {
+        val s = state()
+        s.zoomIn()
+        assertTrue(s.viewMenuModel().canResetZoom)
+        s.resetZoom()
+        assertFalse(s.viewMenuModel().canResetZoom)
+    }
+
+    @Test
+    fun `panning alone enables reset`() {
+        val s = state()
+        s.panBy(15f, 0f)
+        assertTrue(s.viewMenuModel().canResetZoom)
+    }
 }
