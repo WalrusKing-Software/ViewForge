@@ -1,6 +1,7 @@
 package viewforge.editor.canvas
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,9 +80,14 @@ private class CanvasTransform(private val overlay: LayoutCoordinates) {
 
 /**
  * The transparent editor chrome layer above the rendered UI (ARCHITECTURE §4.4). It owns all pointer
- * input for editing — click to select the deepest node, hover to preview — and draws selection and
- * hover outlines. Because it sits *above* the render output and never draws into it, editor chrome can
- * never affect the user UI's layout.
+ * input for editing — click to select the deepest node, hover to preview, scroll to zoom, space-drag
+ * to pan (C5) — and draws selection and hover outlines. Because it sits *above* the render output and
+ * never draws into it, editor chrome can never affect the user UI's layout.
+ *
+ * The overlay is deliberately left outside the content's zoom/pan `graphicsLayer`, so its pointer
+ * coordinates and drag deltas are already in window space: a pan drag maps 1:1 to the cursor, and the
+ * unchanged window-space [hitTest] stays correct because the node bounds it tests against come back
+ * from `boundsInWindow` already scaled by that same layer.
  */
 @Composable
 internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds, modifier: Modifier = Modifier) {
@@ -93,22 +99,38 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             .onGloballyPositioned { transform = CanvasTransform(it) }
             .pointerInput(root) {
                 detectTapGestures { local ->
+                    // While panning (space held) a press is a pan, not a selection — ignore it here.
+                    if (state.isSpaceHeld) return@detectTapGestures
                     val point = transform?.localToWindow(local) ?: local
                     state.select(hitTest(bounds.snapshot(), root, point))
+                }
+            }
+            // Space-drag to pan (C5). Keyed on the flag so the gesture re-arms when pan mode toggles;
+            // deltas are window-space (the overlay is unscaled), so panBy tracks the cursor exactly.
+            .pointerInput(state.isSpaceHeld) {
+                if (!state.isSpaceHeld) return@pointerInput
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    state.panBy(drag.x, drag.y)
                 }
             }
             .pointerInput(root) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        hovered =
-                            if (event.type == PointerEventType.Exit) {
-                                null
-                            } else {
+                        when (event.type) {
+                            // Scroll to zoom (C5): one notch per event, direction from the wheel sign.
+                            PointerEventType.Scroll -> {
+                                val dy = event.changes.first().scrollDelta.y
+                                if (dy != 0f) state.zoomBy(if (dy < 0f) ZOOM_IN_FACTOR else 1f / ZOOM_IN_FACTOR)
+                            }
+                            PointerEventType.Exit -> hovered = null
+                            else -> {
                                 val local = event.changes.first().position
                                 val point = transform?.localToWindow(local) ?: local
-                                hitTest(bounds.snapshot(), root, point)
+                                hovered = hitTest(bounds.snapshot(), root, point)
                             }
+                        }
                     }
                 }
             },
@@ -137,3 +159,6 @@ private val SELECTION_COLOR = Color(0xFF1E88E5)
 private val HOVER_COLOR = Color(0x881E88E5)
 private const val SELECTION_STROKE = 2f // px; a thin editor outline, deliberately not layout-affecting
 private const val HOVER_STROKE = 1f
+
+/** Per-scroll-notch zoom multiplier; finer than the menu/keyboard step so the wheel feels continuous. */
+private const val ZOOM_IN_FACTOR = 1.1f

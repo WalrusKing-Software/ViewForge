@@ -3,6 +3,7 @@ package viewforge.editor.shell
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
+import viewforge.editor.state.CanvasViewport
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ExportMode
 
@@ -31,6 +32,7 @@ internal fun FrameWindowScope.AppMenuBar(
     onOpenThemeEditor: () -> Unit,
 ) {
     val edit = state.editMenuModel()
+    val view = state.viewMenuModel()
     MenuBar {
         Menu("File", mnemonic = 'F') {
             // No .vforge persistence layer yet (Main.kt: "open/save … arrive in later milestones").
@@ -65,10 +67,11 @@ internal fun FrameWindowScope.AppMenuBar(
             )
             Item("Theme…", onClick = onOpenThemeEditor)
             Separator()
-            // No zoom or panel-visibility state on the canvas yet; disabled pending follow-up issues.
-            Item("Zoom In", enabled = false, onClick = {})
-            Item("Zoom Out", enabled = false, onClick = {})
-            Item("Reset Zoom", enabled = false, onClick = {})
+            // Canvas zoom (C5). Accelerators are display-only — the shell's handleShortcut binds the
+            // real keys — matching the Edit menu's pattern. Zoom In/Out grey out at the clamp bounds.
+            Item(withAccel("Zoom In", "Ctrl++"), enabled = view.canZoomIn, onClick = state::zoomIn)
+            Item(withAccel("Zoom Out", "Ctrl+-"), enabled = view.canZoomOut, onClick = state::zoomOut)
+            Item(withAccel("Reset Zoom", "Ctrl+0"), enabled = view.canResetZoom, onClick = state::resetZoom)
             Separator()
             Item("Toggle Palette", enabled = false, onClick = {})
             Item("Toggle Tree", enabled = false, onClick = {})
@@ -94,6 +97,19 @@ internal fun EditorState.editMenuModel(): EditMenuModel = EditMenuModel(
     canRedo = canRedo,
     hasSelection = selectedNode != null,
     canPaste = canPaste,
+)
+
+/**
+ * The enabled-state the canvas [viewport][EditorState.viewport] gives the View menu's zoom items:
+ * Zoom In/Out grey out at the clamp bounds, Reset only enables when the view is off its default.
+ * Pure data, unit-tested without a composition (mirrors [EditMenuModel]).
+ */
+internal data class ViewMenuModel(val canZoomIn: Boolean, val canZoomOut: Boolean, val canResetZoom: Boolean)
+
+internal fun EditorState.viewMenuModel(): ViewMenuModel = ViewMenuModel(
+    canZoomIn = viewport.canZoomIn,
+    canZoomOut = viewport.canZoomOut,
+    canResetZoom = viewport != CanvasViewport(),
 )
 
 /**
