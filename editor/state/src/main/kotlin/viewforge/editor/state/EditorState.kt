@@ -32,6 +32,7 @@ import viewforge.model.findById
 import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
+import java.nio.file.Path
 
 /**
  * The editor's document session, exposed as Compose state so the canvas, tree, and inspector
@@ -89,6 +90,26 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     var isSpaceHeld: Boolean by mutableStateOf(false)
 
     /**
+     * The file this document is saved to, or null when it has never been saved (a fresh [newDocument]).
+     * Drives Save vs Save As and is set on open/save (D1). Transient session state, not part of the
+     * document.
+     */
+    var currentPath: Path? by mutableStateOf(null)
+        private set
+
+    /**
+     * Whether the document has unsaved edits (D1). Set by every mutation ([execute]/[undo]/[redo]);
+     * cleared on save ([markSaved]) and when a document is opened or created ([replaceDocument]). The
+     * File menu gates Save on this, and the toolbar shows an unsaved-marker.
+     *
+     * It is a plain flag: an edit-then-undo back to the last-saved state still reads dirty. That errs
+     * toward *offering* a redundant save rather than ever silently dropping a real change — the safe
+     * direction. (A precise saved-marker is a possible refinement, not needed here.)
+     */
+    var isDirty: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * The selected node's id, or null. Shared, observable state so canvas and tree stay in sync (T1).
      * Selection is transient view state — it lives here, never in the IR.
      */
@@ -127,23 +148,69 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      */
     fun execute(command: Command, selectAfter: NodeId? = selectedId) {
         document = history.execute(command, document)
+        isDirty = true
         reconcileSelection(selectAfter)
     }
 
     fun undo() {
         if (!history.canUndo) return
         document = history.undo(document)
+        isDirty = true
         reconcileSelection(selectedId)
     }
 
     fun redo() {
         if (!history.canRedo) return
         document = history.redo(document)
+        isDirty = true
         reconcileSelection(selectedId)
     }
 
     private fun reconcileSelection(desired: NodeId?) {
         selectedId = desired?.takeIf { activeScreen?.root?.findById(it) != null }
+    }
+
+    // --- document session (D1) --------------------------------------------------------------------
+
+    /**
+     * Swap in a whole new [document] — from opening a file or creating one — and reset everything that
+     * belonged to the old one: history (a closed document's undo stack is meaningless), selection,
+     * clipboard, and the canvas view. [path] records where it came from (null for a never-saved New);
+     * the document starts clean. This is the *only* place the document is replaced wholesale; every
+     * other edit goes through a command.
+     */
+    fun replaceDocument(project: Project, path: Path?) {
+        document = project
+        history.clear()
+        selectedId = null
+        clipboard = null
+        viewport = CanvasViewport()
+        isSpaceHeld = false
+        activeScreenId = project.screens.firstOrNull()?.id
+        currentPath = path
+        isDirty = false
+    }
+
+    /**
+     * Start a fresh, unsaved document with a single empty screen (File → New). It keeps the current
+     * document's [framework][Project.framework] — the editor stays bound to the same target — and roots
+     * the screen in the catalog's first container type, so New works for any framework without naming
+     * one here.
+     */
+    fun newDocument() {
+        val rootType = catalog.palette.firstOrNull { catalog.acceptsChildren(it.type) }?.type
+            ?: catalog.palette.first().type
+        val screen = Screen(id = Ulid.next(), name = "Screen 1", root = catalog.newNode(rootType))
+        replaceDocument(
+            Project(id = Ulid.next(), name = "Untitled", framework = document.framework, screens = listOf(screen)),
+            path = null,
+        )
+    }
+
+    /** Record that the document was just saved to [path]: it becomes the current file and is now clean. */
+    fun markSaved(path: Path) {
+        currentPath = path
+        isDirty = false
     }
 
     // --- high-level operations --------------------------------------------------------------------

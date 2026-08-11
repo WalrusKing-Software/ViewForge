@@ -30,18 +30,23 @@ internal fun FrameWindowScope.AppMenuBar(
     state: EditorState,
     onExport: (ExportMode) -> Unit,
     onOpenThemeEditor: () -> Unit,
+    onNew: () -> Unit,
+    onOpen: () -> Unit,
+    onSave: () -> Unit,
+    onSaveAs: () -> Unit,
 ) {
+    val file = state.fileMenuModel()
     val edit = state.editMenuModel()
     val view = state.viewMenuModel()
     MenuBar {
         Menu("File", mnemonic = 'F') {
-            // No .vforge persistence layer yet (Main.kt: "open/save … arrive in later milestones").
-            // Shown disabled so the menu shape is discoverable; wired in a follow-up issue.
-            Item("New", enabled = false, onClick = {})
-            Item("Open…", enabled = false, onClick = {})
+            // .vforge persistence (#37). Accelerators display-only — handleShortcut binds the real keys.
+            Item(withAccel("New", "Ctrl+N"), onClick = onNew)
+            Item(withAccel("Open…", "Ctrl+O"), onClick = onOpen)
             Separator()
-            Item("Save", enabled = false, onClick = {})
-            Item("Save As…", enabled = false, onClick = {})
+            // Save greys out with no unsaved edits; Save As is always available (write a copy anywhere).
+            Item(withAccel("Save", "Ctrl+S"), enabled = file.canSave, onClick = onSave)
+            Item(withAccel("Save As…", "Ctrl+Shift+S"), onClick = onSaveAs)
             Separator()
             // The one File action that has a backing service today (M7 export, ADR-013 seam).
             Item("Export → .kt files", onClick = { onExport(ExportMode.LOOSE_FILES) })
@@ -79,6 +84,14 @@ internal fun FrameWindowScope.AppMenuBar(
         }
     }
 }
+
+/**
+ * The enabled-state the document session gives the File menu: Save lights up only with unsaved edits
+ * (New/Open/Save As are always available). Pure data, unit-tested without a composition.
+ */
+internal data class FileMenuModel(val canSave: Boolean)
+
+internal fun EditorState.fileMenuModel(): FileMenuModel = FileMenuModel(canSave = isDirty)
 
 /**
  * The enabled-state a snapshot of [EditorState] gives the Edit menu. Extracted as pure data so the
