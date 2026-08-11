@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8SCAFFOLD",
+  "name": "Scaffold",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_sc",
+      "name": "ScaffoldScreen",
+      "root": {
+        "id": "sc_01",
+        "type": "compose.material3.Scaffold",
+        "slots": {
+          "topBar": [
+            {
+              "id": "tab_01",
+              "type": "compose.material3.TopAppBar",
+              "slots": {
+                "title": [
+                  { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Home" } } }
+                ]
+              }
+            }
+          ],
+          "bottomBar": [
+            {
+              "id": "bab_01",
+              "type": "compose.material3.BottomAppBar",
+              "children": [
+                { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Bottom" } } }
+              ]
+            }
+          ]
+        },
+        "children": [
+          { "id": "t_03", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Body" } } }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

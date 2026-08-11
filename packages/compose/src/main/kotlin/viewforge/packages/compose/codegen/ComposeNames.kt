@@ -60,6 +60,7 @@ internal object ComposeNames {
     val Icon = MemberName("androidx.compose.material3", "Icon")
     val TopAppBar = MemberName("androidx.compose.material3", "TopAppBar")
     val BottomAppBar = MemberName("androidx.compose.material3", "BottomAppBar")
+    val Scaffold = MemberName("androidx.compose.material3", "Scaffold")
 
     // Opt-in plumbing for experimental Material3 APIs (TopAppBar): the generated screen function is
     // annotated `@OptIn(ExperimentalMaterial3Api::class)` when its tree uses one.
