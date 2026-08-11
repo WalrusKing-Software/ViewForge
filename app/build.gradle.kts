@@ -11,6 +11,9 @@ plugins {
 dependencies {
     implementation(projects.editor.shell)
     implementation(projects.editor.state)
+    // Startup load of the editor-preferences file (ADR-023): apply the persisted panel layout before
+    // the first frame so there is no layout flash. The shell owns the save side.
+    implementation(projects.core.prefs)
 
     // Bootstrapping wiring: statically link the Compose package (Phase 1, ADR-007 §6.3). A
     // compile-time dependency (not runtimeOnly) because Main.kt binds CanvasRenderer to

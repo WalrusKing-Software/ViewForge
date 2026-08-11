@@ -32,6 +32,7 @@ import viewforge.model.findById
 import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
+import viewforge.prefs.PanelLayout
 import java.nio.file.Path
 
 /**
@@ -78,13 +79,27 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * Whether each side panel is shown (S1, #39). Transient editor-chrome state — never part of the
      * document. The View menu toggles these; the shell hides the panel (and its divider) when false.
      * The canvas has no flag: it is always visible, so hiding every panel still leaves something to
-     * edit. Cross-session persistence of the layout is a separate follow-up.
+     * edit. Persisted across sessions with the panel widths via [PanelLayout] (#43).
      */
     var paletteVisible: Boolean by mutableStateOf(true)
         private set
     var treeVisible: Boolean by mutableStateOf(true)
         private set
     var inspectorVisible: Boolean by mutableStateOf(true)
+        private set
+
+    /**
+     * Each side panel's width in dp (S1, #43). Transient chrome, like the visibility flags — the shell
+     * realises them as `.width(...)` and drags mutate them live. Stored as plain [Float] dp magnitudes
+     * (this module has only the Compose *runtime*, not the UI unit types); the shell attaches `.dp`.
+     * Persisted across sessions via [PanelLayout] — [applyLayout] restores them, [panelLayout] snapshots
+     * them for saving. Both restore and drag clamp through [PanelLayout.clampWidth], the one bound.
+     */
+    var paletteWidth: Float by mutableStateOf(PanelLayout.DEFAULT_PALETTE_WIDTH)
+        private set
+    var treeWidth: Float by mutableStateOf(PanelLayout.DEFAULT_TREE_WIDTH)
+        private set
+    var inspectorWidth: Float by mutableStateOf(PanelLayout.DEFAULT_INSPECTOR_WIDTH)
         private set
 
     /**
@@ -397,6 +412,45 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun toggleInspector() {
         inspectorVisible = !inspectorVisible
     }
+
+    /** Grow/shrink the palette by [delta] dp (splitter drag), clamped to the panel width bounds. */
+    fun resizePalette(delta: Float) {
+        paletteWidth = PanelLayout.clampWidth(paletteWidth + delta)
+    }
+
+    /** Grow/shrink the tree panel by [delta] dp (splitter drag), clamped. */
+    fun resizeTree(delta: Float) {
+        treeWidth = PanelLayout.clampWidth(treeWidth + delta)
+    }
+
+    /** Grow/shrink the inspector by [delta] dp (splitter drag), clamped. */
+    fun resizeInspector(delta: Float) {
+        inspectorWidth = PanelLayout.clampWidth(inspectorWidth + delta)
+    }
+
+    /**
+     * Restore the persisted panel layout at startup (S1, #43). Widths are re-clamped defensively so a
+     * hand-edited or differently-versioned prefs file can never wedge a panel off-screen; visibility is
+     * taken as-is. This is view state, not an edit — it never touches the document or history.
+     */
+    fun applyLayout(layout: PanelLayout) {
+        paletteVisible = layout.paletteVisible
+        treeVisible = layout.treeVisible
+        inspectorVisible = layout.inspectorVisible
+        paletteWidth = PanelLayout.clampWidth(layout.paletteWidth)
+        treeWidth = PanelLayout.clampWidth(layout.treeWidth)
+        inspectorWidth = PanelLayout.clampWidth(layout.inspectorWidth)
+    }
+
+    /** Snapshot the current panel layout for persistence. */
+    fun panelLayout(): PanelLayout = PanelLayout(
+        paletteVisible = paletteVisible,
+        treeVisible = treeVisible,
+        inspectorVisible = inspectorVisible,
+        paletteWidth = paletteWidth,
+        treeWidth = treeWidth,
+        inspectorWidth = inspectorWidth,
+    )
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------
 

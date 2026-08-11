@@ -26,6 +26,7 @@ rootProject.name = "viewforge"
 // --- core: pure/JVM, no Compose (CLAUDE.md rule 1) ---
 include(":core:model")
 include(":core:project")
+include(":core:prefs")
 include(":core:command")
 include(":core:spi")
 

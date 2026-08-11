@@ -28,6 +28,7 @@ import viewforge.editor.state.ExportMode
 @Composable
 internal fun FrameWindowScope.AppMenuBar(
     state: EditorState,
+    prefs: PreferencesController,
     onExport: (ExportMode) -> Unit,
     onOpenThemeEditor: () -> Unit,
     onNew: () -> Unit,
@@ -79,9 +80,10 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Reset Zoom", "Ctrl+0"), enabled = view.canResetZoom, onClick = state::resetZoom)
             Separator()
             // Panel visibility (S1, #39) — checked when shown, mirroring the Dark canvas toggle above.
-            CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { state.togglePalette() })
-            CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { state.toggleTree() })
-            CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { state.toggleInspector() })
+            // Routed through the preferences controller so a toggle persists across sessions (#43).
+            CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { prefs.togglePalette() })
+            CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { prefs.toggleTree() })
+            CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { prefs.toggleInspector() })
         }
     }
 }
