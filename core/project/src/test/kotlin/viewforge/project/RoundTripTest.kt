@@ -25,6 +25,19 @@ class RoundTripTest {
     }
 
     @Test
+    fun `the committed Gallery_vforge sample loads and round-trips losslessly (M9, exit #4)`() {
+        // The Phase-1 "something real" screen — nested layout, images, a scrollable list, theme and
+        // resource references — must survive save → load unchanged (PROJECT_PLAN §8 exit criterion #4).
+        val samplesDir = System.getProperty("viewforge.samplesDir")
+            ?: error("viewforge.samplesDir system property not set by the build")
+        val result = ProjectStore.load(Paths.get(samplesDir, "Gallery.vforge"))
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        val project = result.project
+        // Encode → decode is the identity, so no field is dropped or reordered on the way through.
+        assertEquals(project, ProjectCodec.decode(ProjectCodec.encode(project)))
+    }
+
+    @Test
     fun `all five PropValue kinds survive a round-trip and carry the kind discriminator`() {
         val project = Fixtures.demoProject()
         val json = ProjectCodec.encode(project)

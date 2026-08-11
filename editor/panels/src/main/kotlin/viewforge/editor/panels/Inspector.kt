@@ -118,6 +118,7 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             enumValues = def.enumValues,
             range = def.range,
             themeable = def.themeable,
+            assets = state.document.assets,
         )
     }
 }

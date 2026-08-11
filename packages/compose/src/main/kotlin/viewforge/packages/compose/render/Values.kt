@@ -139,6 +139,21 @@ internal fun hArrange(name: String?): HArrange = when (name) {
     else -> HArrange.Start
 }
 
+/**
+ * The `contentScale` values an `Image` may take (FEATURES §2 content set). A small enum so the
+ * mapping to `ContentScale` is testable and shared by the renderer and codegen — the member name is
+ * the Compose `ContentScale` member name, so both paths agree without a second lookup table.
+ */
+internal enum class ImageScale { Fit, Crop, FillBounds, Inside, None }
+
+internal fun imageScale(name: String?): ImageScale = when (name) {
+    "Crop" -> ImageScale.Crop
+    "FillBounds" -> ImageScale.FillBounds
+    "Inside" -> ImageScale.Inside
+    "None" -> ImageScale.None
+    else -> ImageScale.Fit
+}
+
 internal fun boxAlign(name: String?): BoxAlign = when (name) {
     "TopStart" -> BoxAlign.TopStart
     "TopCenter" -> BoxAlign.TopCenter

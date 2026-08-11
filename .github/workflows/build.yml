@@ -31,6 +31,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
+      # The fidelity test (:app) renders via Skiko/Compose Desktop; libskiko is dynamically linked
+      # against libGL.so.1, so the headless runner needs OpenGL + font libraries present or the test
+      # fails to even load the native library. sudo-fallback so this works whether the runner is root
+      # (act image) or a non-root user with passwordless sudo.
+      - name: Install headless rendering libraries (Skiko)
+        run: |
+          if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
+          $SUDO apt-get update
+          $SUDO apt-get install -y --no-install-recommends libgl1 libfontconfig1
+
       - name: Spotless / ktlint check
         run: ./gradlew spotlessCheck --no-daemon --stacktrace
 

@@ -276,7 +276,7 @@ tests that encode intent so context survives gaps between work sessions.
 | M6 | Codegen v1 | Full component/modifier set emits compiling Kotlin; golden tests green; CI compiles output. |
 | M7 | Project export | Export loose files and a runnable Gradle desktop project scaffold. |
 | M8 | Theming | Theme editor for colors/typography/shapes; props can reference theme tokens. |
-| M9 | **Phase 1 complete** | All Phase 1 exit criteria met; editor used to build something real. |
+| M9 | **Phase 1 complete** ✅ | All Phase 1 exit criteria met; editor used to build something real. Added `Image` + `LazyColumn`/`LazyRow`, the `Gallery` sample (`samples/Gallery.vforge`), an interpreter-vs-composable pixel fidelity test (exit #3), and a lossless round-trip of the sample (exit #4). Codegen goldens + compile gate cover every component (exit #6). The Gradle export ships referenced assets so an exported project *runs* with images unmodified. Remaining follow-up: importing asset files from disk into a project (an "Assets" surface), see ADR-021. |
 | M10 | Packaging | Signed installers for at least Windows + Linux; documented install path. |
 
 ---

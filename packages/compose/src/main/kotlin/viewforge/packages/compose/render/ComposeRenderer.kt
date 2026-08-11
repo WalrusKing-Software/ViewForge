@@ -3,6 +3,7 @@ package viewforge.packages.compose.render
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Theme
@@ -22,12 +23,33 @@ import viewforge.model.Theme
  */
 object ComposeRenderer {
     @Composable
-    fun RenderScreen(root: Node, theme: Theme, dark: Boolean, instrument: (NodeId) -> Modifier = { Modifier }) {
+    fun RenderScreen(
+        root: Node,
+        theme: Theme,
+        dark: Boolean,
+        instrument: (NodeId) -> Modifier = { Modifier },
+        imageLoader: (assetId: String) -> ImageBitmap? = { null },
+    ) {
+        ProjectTheme(theme, dark) {
+            RenderNode(
+                root,
+                RenderContext(theme = theme, dark = dark, instrument = instrument, imageLoader = imageLoader),
+            )
+        }
+    }
+
+    /**
+     * Establishes the project's `MaterialTheme` — the same scheme/shapes [RenderScreen] renders under
+     * (H1/H2, ADR-020), so it is the code twin of the generated `AppTheme` wrapper. Exposed so a
+     * fidelity check can render a hand-written composable under the *identical* theme context the canvas
+     * uses, making an interpreter-vs-compiled pixel comparison fair (M9, exit criterion #3).
+     */
+    @Composable
+    fun ProjectTheme(theme: Theme, dark: Boolean, content: @Composable () -> Unit) {
         MaterialTheme(
             colorScheme = projectColorScheme(theme, dark),
             shapes = projectShapes(theme),
-        ) {
-            RenderNode(root, RenderContext(theme = theme, dark = dark, instrument = instrument))
-        }
+            content = content,
+        )
     }
 }

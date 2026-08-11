@@ -3,6 +3,7 @@ package viewforge.packages.compose.codegen
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.ParameterSpec
+import viewforge.model.Asset
 import viewforge.model.Project
 import viewforge.model.Screen
 import viewforge.model.Theme
@@ -25,7 +26,7 @@ class ComposeCodeGenerator : CodeGenerator {
         return project.screens.map { screen ->
             GeneratedFile(
                 path = "${KotlinIdentifiers.requireFunctionName(screen.name)}.kt",
-                content = generateScreen(screen, project.theme, sourceName, project.schemaVersion),
+                content = generateScreen(screen, project.theme, sourceName, project.schemaVersion, project.assets),
             )
         }
     }
@@ -41,7 +42,13 @@ class ComposeCodeGenerator : CodeGenerator {
         ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion)
 
     /** Generates the source text for a single [screen]; also the unit the golden tests assert on. */
-    fun generateScreen(screen: Screen, theme: Theme, sourceName: String, schemaVersion: Int): String {
+    fun generateScreen(
+        screen: Screen,
+        theme: Theme,
+        sourceName: String,
+        schemaVersion: Int,
+        assets: List<Asset> = emptyList(),
+    ): String {
         val fnName = KotlinIdentifiers.requireFunctionName(screen.name)
         val function = FunSpec.builder(fnName)
             .addAnnotation(ComposeNames.Composable)
@@ -53,7 +60,7 @@ class ComposeCodeGenerator : CodeGenerator {
             .apply {
                 // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
                 if (!screen.root.hidden) {
-                    addCode("%L\n", ComponentEmitter(theme).emit(screen.root, isRoot = true))
+                    addCode("%L\n", ComponentEmitter(theme, assets).emit(screen.root, isRoot = true))
                 }
             }
             .build()

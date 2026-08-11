@@ -2,19 +2,25 @@ package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.MemberName
+import viewforge.model.Asset
 import viewforge.model.Node
 import viewforge.model.Theme
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
- * component: same set (Column/Row/Box/Spacer/Text/Button), same argument order as each renderer's
- * Composable call, so the drawn tree and generated tree are the same tree (TECHNICAL_NOTES §2).
+ * component: same set (Column/Row/Box/Spacer/LazyColumn/LazyRow/Text/Button/Image), same argument
+ * order as each renderer's Composable call, so the drawn tree and generated tree are the same tree
+ * (TECHNICAL_NOTES §2).
  *
  * Each component owns its emitter here, so adding one is a local change beside its renderer — never a
  * change to the pipeline. An unsupported type fails loudly (CLAUDE.md: a visible error beats a silent
  * wrong render/emit); `hidden` nodes are dropped from output (DATA_MODEL §5).
+ *
+ * [assets] resolves an `Image`'s `ResourceRef` to its project-relative path for `painterResource`.
  */
-internal class ComponentEmitter(private val theme: Theme) {
+internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = emptyList()) {
+    private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
+
     /** Emits [node]. [isRoot] chains its modifier onto the composable's `modifier` parameter. */
     fun emit(node: Node, isRoot: Boolean): CodeBlock {
         val mod = if (isRoot) {
@@ -27,8 +33,11 @@ internal class ComponentEmitter(private val theme: Theme) {
             "compose.foundation.layout.Row" -> layout(ComposeNames.Row, node, mod, rowArgs(node))
             "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, boxArgs(node))
             "compose.foundation.layout.Spacer" -> call(ComposeNames.Spacer, modifierArg(mod), content = null)
+            "compose.foundation.lazy.LazyColumn" -> lazyList(ComposeNames.LazyColumn, node, mod, columnArgs(node))
+            "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node))
             "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod), content = null)
             "compose.material3.Button" -> button(node, mod)
+            "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod), content = null)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -66,11 +75,35 @@ internal class ComponentEmitter(private val theme: Theme) {
         node.props["style"]?.let { add(named("style", CodegenValues.typography(it, theme))) }
     }
 
+    private fun imageArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        add(named("painter", CodegenValues.painter(node.props["source"], assetsById)))
+        add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
+        if (mod != null) add(named("modifier", mod))
+        node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
+    }
+
     // --- shape helpers ---------------------------------------------------------------------------
 
     /** A layout container: its own args, then children (hidden dropped) as the trailing lambda. */
     private fun layout(callee: MemberName, node: Node, mod: CodeBlock?, extra: List<CodeBlock>): CodeBlock =
         call(callee, modifierArg(mod) + extra, content = body(node.children))
+
+    /**
+     * A lazy list (`LazyColumn`/`LazyRow`): same args as its eager twin, but each static child is
+     * wrapped in its own `item { … }` — the `LazyListScope` DSL, mirroring the renderer (DATA_MODEL
+     * §12.2: static children only in Phase 1).
+     */
+    private fun lazyList(callee: MemberName, node: Node, mod: CodeBlock?, extra: List<CodeBlock>): CodeBlock =
+        call(callee, modifierArg(mod) + extra, content = lazyBody(node.children))
+
+    /** Children as `item { … }` entries; hidden nodes excluded from codegen (DATA_MODEL §5). */
+    private fun lazyBody(children: List<Node>): CodeBlock {
+        val b = CodeBlock.builder()
+        children.filterNot { it.hidden }.forEach { child ->
+            b.add("item {\n").indent().add("%L\n", emit(child, isRoot = false)).unindent().add("}\n")
+        }
+        return b.build()
+    }
 
     private fun button(node: Node, mod: CodeBlock?): CodeBlock {
         val args = buildList {

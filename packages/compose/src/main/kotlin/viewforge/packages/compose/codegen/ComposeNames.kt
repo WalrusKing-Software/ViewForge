@@ -17,6 +17,7 @@ internal object ComposeNames {
     val Arrangement = ClassName("androidx.compose.foundation.layout", "Arrangement")
     val Color = ClassName("androidx.compose.ui.graphics", "Color")
     val MaterialTheme = ClassName("androidx.compose.material3", "MaterialTheme")
+    val ContentScale = ClassName("androidx.compose.ui.layout", "ContentScale")
 
     // Theme wrapper types (M8 theme codegen)
     val ColorScheme = ClassName("androidx.compose.material3", "ColorScheme")
@@ -38,8 +39,12 @@ internal object ComposeNames {
     val Row = MemberName("androidx.compose.foundation.layout", "Row")
     val Box = MemberName("androidx.compose.foundation.layout", "Box")
     val Spacer = MemberName("androidx.compose.foundation.layout", "Spacer")
+    val LazyColumn = MemberName("androidx.compose.foundation.lazy", "LazyColumn")
+    val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")
     val Text = MemberName("androidx.compose.material3", "Text")
     val Button = MemberName("androidx.compose.material3", "Button")
+    val Image = MemberName("androidx.compose.foundation", "Image")
+    val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
 
     // Modifier factories (layout live in foundation.layout; background in foundation)
     val fillMaxSize = MemberName("androidx.compose.foundation.layout", "fillMaxSize")

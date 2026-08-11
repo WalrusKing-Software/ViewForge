@@ -1,5 +1,6 @@
 package viewforge.packages.compose.render
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +19,8 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,8 +49,11 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.foundation.layout.Row" -> RenderRow(node, modifier, ctx)
         "compose.foundation.layout.Box" -> RenderBox(node, modifier, ctx)
         "compose.foundation.layout.Spacer" -> Spacer(modifier)
+        "compose.foundation.lazy.LazyColumn" -> RenderLazyColumn(node, modifier, ctx)
+        "compose.foundation.lazy.LazyRow" -> RenderLazyRow(node, modifier, ctx)
         "compose.material3.Text" -> RenderText(node, modifier, ctx)
         "compose.material3.Button" -> RenderButton(node, modifier, ctx)
+        "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -89,6 +97,30 @@ private fun RenderBox(node: Node, modifier: Modifier, ctx: RenderContext) {
 }
 
 @Composable
+private fun RenderLazyColumn(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // Phase-1 lists are static children only (DATA_MODEL §12.2) — each child is one `item`, keyed by
+    // its stable node id so reorders move composables rather than recreating them (TECHNICAL_NOTES §4).
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = vArrange(node.props["verticalArrangement"].literalString()).toCompose(),
+        horizontalAlignment = hAlign(node.props["horizontalAlignment"].literalString()).toCompose(),
+    ) {
+        node.children.forEach { child -> item(key = child.id.value) { RenderNode(child, ctx) } }
+    }
+}
+
+@Composable
+private fun RenderLazyRow(node: Node, modifier: Modifier, ctx: RenderContext) {
+    LazyRow(
+        modifier = modifier,
+        horizontalArrangement = hArrange(node.props["horizontalArrangement"].literalString()).toCompose(),
+        verticalAlignment = vAlign(node.props["verticalAlignment"].literalString()).toCompose(),
+    ) {
+        node.children.forEach { child -> item(key = child.id.value) { RenderNode(child, ctx) } }
+    }
+}
+
+@Composable
 private fun RenderText(node: Node, modifier: Modifier, ctx: RenderContext) {
     Text(
         text = node.props["text"].literalString() ?: "",
@@ -104,6 +136,25 @@ private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
     Button(onClick = {}, modifier = modifier) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
+}
+
+@Composable
+private fun RenderImage(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // The source is a ResourceRef; the editor's imageLoader turns its asset id into a decoded bitmap.
+    // A missing/unresolvable asset draws a loud placeholder rather than a blank (ARCHITECTURE §9) — the
+    // canvas never silently omits an image the generated code would still emit.
+    val assetId = (node.props["source"] as? PropValue.ResourceRef)?.assetId
+    val bitmap = assetId?.let { ctx.imageLoader(it) }
+    if (bitmap == null) {
+        ErrorPlaceholder("Missing image", modifier)
+        return
+    }
+    Image(
+        painter = BitmapPainter(bitmap),
+        contentDescription = node.props["contentDescription"].literalString(),
+        modifier = modifier,
+        contentScale = imageScale(node.props["contentScale"].literalString()).toCompose(),
+    )
 }
 
 /** A visible marker for a node the canvas can't render — never a blank space (ARCHITECTURE §9). */
@@ -204,6 +255,14 @@ private fun HArrange.toCompose(): Arrangement.Horizontal = when (this) {
     HArrange.SpaceBetween -> Arrangement.SpaceBetween
     HArrange.SpaceAround -> Arrangement.SpaceAround
     HArrange.SpaceEvenly -> Arrangement.SpaceEvenly
+}
+
+private fun ImageScale.toCompose(): ContentScale = when (this) {
+    ImageScale.Fit -> ContentScale.Fit
+    ImageScale.Crop -> ContentScale.Crop
+    ImageScale.FillBounds -> ContentScale.FillBounds
+    ImageScale.Inside -> ContentScale.Inside
+    ImageScale.None -> ContentScale.None
 }
 
 private fun BoxAlign.toCompose(): Alignment = when (this) {

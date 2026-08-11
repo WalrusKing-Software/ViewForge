@@ -567,6 +567,51 @@ no obvious replacement target.
 
 ---
 
+## ADR-021 — Image codegen via the desktop `painterResource(String)` in Phase 1
+
+**Status:** Accepted
+
+**Context.** M9 (Phase 1 complete) adds the `Image` component required by exit criterion #1. Generated
+image code must (a) compile with zero manual fixes, and (b) keep the in-process compile gate
+(ADR-018, G2/GC-6) self-contained — the gate compiles a single generated `.kt` against the Compose
+runtime/foundation/material3/ui classpath, with no Gradle plugins. An `Image`'s `source` is a
+`ResourceRef` to a project asset (DATA_MODEL §9), resolved to the asset's project-relative path.
+
+**Decision.** Codegen emits `Image(painter = painterResource("<asset.path>"), contentDescription, …)`
+using `androidx.compose.ui.res.painterResource(String)` — the Compose **Desktop** resource API, which
+is already on the package's classpath. `contentScale` maps to `ContentScale.<value>` through the same
+shared parser (`render/Values.kt`) the canvas uses (the ADR-018 render/codegen marriage). The canvas
+resolves the same `ResourceRef` through a `RenderContext.imageLoader` seam that `:app` backs; a missing
+asset draws a loud placeholder (ARCHITECTURE §9), never a blank.
+
+**Rationale.** Phase 1 targets Compose Desktop only (CLAUDE.md). The desktop `painterResource(String)`
+is self-contained: the generated file compiles against the existing classpath with no resource-plugin
+scaffolding, so the compile gate — the project's highest-value test — stays intact.
+
+**Rejected.** The multiplatform resources API (`org.jetbrains.compose.resources`,
+`painterResource(Res.drawable.x)`) is the future-proof, `commonMain`-compatible answer, but it needs
+the resources Gradle plugin to generate the `Res` accessor and a `components-resources` dependency; the
+plugin cannot run inside kotlin-compile-testing, and `DrawableResource` has an internal constructor, so
+a self-contained golden/compile fixture is not achievable. Adopting it now would gut the compile gate.
+A placeholder-only Image (no real bitmap) was rejected as not honestly satisfying "images."
+
+**Consequences.** Phase-1 image output compiles and the sample renders on the canvas. **Migration to
+`Res.drawable` is a Phase-2 task**, taken up with per-target source-set routing (G9) — it will rewrite
+the `Image` emitter and regenerate the image goldens, a localised change beside the renderer.
+
+*Update (M9 follow-up):* the **Gradle export now ships referenced assets**, so an exported project
+*runs* unmodified, not merely compiles. `DesktopExporter.gradleProject(project, assetBytes)` takes an
+`(Asset) -> ByteArray?` resolver and emits each asset as a `BinaryFile` under `src/main/resources/`
+(on the `kotlin("jvm")` runtime classpath, so `painterResource("assets/…")` resolves); `:app` backs
+the resolver from the same classpath source the canvas loads from. An earlier symptom — a `LazyColumn`
+of `Image` rows rendering blank in an exported app — was this gap: the missing resource made
+`painterResource` throw during the list's lazy layout, dropping the whole subtree while the
+already-placed title/buttons survived. **Still deferred:** importing asset files from disk into a
+project (an "Assets" surface + guarded copy); and loose-file export (G4) stays screens-only, since a
+pasted screen has no canonical resources dir — its assets are the host project's responsibility.
+
+---
+
 ## Template
 
 ```markdown

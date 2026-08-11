@@ -43,6 +43,8 @@ internal fun floatValue(f: Float): PropValue = PropValue.Literal(JsonPrimitive(f
 
 internal fun themeValue(token: String): PropValue = PropValue.ThemeRef(token)
 
+internal fun resourceValue(assetId: String): PropValue = PropValue.ResourceRef(assetId)
+
 internal fun expressionValue(code: String): PropValue = PropValue.RawExpression(code)
 
 // --- numeric parsing/validation ------------------------------------------------------------------

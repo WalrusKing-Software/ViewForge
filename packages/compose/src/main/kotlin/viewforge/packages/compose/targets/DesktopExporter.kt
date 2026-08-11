@@ -4,6 +4,7 @@ import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.MemberName
+import viewforge.model.Asset
 import viewforge.model.Project
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinFormatter
@@ -30,6 +31,13 @@ import viewforge.project.TextFile
 object DesktopExporter {
     private const val SOURCE_DIR = "src/main/kotlin"
 
+    /**
+     * Where asset bytes land in the scaffold. `src/main/resources` is on a `kotlin("jvm")` runtime
+     * classpath, so a generated `painterResource("assets/foo.png")` (ADR-021) resolves at run time —
+     * without this the exported project compiles but throws `Resource … not found` when the screen draws.
+     */
+    private const val RESOURCE_DIR = "src/main/resources"
+
     private val application = MemberName("androidx.compose.ui.window", "application")
     private val windowFn = MemberName("androidx.compose.ui.window", "Window")
     private val materialTheme = MemberName("androidx.compose.material3", "MaterialTheme")
@@ -40,8 +48,14 @@ object DesktopExporter {
     /** The generated screen composables only (G4), each formatted, at top level (default package). */
     fun looseFiles(project: Project): List<ExportFile> = screenFiles(project, dir = "")
 
-    /** A complete runnable Compose Desktop project (G5). */
-    fun gradleProject(project: Project): List<ExportFile> {
+    /**
+     * A complete runnable Compose Desktop project (G5). [assetBytes] resolves each referenced [Asset]
+     * to its raw bytes so images ship inside the scaffold and the app *runs* unmodified, not merely
+     * compiles (ADR-021); the caller (`:app`) reads them from the project's asset store. An asset whose
+     * bytes can't be resolved is omitted rather than aborting the whole export — the default resolver
+     * yields nothing, so a caller that doesn't wire assets simply exports source only, as before.
+     */
+    fun gradleProject(project: Project, assetBytes: (Asset) -> ByteArray? = { null }): List<ExportFile> {
         val slug = GradleScaffold.slug(project.name.ifBlank { "Project" })
         val themeSource = ComposeCodeGenerator().generateTheme(project)
         return buildList {
@@ -50,6 +64,11 @@ object DesktopExporter {
             // screen in it so the compiled app is themed exactly like the canvas (ADR-018).
             if (themeSource != null) add(TextFile("$SOURCE_DIR/Theme.kt", themeSource))
             add(TextFile("$SOURCE_DIR/Main.kt", mainSource(project, themed = themeSource != null)))
+            // Referenced assets, copied verbatim into the classpath resources so painterResource resolves.
+            for (asset in project.assets) {
+                val bytes = assetBytes(asset) ?: continue
+                add(BinaryFile("$RESOURCE_DIR/${asset.path}", bytes))
+            }
             add(TextFile("build.gradle.kts", GradleScaffold.buildGradle()))
             add(TextFile("settings.gradle.kts", GradleScaffold.settingsGradle(slug)))
             add(TextFile("gradle.properties", GradleScaffold.gradleProperties()))
