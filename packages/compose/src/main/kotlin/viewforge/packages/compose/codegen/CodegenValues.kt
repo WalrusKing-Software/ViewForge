@@ -10,11 +10,14 @@ import viewforge.model.Theme
 import viewforge.model.TypographyToken
 import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
 import viewforge.packages.compose.render.boxAlign
+import viewforge.packages.compose.render.fontWeightName
 import viewforge.packages.compose.render.hAlign
 import viewforge.packages.compose.render.hArrange
 import viewforge.packages.compose.render.iconName
 import viewforge.packages.compose.render.imageScale
 import viewforge.packages.compose.render.parseColorArgb
+import viewforge.packages.compose.render.textAlignName
+import viewforge.packages.compose.render.textOverflowName
 import viewforge.packages.compose.render.vAlign
 import viewforge.packages.compose.render.vArrange
 
@@ -64,6 +67,33 @@ internal object CodegenValues {
         is PropValue.RawExpression -> raw(value)
         null -> throw CodegenException("float prop has no value")
         else -> throw CodegenException("float prop must be a literal or expression, got $value")
+    }
+
+    /** An sp-typed prop (font size, line height) → `N.sp` (or a raw expression). */
+    fun sp(value: PropValue?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            CodeBlock.of(
+                "%L.%M",
+                value.value.intOrNull
+                    ?: throw CodegenException("sp prop expects an integer, got '${value.value.content}'"),
+                ComposeNames.sp,
+            )
+        is PropValue.RawExpression -> raw(value)
+        null -> throw CodegenException("sp prop has no value")
+        else -> throw CodegenException("sp prop must be a literal or expression, got $value")
+    }
+
+    /** A plain integer prop (e.g. `maxLines`) → `N` (or a raw expression). */
+    fun int(value: PropValue?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            CodeBlock.of(
+                "%L",
+                value.value.intOrNull
+                    ?: throw CodegenException("int prop expects an integer, got '${value.value.content}'"),
+            )
+        is PropValue.RawExpression -> raw(value)
+        null -> throw CodegenException("int prop has no value")
+        else -> throw CodegenException("int prop must be a literal or expression, got $value")
     }
 
     /** A boolean-typed prop → `true`/`false` (or a raw expression, GC-4). */
@@ -191,6 +221,9 @@ internal object CodegenValues {
         "contentScale" -> CodeBlock.of("%T.%L", ComposeNames.ContentScale, imageScale(name).name)
         // An icon extension property: `Icons.Filled` receiver (imports Icons) + the property (imports it).
         "icon" -> CodeBlock.of("%T.%M", ComposeNames.IconsFilled, ComposeNames.iconMember(iconName(name)))
+        "fontWeight" -> CodeBlock.of("%T.%L", ComposeNames.FontWeight, fontWeightName(name))
+        "textAlign" -> CodeBlock.of("%T.%L", ComposeNames.TextAlign, textAlignName(name))
+        "overflow" -> CodeBlock.of("%T.%L", ComposeNames.TextOverflow, textOverflowName(name))
         else -> throw CodegenException("Unknown enum prop '$propName'")
     }
 

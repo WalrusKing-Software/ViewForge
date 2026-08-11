@@ -62,6 +62,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import viewforge.model.Node
@@ -177,12 +180,40 @@ private fun RenderLazyRow(node: Node, modifier: Modifier, ctx: RenderContext) {
 
 @Composable
 private fun RenderText(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // Each optional value falls back to the same default the Text composable uses when the arg is
+    // omitted, so an unset prop renders identically to codegen omitting it (TECHNICAL_NOTES §2).
     Text(
         text = node.props["text"].literalString() ?: "",
         modifier = modifier,
         color = resolveColor(node.props["color"], ctx) ?: Color.Unspecified,
+        fontSize = node.props["fontSize"].literalInt()?.sp ?: TextUnit.Unspecified,
+        fontWeight = node.props["fontWeight"].literalString()?.let { fontWeightOf(it) },
+        textAlign = node.props["textAlign"].literalString()?.let { textAlignOf(it) },
+        overflow = node.props["overflow"].literalString()?.let { textOverflowOf(it) } ?: TextOverflow.Clip,
+        maxLines = node.props["maxLines"].literalInt() ?: Int.MAX_VALUE,
         style = resolveTextStyle(node.props["style"], ctx),
     )
+}
+
+private fun fontWeightOf(name: String): FontWeight = when (fontWeightName(name)) {
+    "Light" -> FontWeight.Light
+    "Medium" -> FontWeight.Medium
+    "SemiBold" -> FontWeight.SemiBold
+    "Bold" -> FontWeight.Bold
+    else -> FontWeight.Normal
+}
+
+private fun textAlignOf(name: String): TextAlign = when (textAlignName(name)) {
+    "Center" -> TextAlign.Center
+    "End" -> TextAlign.End
+    "Justify" -> TextAlign.Justify
+    else -> TextAlign.Start
+}
+
+private fun textOverflowOf(name: String): TextOverflow = when (textOverflowName(name)) {
+    "Ellipsis" -> TextOverflow.Ellipsis
+    "Visible" -> TextOverflow.Visible
+    else -> TextOverflow.Clip
 }
 
 @Composable

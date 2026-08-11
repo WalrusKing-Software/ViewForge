@@ -25,6 +25,8 @@ internal object ComposeNames {
     val Typography = ClassName("androidx.compose.material3", "Typography")
     val TextStyle = ClassName("androidx.compose.ui.text", "TextStyle")
     val FontWeight = ClassName("androidx.compose.ui.text.font", "FontWeight")
+    val TextAlign = ClassName("androidx.compose.ui.text.style", "TextAlign")
+    val TextOverflow = ClassName("androidx.compose.ui.text.style", "TextOverflow")
     val lightColorScheme = MemberName("androidx.compose.material3", "lightColorScheme")
     val darkColorScheme = MemberName("androidx.compose.material3", "darkColorScheme")
     val RoundedCornerShape = MemberName("androidx.compose.foundation.shape", "RoundedCornerShape")
