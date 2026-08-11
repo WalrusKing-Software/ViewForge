@@ -38,6 +38,9 @@ internal object GradleScaffold {
 
         dependencies {
             implementation(compose.desktop.currentOs)
+            // currentOs bundles runtime/foundation/ui + Material 2; the generated screens and Theme
+            // use Material 3 (MaterialTheme, Text, Button, ColorScheme, …), which is a separate artifact.
+            implementation(compose.material3)
         }
 
         kotlin {

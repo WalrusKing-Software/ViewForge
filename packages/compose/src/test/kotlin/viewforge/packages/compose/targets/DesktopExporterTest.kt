@@ -72,6 +72,10 @@ class DesktopExporterTest {
     fun `build script is runnable and version-pinned`() {
         val build = textOf(DesktopExporter.gradleProject(demoProject()), "build.gradle.kts")
         assertContains(build, "compose.desktop.currentOs")
+        // currentOs bundles only Material 2; generated screens + Theme use Material 3, so the scaffold
+        // must declare it explicitly. The in-process compile gate can't catch this — it inherits
+        // ViewForge's own richer classpath — so this asserts the real scaffold dependency directly.
+        assertContains(build, "compose.material3")
         assertContains(build, "mainClass = \"MainKt\"")
         assertContains(build, "version \"${GradleScaffold.KOTLIN_VERSION}\"")
         assertContains(build, "version \"${GradleScaffold.COMPOSE_VERSION}\"")
