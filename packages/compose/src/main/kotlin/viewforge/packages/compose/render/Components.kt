@@ -41,11 +41,13 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -89,6 +91,8 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.OutlinedButton" -> RenderOutlinedButton(node, modifier, ctx)
         "compose.material3.TextButton" -> RenderTextButton(node, modifier, ctx)
         "compose.material3.Slider" -> RenderSlider(node, modifier)
+        "compose.material3.TextField" -> RenderTextField(node, modifier)
+        "compose.material3.OutlinedTextField" -> RenderOutlinedTextField(node, modifier)
         "compose.material3.CircularProgressIndicator" -> RenderCircularProgress(modifier)
         "compose.material3.LinearProgressIndicator" -> RenderLinearProgress(modifier)
         "compose.material3.Card" -> RenderCard(node, modifier, ctx)
@@ -201,6 +205,28 @@ private fun RenderSlider(node: Node, modifier: Modifier) {
     // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
     Slider(
         value = node.props["value"].literalFloat() ?: 0f,
+        onValueChange = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+    )
+}
+
+@Composable
+private fun RenderTextField(node: Node, modifier: Modifier) {
+    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); the field
+    // reflects the `value` prop but isn't interactively editable here (edit `value` in the inspector).
+    TextField(
+        value = node.props["value"].literalString() ?: "",
+        onValueChange = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+    )
+}
+
+@Composable
+private fun RenderOutlinedTextField(node: Node, modifier: Modifier) {
+    OutlinedTextField(
+        value = node.props["value"].literalString() ?: "",
         onValueChange = {},
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,

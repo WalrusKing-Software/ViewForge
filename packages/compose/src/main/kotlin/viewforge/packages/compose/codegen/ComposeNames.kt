@@ -46,6 +46,8 @@ internal object ComposeNames {
     val OutlinedButton = MemberName("androidx.compose.material3", "OutlinedButton")
     val TextButton = MemberName("androidx.compose.material3", "TextButton")
     val Slider = MemberName("androidx.compose.material3", "Slider")
+    val TextField = MemberName("androidx.compose.material3", "TextField")
+    val OutlinedTextField = MemberName("androidx.compose.material3", "OutlinedTextField")
     val CircularProgressIndicator = MemberName("androidx.compose.material3", "CircularProgressIndicator")
     val LinearProgressIndicator = MemberName("androidx.compose.material3", "LinearProgressIndicator")
     val Card = MemberName("androidx.compose.material3", "Card")

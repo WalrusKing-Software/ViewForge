@@ -54,6 +54,9 @@ class GoldenCodegenTest {
     // Icon: a curated Material-icon enum emitted as `Icons.Filled.<name>` (extension-property import; issue #16).
     @Test fun icons() = assertGolden("Icons")
 
+    // TextField + OutlinedTextField: String value + a raw onValueChange (issue #16).
+    @Test fun textFields() = assertGolden("TextFields")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }
