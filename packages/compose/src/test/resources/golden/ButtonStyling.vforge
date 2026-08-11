@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8BUTTONSTYLING",
+  "name": "ButtonStyling",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_by",
+      "name": "ButtonStylingScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "b_01",
+            "type": "compose.material3.Button",
+            "props": {
+              "containerColor": { "kind": "theme", "token": "colors.primary" },
+              "contentColor": { "kind": "literal", "value": "#FFFFFF" },
+              "elevation": { "kind": "literal", "value": 6 },
+              "contentPadding": { "kind": "literal", "value": 12 },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Styled" } } }
+              ]
+            }
+          },
+          {
+            "id": "b_02",
+            "type": "compose.material3.Button",
+            "props": {
+              "elevation": { "kind": "literal", "value": 2 },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Raised" } } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

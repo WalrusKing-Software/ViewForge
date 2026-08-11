@@ -1,6 +1,7 @@
 package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.joinToCode
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
@@ -144,6 +145,27 @@ internal object CodegenValues {
         }
         is PropValue.RawExpression -> raw(value)
         else -> throw CodegenException("Image 'source' must be a resource reference or expression, got $value")
+    }
+
+    /** A filled Button's `contentPadding` from a Dp prop → `PaddingValues(N.dp)`. */
+    fun contentPadding(value: PropValue?): CodeBlock = CodeBlock.of("%T(%L)", ComposeNames.PaddingValues, dpProp(value))
+
+    /** A filled Button's `elevation` from a Dp prop → `ButtonDefaults.buttonElevation(defaultElevation = N.dp)`. */
+    fun buttonElevation(value: PropValue?): CodeBlock =
+        CodeBlock.of("%T.buttonElevation(defaultElevation = %L)", ComposeNames.ButtonDefaults, dpProp(value))
+
+    /**
+     * A filled Button's `colors` from its optional `containerColor`/`contentColor` props →
+     * `ButtonDefaults.buttonColors(...)` naming only the set colors (the rest keep the factory default),
+     * or null when neither is set so the caller omits the arg entirely (matching the renderer).
+     */
+    fun buttonColors(container: PropValue?, content: PropValue?, theme: Theme): CodeBlock? {
+        if (container == null && content == null) return null
+        val args = buildList {
+            container?.let { add(CodeBlock.of("containerColor = %L", color(it, theme))) }
+            content?.let { add(CodeBlock.of("contentColor = %L", color(it, theme))) }
+        }
+        return CodeBlock.of("%T.buttonColors(%L)", ComposeNames.ButtonDefaults, args.joinToCode(", "))
     }
 
     /** A lambda-valued prop such as `onClick` — only an expression is meaningful; absent → no-op `{}`. */

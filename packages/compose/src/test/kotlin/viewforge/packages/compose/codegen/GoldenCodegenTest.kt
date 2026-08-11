@@ -78,6 +78,9 @@ class GoldenCodegenTest {
     // Text emphasis enums: fontStyle + textDecoration, completing Text's prop set (issue #17).
     @Test fun textEmphasis() = assertGolden("TextEmphasis")
 
+    // Button styling via ButtonDefaults: themeable container/content colors, elevation, contentPadding (issue #17).
+    @Test fun buttonStyling() = assertGolden("ButtonStyling")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

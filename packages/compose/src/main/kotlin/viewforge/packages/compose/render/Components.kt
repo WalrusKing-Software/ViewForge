@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -236,8 +239,39 @@ private fun textOverflowOf(name: String): TextOverflow = when (textOverflowName(
 @Composable
 private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
     // `onClick` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    Button(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
+    // Absent styling props pass Compose's own defaults explicitly, so the canvas matches codegen — which
+    // simply omits those args and thus gets the same defaults (TECHNICAL_NOTES §2).
+    Button(
+        onClick = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+        colors = buttonColorsFor(node, ctx),
+        elevation = node.props["elevation"].literalInt()
+            ?.let { ButtonDefaults.buttonElevation(defaultElevation = it.dp) }
+            ?: ButtonDefaults.buttonElevation(),
+        contentPadding = node.props["contentPadding"].literalInt()
+            ?.let { PaddingValues(it.dp) }
+            ?: ButtonDefaults.ContentPadding,
+    ) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
+    }
+}
+
+/**
+ * The filled Button's `colors`, built from the optional `containerColor`/`contentColor` props. Only the
+ * set colors are overridden (the rest keep `ButtonDefaults.buttonColors()`), mirroring codegen which
+ * emits `ButtonDefaults.buttonColors(...)` with exactly the set args.
+ */
+@Composable
+private fun buttonColorsFor(node: Node, ctx: RenderContext): ButtonColors {
+    val container = resolveColor(node.props["containerColor"], ctx)
+    val content = resolveColor(node.props["contentColor"], ctx)
+    return when {
+        container != null && content != null ->
+            ButtonDefaults.buttonColors(containerColor = container, contentColor = content)
+        container != null -> ButtonDefaults.buttonColors(containerColor = container)
+        content != null -> ButtonDefaults.buttonColors(contentColor = content)
+        else -> ButtonDefaults.buttonColors()
     }
 }
 
