@@ -31,10 +31,12 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,6 +50,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -102,6 +105,8 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.Switch" -> RenderSwitch(node, modifier)
         "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
         "compose.material3.Icon" -> RenderIcon(node, modifier)
+        "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, ctx)
+        "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, ctx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -280,6 +285,20 @@ private fun RenderSwitch(node: Node, modifier: Modifier) {
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RenderTopAppBar(node: Node, modifier: Modifier, ctx: RenderContext) {
+    TopAppBar(
+        title = { RenderChildren(node.slots["title"].orEmpty(), ctx) },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun RenderBottomAppBar(node: Node, modifier: Modifier, ctx: RenderContext) {
+    BottomAppBar(modifier = modifier) { RenderChildren(node.children, ctx) }
 }
 
 @Composable

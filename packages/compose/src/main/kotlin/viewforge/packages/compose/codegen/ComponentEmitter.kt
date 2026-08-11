@@ -20,6 +20,14 @@ import viewforge.model.Theme
 internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = emptyList()) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
 
+    /**
+     * Set true while emitting a tree that used an experimental Material3 API (e.g. `TopAppBar`), so the
+     * caller can annotate the generated function `@OptIn(ExperimentalMaterial3Api::class)`. Read after
+     * [emit] returns.
+     */
+    var requiresMaterial3OptIn: Boolean = false
+        private set
+
     /** Emits [node]. [isRoot] chains its modifier onto the composable's `modifier` parameter. */
     fun emit(node: Node, isRoot: Boolean): CodeBlock {
         val mod = if (isRoot) {
@@ -57,6 +65,8 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.material3.Switch" -> call(ComposeNames.Switch, toggleArgs(node, mod), content = null)
             "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod), content = null)
             "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod), content = null)
+            "compose.material3.TopAppBar" -> topAppBar(node, mod)
+            "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList())
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -143,6 +153,28 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         }
         return b.build()
     }
+
+    /**
+     * `TopAppBar`: a `title` slot (required) then modifier. Experimental Material3, so it flags the
+     * screen for an `@OptIn(ExperimentalMaterial3Api::class)` annotation.
+     */
+    private fun topAppBar(node: Node, mod: CodeBlock?): CodeBlock {
+        requiresMaterial3OptIn = true
+        val args = buildList {
+            add(slotArg("title", node.slots["title"].orEmpty()))
+            if (mod != null) add(named("modifier", mod))
+        }
+        return call(ComposeNames.TopAppBar, args, content = null)
+    }
+
+    /** A named slot emitted as a `name = { … }` lambda argument (hidden children dropped). */
+    private fun slotArg(name: String, children: List<Node>): CodeBlock = CodeBlock.builder()
+        .add("%L = {\n", name)
+        .indent()
+        .add(body(children))
+        .unindent()
+        .add("}")
+        .build()
 
     /** `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, then a content slot. */
     private fun button(callee: MemberName, node: Node, mod: CodeBlock?): CodeBlock {

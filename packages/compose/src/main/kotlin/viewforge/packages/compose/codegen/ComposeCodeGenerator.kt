@@ -1,5 +1,6 @@
 package viewforge.packages.compose.codegen
 
+import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.ParameterSpec
@@ -50,7 +51,20 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset> = emptyList(),
     ): String {
         val fnName = KotlinIdentifiers.requireFunctionName(screen.name)
+        val emitter = ComponentEmitter(theme, assets)
+        // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
+        val body = if (screen.root.hidden) null else emitter.emit(screen.root, isRoot = true)
         val function = FunSpec.builder(fnName)
+            .apply {
+                // Emitting the body first sets the opt-in flag for any experimental API used (TopAppBar).
+                if (emitter.requiresMaterial3OptIn) {
+                    addAnnotation(
+                        AnnotationSpec.builder(ComposeNames.OptIn)
+                            .addMember("%T::class", ComposeNames.ExperimentalMaterial3Api)
+                            .build(),
+                    )
+                }
+            }
             .addAnnotation(ComposeNames.Composable)
             .addParameter(
                 ParameterSpec.builder("modifier", ComposeNames.Modifier)
@@ -58,10 +72,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     .build(),
             )
             .apply {
-                // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
-                if (!screen.root.hidden) {
-                    addCode("%L\n", ComponentEmitter(theme, assets).emit(screen.root, isRoot = true))
-                }
+                if (body != null) addCode("%L\n", body)
             }
             .build()
 

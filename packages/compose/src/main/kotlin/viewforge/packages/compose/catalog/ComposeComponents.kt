@@ -404,6 +404,36 @@ object ComposeComponents {
         ) {
             Node(id = NodeId.random(), type = "compose.material3.LinearProgressIndicator")
         },
+        Spec(
+            "compose.material3.TopAppBar",
+            "TopAppBar",
+            CATEGORY_NAV,
+            acceptsChildren = false,
+            slots = listOf("title"),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.TopAppBar",
+                slots = mapOf(
+                    "title" to listOf(
+                        Node(
+                            id = NodeId.random(),
+                            type = "compose.material3.Text",
+                            props = mapOf("text" to stringLiteral("Title")),
+                        ),
+                    ),
+                ),
+            )
+        },
+        Spec(
+            "compose.material3.BottomAppBar",
+            "BottomAppBar",
+            CATEGORY_NAV,
+            acceptsChildren = true,
+            slots = emptyList(),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.BottomAppBar")
+        },
     )
 
     private val byType: Map<String, Spec> = specs.associateBy { it.type }
@@ -451,4 +481,5 @@ object ComposeComponents {
     private const val CATEGORY_LAYOUT = "Layout"
     private const val CATEGORY_CONTENT = "Content"
     private const val CATEGORY_INPUT = "Input"
+    private const val CATEGORY_NAV = "Navigation"
 }
