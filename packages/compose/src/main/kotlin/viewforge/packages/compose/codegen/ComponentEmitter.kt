@@ -99,15 +99,18 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
     }
 
     // Arg order mirrors the `Text` composable signature (and RenderText): text, modifier, color,
-    // fontSize, fontWeight, letterSpacing, textAlign, lineHeight, overflow, maxLines, style. Each
-    // optional arg is emitted only when the prop is present, so a plain Text stays `Text(text = …)`.
+    // fontSize, fontStyle, fontWeight, letterSpacing, textDecoration, textAlign, lineHeight, overflow,
+    // maxLines, style. Each optional arg is emitted only when the prop is present, so a plain Text
+    // stays `Text(text = …)`.
     private fun textArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
         add(named("text", CodegenValues.text(node.props["text"])))
         if (mod != null) add(named("modifier", mod))
         node.props["color"]?.let { add(named("color", CodegenValues.color(it, theme))) }
         node.props["fontSize"]?.let { add(named("fontSize", CodegenValues.sp(it))) }
+        node.props["fontStyle"]?.let { add(named("fontStyle", CodegenValues.enum("fontStyle", it))) }
         node.props["fontWeight"]?.let { add(named("fontWeight", CodegenValues.enum("fontWeight", it))) }
         node.props["letterSpacing"]?.let { add(named("letterSpacing", CodegenValues.sp(it))) }
+        node.props["textDecoration"]?.let { add(named("textDecoration", CodegenValues.enum("textDecoration", it))) }
         node.props["textAlign"]?.let { add(named("textAlign", CodegenValues.enum("textAlign", it))) }
         node.props["lineHeight"]?.let { add(named("lineHeight", CodegenValues.sp(it))) }
         node.props["overflow"]?.let { add(named("overflow", CodegenValues.enum("overflow", it))) }

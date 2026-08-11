@@ -178,6 +178,14 @@ internal val FONT_WEIGHTS: List<String> = listOf("Light", "Normal", "Medium", "S
 
 internal fun fontWeightName(name: String?): String = if (name in FONT_WEIGHTS) name!! else "Normal"
 
+internal val FONT_STYLES: List<String> = listOf("Normal", "Italic")
+
+internal fun fontStyleName(name: String?): String = if (name in FONT_STYLES) name!! else "Normal"
+
+internal val TEXT_DECORATIONS: List<String> = listOf("None", "Underline", "LineThrough")
+
+internal fun textDecorationName(name: String?): String = if (name in TEXT_DECORATIONS) name!! else "None"
+
 internal val TEXT_ALIGNS: List<String> = listOf("Start", "Center", "End", "Justify")
 
 internal fun textAlignName(name: String?): String = if (name in TEXT_ALIGNS) name!! else "Start"

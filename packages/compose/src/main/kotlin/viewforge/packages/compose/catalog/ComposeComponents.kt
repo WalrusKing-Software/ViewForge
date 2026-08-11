@@ -61,7 +61,9 @@ object ComposeComponents {
     // Text styling enums — subsets of `render/Values.kt`'s allowlists (CatalogConsistencyTest guards it).
     // Emitted as `FontWeight.<v>` / `TextAlign.<v>` / `TextOverflow.<v>`.
     private val FONT_WEIGHTS = listOf("Light", "Normal", "Medium", "SemiBold", "Bold")
+    private val FONT_STYLES = listOf("Normal", "Italic")
     private val TEXT_ALIGNS = listOf("Start", "Center", "End", "Justify")
+    private val TEXT_DECORATIONS = listOf("None", "Underline", "LineThrough")
     private val TEXT_OVERFLOWS = listOf("Clip", "Ellipsis", "Visible")
 
     val specs: List<Spec> = listOf(
@@ -155,8 +157,10 @@ object ComposeComponents {
                 // fontSize/letterSpacing/lineHeight are all sp (PropType.Int for now; a suffixed Sp control
                 // is a later inspector polish). Ordered to mirror the Text composable signature.
                 PropDefinition("fontSize", PropType.Int),
+                enumProp("fontStyle", FONT_STYLES, default = "Normal"),
                 enumProp("fontWeight", FONT_WEIGHTS, default = "Normal"),
                 PropDefinition("letterSpacing", PropType.Int),
+                enumProp("textDecoration", TEXT_DECORATIONS, default = "None"),
                 enumProp("textAlign", TEXT_ALIGNS, default = "Start"),
                 PropDefinition("lineHeight", PropType.Int),
                 PropDefinition("maxLines", PropType.Int),

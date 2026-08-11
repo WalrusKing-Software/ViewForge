@@ -10,6 +10,7 @@ import viewforge.model.Theme
 import viewforge.model.TypographyToken
 import viewforge.packages.compose.render.MATERIAL_COLOR_SLOTS
 import viewforge.packages.compose.render.boxAlign
+import viewforge.packages.compose.render.fontStyleName
 import viewforge.packages.compose.render.fontWeightName
 import viewforge.packages.compose.render.hAlign
 import viewforge.packages.compose.render.hArrange
@@ -17,6 +18,7 @@ import viewforge.packages.compose.render.iconName
 import viewforge.packages.compose.render.imageScale
 import viewforge.packages.compose.render.parseColorArgb
 import viewforge.packages.compose.render.textAlignName
+import viewforge.packages.compose.render.textDecorationName
 import viewforge.packages.compose.render.textOverflowName
 import viewforge.packages.compose.render.vAlign
 import viewforge.packages.compose.render.vArrange
@@ -224,7 +226,9 @@ internal object CodegenValues {
         // An icon extension property: `Icons.Filled` receiver (imports Icons) + the property (imports it).
         "icon" -> CodeBlock.of("%T.%M", ComposeNames.IconsFilled, ComposeNames.iconMember(iconName(name)))
         "fontWeight" -> CodeBlock.of("%T.%L", ComposeNames.FontWeight, fontWeightName(name))
+        "fontStyle" -> CodeBlock.of("%T.%L", ComposeNames.FontStyle, fontStyleName(name))
         "textAlign" -> CodeBlock.of("%T.%L", ComposeNames.TextAlign, textAlignName(name))
+        "textDecoration" -> CodeBlock.of("%T.%L", ComposeNames.TextDecoration, textDecorationName(name))
         "overflow" -> CodeBlock.of("%T.%L", ComposeNames.TextOverflow, textOverflowName(name))
         else -> throw CodegenException("Unknown enum prop '$propName'")
     }

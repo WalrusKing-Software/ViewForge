@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8TEXTEMPHASIS",
+  "name": "TextEmphasis",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_te",
+      "name": "TextEmphasisScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "t_01",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Italic underlined" },
+              "fontStyle": { "kind": "literal", "value": "Italic" },
+              "textDecoration": { "kind": "literal", "value": "Underline" }
+            }
+          },
+          {
+            "id": "t_02",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Struck through" },
+              "textDecoration": { "kind": "literal", "value": "LineThrough" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}
