@@ -45,6 +45,12 @@ class GoldenCodegenTest {
     // Checkbox + Switch: Bool props and a raw onCheckedChange lambda — the input half (issue #16).
     @Test fun toggles() = assertGolden("Toggles")
 
+    // OutlinedButton + TextButton: the button variants share Button's onClick + content shape (issue #16).
+    @Test fun buttons() = assertGolden("Buttons")
+
+    // Slider (Float prop + raw onValueChange) and the progress indicators (issue #16).
+    @Test fun indicators() = assertGolden("Indicators")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

@@ -2,6 +2,7 @@ package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import viewforge.model.Asset
 import viewforge.model.PropValue
@@ -49,6 +50,19 @@ internal object CodegenValues {
         is PropValue.RawExpression -> raw(value)
         null -> throw CodegenException("dp prop has no value")
         else -> throw CodegenException("dp prop must be a literal or expression, got $value")
+    }
+
+    /** A float-typed prop → a Kotlin `Float` literal such as `0.5f` (or a raw expression, GC-4). */
+    fun float(value: PropValue?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            CodeBlock.of(
+                "%Lf",
+                value.value.floatOrNull
+                    ?: throw CodegenException("float prop expects a number, got '${value.value.content}'"),
+            )
+        is PropValue.RawExpression -> raw(value)
+        null -> throw CodegenException("float prop has no value")
+        else -> throw CodegenException("float prop must be a literal or expression, got $value")
     }
 
     /** A boolean-typed prop → `true`/`false` (or a raw expression, GC-4). */

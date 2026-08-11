@@ -58,11 +58,16 @@ into issues directly.
 > copying assets into an exported project are the tracked follow-up (ADR-021). The remaining
 > Content/Input/Navigation entries above join the set one triple at a time.
 
-> **Post-Phase-1 catalog expansion (issue #16), first slice:** `Card` · `Surface` · `HorizontalDivider`
-> (`thickness`) · `Checkbox` · `Switch` (`checked`/`enabled` + a raw `onCheckedChange`). Each added as a
-> renderer + emitter + golden triple with an in-process compile check; no pipeline or inspector change.
-> Still to come one triple at a time: `Icon`, `Slider`, `TextField`/`OutlinedTextField`, the button
-> variants, progress indicators, `Scaffold`, and the structural app-bars.
+> **Post-Phase-1 catalog expansion (issue #16):** added as renderer + emitter + golden triples with an
+> in-process compile check; no pipeline or inspector change.
+> - *Slice 1:* `Card` · `Surface` · `HorizontalDivider` (`thickness`) · `Checkbox` · `Switch`
+>   (`checked`/`enabled` + a raw `onCheckedChange`).
+> - *Slice 2:* `OutlinedButton` · `TextButton` (Button's `onClick` + content shape) · `Slider`
+>   (`value`/`enabled` + a raw `onValueChange`) · `CircularProgressIndicator` · `LinearProgressIndicator`
+>   (indeterminate).
+>
+> Still to come one triple at a time: `Icon`, `TextField`/`OutlinedTextField`, `Scaffold`, and the
+> structural app-bars.
 
 ## 3. Tree / layers panel
 

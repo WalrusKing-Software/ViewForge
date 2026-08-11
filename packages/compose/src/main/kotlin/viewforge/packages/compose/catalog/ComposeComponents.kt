@@ -15,12 +15,10 @@ import viewforge.model.Ulid
  * instance of each, and each type's container facts (default children / named slots) for drop
  * validation.
  *
- * It mirrors **only the currently supported set** — Column, Row, Box, Spacer, LazyColumn, LazyRow,
- * Text, Button, Image (the Phase-1 set M9 completes for exit criterion #1) — which the renderer
+ * It mirrors **only the currently supported set** — the same components the renderer
  * (`render/Components.kt`) *and* codegen (`codegen/ComponentEmitter.kt`) both cover in lockstep, so the
  * palette never offers a node the canvas can't draw or the emitter can't generate. Growing the set
- * further (Card, TextField, …) is a renderer + emitter + golden-test triple per component (depth over
- * breadth).
+ * (issue #16) is a renderer + emitter + golden-test triple per component (depth before breadth).
  * `:app` adapts this to the editor's `ComponentCatalog` seam (ADR-013); nothing here depends on the
  * editor or on Compose UI types.
  */
@@ -272,6 +270,75 @@ object ComposeComponents {
                 ),
             )
         },
+        Spec(
+            "compose.material3.OutlinedButton",
+            "Outlined Button",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = listOf("content"),
+            props = listOf(
+                PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
+            ),
+        ) {
+            buttonNode("compose.material3.OutlinedButton")
+        },
+        Spec(
+            "compose.material3.TextButton",
+            "Text Button",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = listOf("content"),
+            props = listOf(
+                PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
+            ),
+        ) {
+            buttonNode("compose.material3.TextButton")
+        },
+        Spec(
+            "compose.material3.Slider",
+            "Slider",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            // onValueChange is an expression prop — never evaluated on the canvas (PF-4), like Button.onClick.
+            props = listOf(
+                PropDefinition("value", PropType.Float, default = floatLiteral(0f)),
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition(
+                    "onValueChange",
+                    PropType.String,
+                    default = PropValue.RawExpression("{}"),
+                    advanced = true,
+                ),
+            ),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.Slider",
+                props = mapOf(
+                    "value" to floatLiteral(0f),
+                    "onValueChange" to PropValue.RawExpression("{ value -> }"),
+                ),
+            )
+        },
+        Spec(
+            "compose.material3.CircularProgressIndicator",
+            "Circular Progress",
+            CATEGORY_CONTENT,
+            acceptsChildren = false,
+            slots = emptyList(),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.CircularProgressIndicator")
+        },
+        Spec(
+            "compose.material3.LinearProgressIndicator",
+            "Linear Progress",
+            CATEGORY_CONTENT,
+            acceptsChildren = false,
+            slots = emptyList(),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.LinearProgressIndicator")
+        },
     )
 
     private val byType: Map<String, Spec> = specs.associateBy { it.type }
@@ -283,6 +350,24 @@ object ComposeComponents {
     private fun intLiteral(value: Int): PropValue = PropValue.Literal(JsonPrimitive(value))
 
     private fun boolLiteral(value: Boolean): PropValue = PropValue.Literal(JsonPrimitive(value))
+
+    private fun floatLiteral(value: Float): PropValue = PropValue.Literal(JsonPrimitive(value))
+
+    /** A fresh button-family node: a placeholder `onClick` and a single `Text` in its content slot. */
+    private fun buttonNode(type: String): Node = Node(
+        id = NodeId.random(),
+        type = type,
+        props = mapOf("onClick" to PropValue.RawExpression("{ /* TODO */ }")),
+        slots = mapOf(
+            "content" to listOf(
+                Node(
+                    id = NodeId.random(),
+                    type = "compose.material3.Text",
+                    props = mapOf("text" to stringLiteral("Button")),
+                ),
+            ),
+        ),
+    )
 
     /** An enum prop whose literal string is one of [values] — kept in lockstep with the `Values.kt` parsers. */
     private fun enumProp(name: String, values: List<String>, default: String): PropDefinition =

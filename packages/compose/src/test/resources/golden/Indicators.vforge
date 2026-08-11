@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8INDICATORS",
+  "name": "Indicators",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_in",
+      "name": "IndicatorsScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "sl_01",
+            "type": "compose.material3.Slider",
+            "props": {
+              "value": { "kind": "literal", "value": 0.5 },
+              "enabled": { "kind": "literal", "value": false },
+              "onValueChange": { "kind": "expression", "code": "{ value -> }" }
+            }
+          },
+          { "id": "cp_01", "type": "compose.material3.CircularProgressIndicator" },
+          { "id": "lp_01", "type": "compose.material3.LinearProgressIndicator" }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

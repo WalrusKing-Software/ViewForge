@@ -13,12 +13,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -58,6 +63,11 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.foundation.lazy.LazyRow" -> RenderLazyRow(node, modifier, ctx)
         "compose.material3.Text" -> RenderText(node, modifier, ctx)
         "compose.material3.Button" -> RenderButton(node, modifier, ctx)
+        "compose.material3.OutlinedButton" -> RenderOutlinedButton(node, modifier, ctx)
+        "compose.material3.TextButton" -> RenderTextButton(node, modifier, ctx)
+        "compose.material3.Slider" -> RenderSlider(node, modifier)
+        "compose.material3.CircularProgressIndicator" -> RenderCircularProgress(modifier)
+        "compose.material3.LinearProgressIndicator" -> RenderLinearProgress(modifier)
         "compose.material3.Card" -> RenderCard(node, modifier, ctx)
         "compose.material3.Surface" -> RenderSurface(node, modifier, ctx)
         "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
@@ -146,6 +156,42 @@ private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
     Button(onClick = {}, modifier = modifier) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
+}
+
+@Composable
+private fun RenderOutlinedButton(node: Node, modifier: Modifier, ctx: RenderContext) {
+    OutlinedButton(onClick = {}, modifier = modifier) {
+        RenderChildren(node.slots["content"].orEmpty(), ctx)
+    }
+}
+
+@Composable
+private fun RenderTextButton(node: Node, modifier: Modifier, ctx: RenderContext) {
+    TextButton(onClick = {}, modifier = modifier) {
+        RenderChildren(node.slots["content"].orEmpty(), ctx)
+    }
+}
+
+@Composable
+private fun RenderSlider(node: Node, modifier: Modifier) {
+    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
+    Slider(
+        value = node.props["value"].literalFloat() ?: 0f,
+        onValueChange = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+    )
+}
+
+@Composable
+private fun RenderCircularProgress(modifier: Modifier) {
+    // Indeterminate (no bound progress) — the Phase-1 "loading indicator".
+    CircularProgressIndicator(modifier = modifier)
+}
+
+@Composable
+private fun RenderLinearProgress(modifier: Modifier) {
+    LinearProgressIndicator(modifier = modifier)
 }
 
 @Composable
