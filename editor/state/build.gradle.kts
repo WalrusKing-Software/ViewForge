@@ -8,6 +8,7 @@ dependencies {
     api(projects.core.model)
     api(projects.core.command)
     api(projects.core.project)
+    api(projects.core.prefs)
     api(projects.core.spi)
 
     implementation(libs.compose.runtime)

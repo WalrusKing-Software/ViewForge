@@ -14,7 +14,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,9 +66,12 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
     val export = rememberExportController(state, exportService)
     // .vforge New/Open/Save/Save As (#37): its own controller, shared by the File menu and shortcuts.
     val document = rememberDocumentController(state)
+    // Panel layout persistence (#43): saves visibility + widths across sessions (startup load is in :app).
+    val prefs = rememberPreferencesController(state)
 
     AppMenuBar(
         state,
+        prefs,
         onExport = export::start,
         onOpenThemeEditor = { showThemeEditor = true },
         onNew = document::newDocument,
@@ -102,18 +104,21 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
                     // weight(1f) and is always shown, so hiding everything still leaves an edit surface.
+                    // The divider is a drag-to-resize splitter (S1, #43): the panel's own width lives in
+                    // state (persisted across sessions), and the drag grows it toward the canvas — so the
+                    // left panels add the delta and the right-hand inspector subtracts it.
                     if (state.paletteVisible) {
-                        Palette(state, Modifier.width(180.dp).fillMaxHeight())
-                        VerticalDivider()
+                        Palette(state, Modifier.width(state.paletteWidth.dp).fillMaxHeight())
+                        ResizableDivider(onResize = state::resizePalette, onCommit = prefs::persist)
                     }
                     if (state.treeVisible) {
-                        TreePanel(state, Modifier.width(210.dp).fillMaxHeight())
-                        VerticalDivider()
+                        TreePanel(state, Modifier.width(state.treeWidth.dp).fillMaxHeight())
+                        ResizableDivider(onResize = state::resizeTree, onCommit = prefs::persist)
                     }
                     EditorCanvas(state, renderer, Modifier.weight(1f).fillMaxHeight())
                     if (state.inspectorVisible) {
-                        VerticalDivider()
-                        Inspector(state, Modifier.width(240.dp).fillMaxHeight())
+                        ResizableDivider(onResize = { state.resizeInspector(-it) }, onCommit = prefs::persist)
+                        Inspector(state, Modifier.width(state.inspectorWidth.dp).fillMaxHeight())
                     }
                 }
             }

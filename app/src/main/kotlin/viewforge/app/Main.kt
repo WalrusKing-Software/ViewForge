@@ -20,6 +20,7 @@ import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
+import viewforge.prefs.PreferencesStore
 import viewforge.project.ExportFile
 import viewforge.project.ProjectExporter
 import java.nio.file.Path
@@ -34,6 +35,9 @@ import java.nio.file.Path
  */
 fun main() = application {
     val state = EditorState(sampleProject(), ComposeCatalog)
+    // Restore the persisted panel layout (#43) before the first frame — a missing/corrupt prefs file
+    // yields defaults, so this never fails startup. The shell persists changes back on toggle/resize.
+    state.applyLayout(PreferencesStore.load().panelLayout)
     val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds

@@ -668,6 +668,65 @@ decision (ADR-011/DI-4), not a packaging afterthought. Install steps per OS live
 
 ---
 
+## ADR-023 — Editor preferences: a dedicated `core/prefs` store; Phase-1 panels are resizable, not dockable
+
+**Status:** Accepted
+
+**Context.** S1 (FEATURES) asks for "dockable/resizable panels" whose "layout persists across sessions."
+#39 (PR #42) shipped the menu-backed *visibility* toggles as transient `EditorState` chrome; #43 is the
+rest of S1 — resizable panels and cross-session persistence of the layout. Persisting layout forces a
+decision the visibility toggles could dodge: **where** does editor chrome live on disk? It must never
+enter the `.vforge` document (panel widths are not project data, and would pollute diffs and travel
+between machines), yet CLAUDE.md rule 6 requires every write to go through the one guarded writer.
+
+**Decision.**
+- **A new `core/prefs` module** owns editor-preferences persistence, separate from `core/project`'s
+  `.vforge` handling. It defines `EditorPreferences` (a `@Serializable` record with its **own**
+  `prefsVersion`, independent of the document `schemaVersion`) carrying a `PanelLayout` — the three
+  visibility flags plus three panel widths (plain `Float` dp, so the module stays Compose-free). It
+  depends on `core/project` solely to **reuse `GuardedWriter`** — one path-safety implementation, not
+  two. `PreferencesStore.save` writes atomically to a `preferences.json` in the platform config dir
+  (`%APPDATA%\ViewForge`, `~/Library/Application Support/ViewForge`, or `$XDG_CONFIG_HOME/viewforge`,
+  resolved by an injectable `ConfigDir`).
+- **Loading is total: it never fails the editor.** A missing, unreadable, or corrupt file yields
+  defaults — exactly a fresh install — and out-of-range widths are clamped. This is the deliberate
+  counterpart to `ProjectStore`, which reports *why* a load failed because a project *is* the user's
+  work; a forgotten panel width is not (ARCHITECTURE §9's "fail loudly for documents" applies to
+  documents, not chrome).
+- **Phase 1 is resizable + persisted, not dockable.** The fixed palette│tree│canvas│inspector
+  arrangement gains drag-to-resize splitters (a dependency-free `ResizableDivider` in `editor/shell`
+  using `draggable`, clamped to min/max widths); widths and visibility persist. True drag-to-rearrange
+  docking is deferred. This meets S1's acceptance ("layout persists across sessions") without a docking
+  framework's state and UX surface.
+- **Wiring follows the #37 no-seam precedent.** Persistence has no framework coupling, so nothing goes
+  through an SPI-style seam: `:app` loads prefs at startup and applies them to `EditorState` before the
+  first frame (no layout flash); a `PreferencesController` in the shell saves at the discrete points
+  layout changes (a visibility toggle, the end of a resize drag), so there is no per-pixel write during
+  a drag. `EditorState` holds the widths as transient state with clamped `resize*` setters and
+  `applyLayout`/`panelLayout` bridges; it does no I/O itself.
+
+**Rationale.** A dedicated module keeps editor-chrome persistence a first-class concern with its own
+version, so it never tangles with the `.vforge` migration chain, and gives the later S5 preferences /
+window-geometry / recent-files a natural home. Reusing `GuardedWriter` honors rule 6 for free. Total
+loading matches the project's "never lose *user work*, but don't nag over chrome" posture. Resizable-only
+delivers the persistence S1 actually grades on at a fraction of docking's complexity.
+
+**Rejected.** **Layout in the `.vforge` document** — forbidden: chrome is not project data, would churn
+diffs and leak per-machine layout between collaborators. **Folding the store into `core/project`** —
+muddies that module's "owns `.vforge` backward-compatibility" identity and couples the two versions.
+**The JetBrains Compose `SplitPane` component** — a new pinned dependency and an experimental API for a
+need a ~30-line `draggable` divider covers. **Full dockable rearrangement now** — large UX + state
+surface for little Phase-1 payoff; a candidate follow-up. **An SPI seam for persistence** — there is no
+framework coupling to hide (the #37 precedent), so a seam would be ceremony.
+
+**Consequences.** Panel layout survives restarts, and `core/prefs` is the home for future editor
+preferences (S5), window geometry, and recent files — each an additive field with forward tolerance
+(`ignoreUnknownKeys`), no document migration. No `.vforge` schema change. Honest gaps: the splitter drag
+gesture is not exercised headlessly (the same class of gap as #38's zoom hit-testing), and dockable
+rearrangement remains open.
+
+---
+
 ## Template
 
 ```markdown

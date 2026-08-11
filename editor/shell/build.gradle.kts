@@ -10,6 +10,9 @@ dependencies {
     // so :app must see the type to construct one (ARCHITECTURE §3 wiring exception).
     api(projects.editor.canvas)
     implementation(projects.editor.panels)
+    // Editor-preferences persistence (ADR-023) — the shell saves panel layout directly, no framework
+    // coupling, exactly as DocumentControls calls ProjectStore (the #37 no-seam precedent).
+    implementation(projects.core.prefs)
 
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
