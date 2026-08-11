@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8TEXTFIELDS",
+  "name": "TextFields",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_tf",
+      "name": "TextFieldsScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "tf_01",
+            "type": "compose.material3.TextField",
+            "props": {
+              "value": { "kind": "literal", "value": "Name" },
+              "onValueChange": { "kind": "expression", "code": "{ text -> }" }
+            }
+          },
+          {
+            "id": "otf_01",
+            "type": "compose.material3.OutlinedTextField",
+            "props": {
+              "value": { "kind": "literal", "value": "Email" },
+              "enabled": { "kind": "literal", "value": false },
+              "onValueChange": { "kind": "expression", "code": "{ text -> }" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

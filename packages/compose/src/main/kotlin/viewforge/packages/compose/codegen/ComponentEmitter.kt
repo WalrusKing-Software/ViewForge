@@ -39,6 +39,9 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.material3.OutlinedButton" -> button(ComposeNames.OutlinedButton, node, mod)
             "compose.material3.TextButton" -> button(ComposeNames.TextButton, node, mod)
             "compose.material3.Slider" -> call(ComposeNames.Slider, sliderArgs(node, mod), content = null)
+            "compose.material3.TextField" -> call(ComposeNames.TextField, textFieldArgs(node, mod), content = null)
+            "compose.material3.OutlinedTextField" ->
+                call(ComposeNames.OutlinedTextField, textFieldArgs(node, mod), content = null)
             "compose.material3.CircularProgressIndicator" ->
                 call(ComposeNames.CircularProgressIndicator, modifierArg(mod), content = null)
             "compose.material3.LinearProgressIndicator" ->
@@ -153,6 +156,14 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
     /** `Slider`: value, onValueChange, modifier, enabled (order mirrors the renderer). */
     private fun sliderArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
         add(named("value", CodegenValues.float(node.props["value"])))
+        add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
+        if (mod != null) add(named("modifier", mod))
+        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+    }
+
+    /** `TextField`/`OutlinedTextField` share: value (String), onValueChange, modifier, enabled. */
+    private fun textFieldArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        add(named("value", CodegenValues.text(node.props["value"])))
         add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
         if (mod != null) add(named("modifier", mod))
         node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }

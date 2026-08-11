@@ -347,6 +347,46 @@ object ComposeComponents {
             )
         },
         Spec(
+            "compose.material3.TextField",
+            "TextField",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            // onValueChange is an expression prop — never evaluated on the canvas (PF-4), like Button.onClick.
+            // label/placeholder are @Composable slots, deferred.
+            props = listOf(
+                PropDefinition("value", PropType.String, default = stringLiteral("")),
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition(
+                    "onValueChange",
+                    PropType.String,
+                    default = PropValue.RawExpression("{}"),
+                    advanced = true,
+                ),
+            ),
+        ) {
+            textFieldNode("compose.material3.TextField")
+        },
+        Spec(
+            "compose.material3.OutlinedTextField",
+            "Outlined TextField",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            props = listOf(
+                PropDefinition("value", PropType.String, default = stringLiteral("")),
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition(
+                    "onValueChange",
+                    PropType.String,
+                    default = PropValue.RawExpression("{}"),
+                    advanced = true,
+                ),
+            ),
+        ) {
+            textFieldNode("compose.material3.OutlinedTextField")
+        },
+        Spec(
             "compose.material3.CircularProgressIndicator",
             "Circular Progress",
             CATEGORY_CONTENT,
@@ -377,6 +417,16 @@ object ComposeComponents {
     private fun boolLiteral(value: Boolean): PropValue = PropValue.Literal(JsonPrimitive(value))
 
     private fun floatLiteral(value: Float): PropValue = PropValue.Literal(JsonPrimitive(value))
+
+    /** A fresh text-field node: an empty `value` and a placeholder `onValueChange`. */
+    private fun textFieldNode(type: String): Node = Node(
+        id = NodeId.random(),
+        type = type,
+        props = mapOf(
+            "value" to stringLiteral(""),
+            "onValueChange" to PropValue.RawExpression("{ text -> }"),
+        ),
+    )
 
     /** A fresh button-family node: a placeholder `onClick` and a single `Text` in its content slot. */
     private fun buttonNode(type: String): Node = Node(
