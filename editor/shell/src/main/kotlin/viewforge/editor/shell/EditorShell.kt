@@ -100,13 +100,21 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
-                    Palette(state, Modifier.width(180.dp).fillMaxHeight())
-                    VerticalDivider()
-                    TreePanel(state, Modifier.width(210.dp).fillMaxHeight())
-                    VerticalDivider()
+                    // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
+                    // weight(1f) and is always shown, so hiding everything still leaves an edit surface.
+                    if (state.paletteVisible) {
+                        Palette(state, Modifier.width(180.dp).fillMaxHeight())
+                        VerticalDivider()
+                    }
+                    if (state.treeVisible) {
+                        TreePanel(state, Modifier.width(210.dp).fillMaxHeight())
+                        VerticalDivider()
+                    }
                     EditorCanvas(state, renderer, Modifier.weight(1f).fillMaxHeight())
-                    VerticalDivider()
-                    Inspector(state, Modifier.width(240.dp).fillMaxHeight())
+                    if (state.inspectorVisible) {
+                        VerticalDivider()
+                        Inspector(state, Modifier.width(240.dp).fillMaxHeight())
+                    }
                 }
             }
         }

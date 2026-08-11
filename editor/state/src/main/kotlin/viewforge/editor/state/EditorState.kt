@@ -75,6 +75,19 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether each side panel is shown (S1, #39). Transient editor-chrome state — never part of the
+     * document. The View menu toggles these; the shell hides the panel (and its divider) when false.
+     * The canvas has no flag: it is always visible, so hiding every panel still leaves something to
+     * edit. Cross-session persistence of the layout is a separate follow-up.
+     */
+    var paletteVisible: Boolean by mutableStateOf(true)
+        private set
+    var treeVisible: Boolean by mutableStateOf(true)
+        private set
+    var inspectorVisible: Boolean by mutableStateOf(true)
+        private set
+
+    /**
      * The canvas zoom & pan (C5). Transient view state — where the editor is looking, never part of
      * the document. The menu, keyboard shortcuts and canvas gestures all mutate this one value; the
      * canvas realises it as a single `graphicsLayer`, so hit-testing stays correct at every level.
@@ -368,6 +381,21 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the canvas between the theme's light and dark values (H2). View state, not an edit. */
     fun toggleCanvasDark() {
         canvasDark = !canvasDark
+    }
+
+    /** Show/hide the palette panel (S1). */
+    fun togglePalette() {
+        paletteVisible = !paletteVisible
+    }
+
+    /** Show/hide the tree panel (S1). */
+    fun toggleTree() {
+        treeVisible = !treeVisible
+    }
+
+    /** Show/hide the inspector panel (S1). */
+    fun toggleInspector() {
+        inspectorVisible = !inspectorVisible
     }
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------
