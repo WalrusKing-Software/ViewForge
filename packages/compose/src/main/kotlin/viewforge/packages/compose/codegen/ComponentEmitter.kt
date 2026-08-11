@@ -35,7 +35,14 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.foundation.lazy.LazyColumn" -> lazyList(ComposeNames.LazyColumn, node, mod, columnArgs(node))
             "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node))
             "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod), content = null)
-            "compose.material3.Button" -> button(node, mod)
+            "compose.material3.Button" -> button(ComposeNames.Button, node, mod)
+            "compose.material3.OutlinedButton" -> button(ComposeNames.OutlinedButton, node, mod)
+            "compose.material3.TextButton" -> button(ComposeNames.TextButton, node, mod)
+            "compose.material3.Slider" -> call(ComposeNames.Slider, sliderArgs(node, mod), content = null)
+            "compose.material3.CircularProgressIndicator" ->
+                call(ComposeNames.CircularProgressIndicator, modifierArg(mod), content = null)
+            "compose.material3.LinearProgressIndicator" ->
+                call(ComposeNames.LinearProgressIndicator, modifierArg(mod), content = null)
             "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, emptyList())
             "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, emptyList())
             "compose.material3.HorizontalDivider" -> call(
@@ -126,12 +133,21 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         return b.build()
     }
 
-    private fun button(node: Node, mod: CodeBlock?): CodeBlock {
+    /** `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, then a content slot. */
+    private fun button(callee: MemberName, node: Node, mod: CodeBlock?): CodeBlock {
         val args = buildList {
             add(named("onClick", CodegenValues.lambda(node.props["onClick"])))
             if (mod != null) add(named("modifier", mod))
         }
-        return call(ComposeNames.Button, args, content = body(node.slots["content"].orEmpty()))
+        return call(callee, args, content = body(node.slots["content"].orEmpty()))
+    }
+
+    /** `Slider`: value, onValueChange, modifier, enabled (order mirrors the renderer). */
+    private fun sliderArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        add(named("value", CodegenValues.float(node.props["value"])))
+        add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
+        if (mod != null) add(named("modifier", mod))
+        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
     }
 
     /** The `modifier = <chain>` argument, or nothing when a non-root node has no modifiers. */
