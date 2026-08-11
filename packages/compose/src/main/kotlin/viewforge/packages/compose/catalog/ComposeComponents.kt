@@ -190,6 +190,88 @@ object ComposeComponents {
         ) {
             Node(id = NodeId.random(), type = "compose.foundation.Image")
         },
+        Spec(
+            "compose.material3.Card",
+            "Card",
+            CATEGORY_LAYOUT,
+            acceptsChildren = true,
+            slots = emptyList(),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.Card")
+        },
+        Spec(
+            "compose.material3.Surface",
+            "Surface",
+            CATEGORY_LAYOUT,
+            acceptsChildren = true,
+            slots = emptyList(),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.Surface")
+        },
+        Spec(
+            "compose.material3.HorizontalDivider",
+            "Divider",
+            CATEGORY_CONTENT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            props = listOf(PropDefinition("thickness", PropType.Dp, default = intLiteral(1))),
+        ) {
+            Node(id = NodeId.random(), type = "compose.material3.HorizontalDivider")
+        },
+        Spec(
+            "compose.material3.Checkbox",
+            "Checkbox",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            // onCheckedChange is an expression prop — never evaluated on the canvas (PF-4); edited via the
+            // raw-expression hatch, exactly like Button.onClick.
+            props = listOf(
+                PropDefinition("checked", PropType.Bool, default = boolLiteral(false)),
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition(
+                    "onCheckedChange",
+                    PropType.String,
+                    default = PropValue.RawExpression("{}"),
+                    advanced = true,
+                ),
+            ),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.Checkbox",
+                props = mapOf(
+                    "checked" to boolLiteral(false),
+                    "onCheckedChange" to PropValue.RawExpression("{ checked -> }"),
+                ),
+            )
+        },
+        Spec(
+            "compose.material3.Switch",
+            "Switch",
+            CATEGORY_INPUT,
+            acceptsChildren = false,
+            slots = emptyList(),
+            props = listOf(
+                PropDefinition("checked", PropType.Bool, default = boolLiteral(false)),
+                PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
+                PropDefinition(
+                    "onCheckedChange",
+                    PropType.String,
+                    default = PropValue.RawExpression("{}"),
+                    advanced = true,
+                ),
+            ),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.Switch",
+                props = mapOf(
+                    "checked" to boolLiteral(false),
+                    "onCheckedChange" to PropValue.RawExpression("{ checked -> }"),
+                ),
+            )
+        },
     )
 
     private val byType: Map<String, Spec> = specs.associateBy { it.type }
@@ -199,6 +281,8 @@ object ComposeComponents {
     private fun stringLiteral(value: String): PropValue = PropValue.Literal(JsonPrimitive(value))
 
     private fun intLiteral(value: Int): PropValue = PropValue.Literal(JsonPrimitive(value))
+
+    private fun boolLiteral(value: Boolean): PropValue = PropValue.Literal(JsonPrimitive(value))
 
     /** An enum prop whose literal string is one of [values] — kept in lockstep with the `Values.kt` parsers. */
     private fun enumProp(name: String, values: List<String>, default: String): PropDefinition =

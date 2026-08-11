@@ -1,6 +1,8 @@
 package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import viewforge.model.Asset
 import viewforge.model.PropValue
 import viewforge.model.Theme
@@ -36,6 +38,31 @@ internal object CodegenValues {
 
     /** A dp literal: `16.dp`. */
     fun dp(value: Int): CodeBlock = CodeBlock.of("%L.%M", value, ComposeNames.dp)
+
+    /** A dp-typed *prop* value → `N.dp` (or a raw expression). Reuses [dp] so both agree on the form. */
+    fun dpProp(value: PropValue?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            dp(
+                value.value.intOrNull
+                    ?: throw CodegenException("dp prop expects an integer, got '${value.value.content}'"),
+            )
+        is PropValue.RawExpression -> raw(value)
+        null -> throw CodegenException("dp prop has no value")
+        else -> throw CodegenException("dp prop must be a literal or expression, got $value")
+    }
+
+    /** A boolean-typed prop → `true`/`false` (or a raw expression, GC-4). */
+    fun bool(value: PropValue?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            CodeBlock.of(
+                "%L",
+                value.value.booleanOrNull
+                    ?: throw CodegenException("bool prop expects true/false, got '${value.value.content}'"),
+            )
+        is PropValue.RawExpression -> raw(value)
+        null -> throw CodegenException("bool prop has no value")
+        else -> throw CodegenException("bool prop must be a literal or expression, got $value")
+    }
 
     /** A `Text`'s content: a string literal (escaped by KotlinPoet, GC-2) or a raw expression (GC-4). */
     fun text(value: PropValue?): CodeBlock = when (value) {

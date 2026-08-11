@@ -11,8 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -33,8 +38,8 @@ import viewforge.model.PropValue
  * its modifiers, and recurse. Each component owns its own render here so adding one is a local
  * change, never a change to the canvas.
  *
- * M2 renders the deliberately small subset needed for a real screen — `Column`/`Row`/`Box`/`Spacer`
- * plus `Text`/`Button` (FEATURES §2 Phase-1 set). Anything else draws a visible placeholder rather
+ * Dispatch is by explicit `type` over the currently supported set (FEATURES §2), which grows one
+ * component at a time beside its emitter (ADR-018). Anything else draws a visible placeholder rather
  * than being dispatched by name (PF-6): failing loudly beats a silent wrong render (CLAUDE.md).
  */
 @Composable
@@ -53,6 +58,11 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.foundation.lazy.LazyRow" -> RenderLazyRow(node, modifier, ctx)
         "compose.material3.Text" -> RenderText(node, modifier, ctx)
         "compose.material3.Button" -> RenderButton(node, modifier, ctx)
+        "compose.material3.Card" -> RenderCard(node, modifier, ctx)
+        "compose.material3.Surface" -> RenderSurface(node, modifier, ctx)
+        "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
+        "compose.material3.Checkbox" -> RenderCheckbox(node, modifier)
+        "compose.material3.Switch" -> RenderSwitch(node, modifier)
         "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
@@ -136,6 +146,44 @@ private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
     Button(onClick = {}, modifier = modifier) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
+}
+
+@Composable
+private fun RenderCard(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Card(modifier = modifier) { RenderChildren(node.children, ctx) }
+}
+
+@Composable
+private fun RenderSurface(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Surface(modifier = modifier) { RenderChildren(node.children, ctx) }
+}
+
+@Composable
+private fun RenderDivider(node: Node, modifier: Modifier) {
+    // `thickness` absent falls back to Material's 1.dp default, which is exactly what codegen emits
+    // when the prop is unset — so canvas and generated output agree either way.
+    HorizontalDivider(modifier = modifier, thickness = (node.props["thickness"].literalInt() ?: 1).dp)
+}
+
+@Composable
+private fun RenderCheckbox(node: Node, modifier: Modifier) {
+    // `onCheckedChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
+    Checkbox(
+        checked = node.props["checked"].literalBoolean() ?: false,
+        onCheckedChange = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+    )
+}
+
+@Composable
+private fun RenderSwitch(node: Node, modifier: Modifier) {
+    Switch(
+        checked = node.props["checked"].literalBoolean() ?: false,
+        onCheckedChange = {},
+        modifier = modifier,
+        enabled = node.props["enabled"].literalBoolean() ?: true,
+    )
 }
 
 @Composable
