@@ -1,0 +1,164 @@
+# Release packaging (PROJECT_PLAN §8 M10; SECURITY §9 DI-1…DI-3). Builds signed native installers
+# from a pushed version tag and attaches them — with SHA-256 checksums — to a GitHub Release.
+#
+# GitHub-ONLY by design, same reasoning as matrix.yml: a homelab Forgejo has no Windows/macOS
+# runners, so a per-OS packaging job would queue forever there. Releases are cut on the GitHub
+# mirror. There is intentionally no .forgejo copy.
+#
+# Signing is best-effort on the CI secrets being present (see the "Sign" steps): Windows Authenticode
+# on the .msi/.exe, detached GPG signatures on the Linux .deb/.rpm. When the secret is absent the job
+# still produces UNSIGNED artifacts and says so loudly — a real public release MUST run with the
+# secrets configured (DI-1). Secrets are never exposed to fork PR builds because this workflow only
+# triggers on tag pushes to this repo, never on pull_request (DS-7).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# `contents: write` is needed to create the Release and upload assets via the gh CLI.
+permissions:
+  contents: write
+
+jobs:
+  # One release object, created once, so the per-OS package jobs only upload to it (no race to
+  # create it from parallel matrix jobs). Created as a draft; the final job publishes it once every
+  # artifact is attached, so a half-populated release is never visible.
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — reusing it."
+          else
+            gh release create "$TAG" \
+              --draft \
+              --verify-tag \
+              --title "ViewForge $TAG" \
+              --notes "Automated release build for $TAG. Verify the published SHA-256 sums against the \`.sha256\` files before installing."
+          fi
+
+  package:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            tasks: ":app:packageMsi :app:packageExe"
+          - os: ubuntu-latest
+            tasks: ":app:packageDeb :app:packageRpm"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      # jpackage shells out to distro tools: .deb needs fakeroot, .rpm needs rpmbuild. Both are
+      # absent on the stock ubuntu runner. (Windows MSI/EXE use the WiX the Compose plugin unpacks
+      # itself, so no extra install there.)
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fakeroot rpm
+
+      - name: Build installers
+        run: ./gradlew ${{ matrix.tasks }} --no-daemon --stacktrace
+
+      # --- Signing (best-effort; gated on secrets) -----------------------------------------------
+      - name: Sign Windows installers (Authenticode)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:PFX_B64)) {
+            Write-Warning "WINDOWS_PFX_BASE64 not set — installers are UNSIGNED. Do not publish this as a real release (SECURITY DI-1)."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          $pw = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $cert = Get-PfxCertificate -FilePath $pfx -Password $pw
+          Get-ChildItem app/build/compose/binaries/main/{msi,exe}/*.{msi,exe} | ForEach-Object {
+            Write-Host "Signing $($_.Name)"
+            Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert `
+              -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
+          }
+          Remove-Item $pfx -Force
+
+      - name: Sign Linux installers (detached GPG)
+        if: runner.os == 'Linux'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::warning::LINUX_GPG_PRIVATE_KEY not set — installers are UNSIGNED. Do not publish this as a real release (SECURITY DI-1)."
+            exit 0
+          fi
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for f in app/build/compose/binaries/main/deb/*.deb app/build/compose/binaries/main/rpm/*.rpm; do
+            [ -e "$f" ] || continue
+            echo "Signing $f"
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --armor --detach-sign --output "$f.asc" "$f"
+          done
+
+      # --- Checksums (DI-2) ----------------------------------------------------------------------
+      - name: Checksums and upload (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "artifacts"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Get-ChildItem app/build/compose/binaries/main/{msi,exe}/* -Include *.msi,*.exe | ForEach-Object {
+            Copy-Item $_.FullName $out
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -Encoding ascii (Join-Path $out "$($_.Name).sha256")
+          }
+          gh release upload "$env:GITHUB_REF_NAME" (Get-ChildItem $out).FullName --clobber
+
+      - name: Checksums and upload (Linux)
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          out="$RUNNER_TEMP/artifacts"; mkdir -p "$out"
+          for f in app/build/compose/binaries/main/deb/*.deb app/build/compose/binaries/main/rpm/*.rpm \
+                   app/build/compose/binaries/main/deb/*.asc app/build/compose/binaries/main/rpm/*.asc; do
+            [ -e "$f" ] || continue
+            cp "$f" "$out/"
+            if [ "${f##*.}" != "asc" ]; then
+              ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" ) > "$out/$(basename "$f").sha256"
+            fi
+          done
+          gh release upload "$GITHUB_REF_NAME" "$out"/* --clobber
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

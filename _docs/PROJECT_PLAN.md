@@ -133,7 +133,7 @@ formatting. Budget time for formatting tuning and lock it down with golden-file 
 | Widget toolkit | Compose Multiplatform | — |
 | IDE-style chrome | **Jewel** (JetBrains) — *optional, evaluate first* | Gives an IntelliJ-native look, but **requires the JetBrains Runtime (JBR)** rather than a stock JDK. That's a real constraint on your build and distribution. Do not adopt it without deciding you accept the JBR dependency. Default to plain Material 3 if unsure. |
 | Icons | Compose Material Icons + custom | — |
-| Packaging | Compose Desktop `packageDistributionForCurrentOS`, or **Conveyor** for cross-OS builds + auto-update | Conveyor is what ComposeFlow uses; it solves cross-OS packaging and updates but is a paid product above certain usage. Evaluate before Phase 1 exit. |
+| Packaging | Compose Desktop `nativeDistributions` / jpackage (**chosen**, ADR-022). Conveyor evaluated and rejected. | Vanilla jpackage: offline, no paid product, no auto-update (ADR-011). Conveyor's cross-OS packaging + auto-update was rejected because auto-update is a network channel ADR-011 excludes. See `_docs/INSTALL.md`. |
 
 ### 3.3 Testing
 
@@ -277,7 +277,7 @@ tests that encode intent so context survives gaps between work sessions.
 | M7 | Project export | Export loose files and a runnable Gradle desktop project scaffold. |
 | M8 | Theming | Theme editor for colors/typography/shapes; props can reference theme tokens. |
 | M9 | **Phase 1 complete** ✅ | All Phase 1 exit criteria met; editor used to build something real. Added `Image` + `LazyColumn`/`LazyRow`, the `Gallery` sample (`samples/Gallery.vforge`), an interpreter-vs-composable pixel fidelity test (exit #3), and a lossless round-trip of the sample (exit #4). Codegen goldens + compile gate cover every component (exit #6). The Gradle export ships referenced assets so an exported project *runs* with images unmodified. Remaining follow-up: importing asset files from disk into a project (an "Assets" surface), see ADR-021. |
-| M10 | Packaging | Signed installers for at least Windows + Linux; documented install path. |
+| M10 | Packaging ✅ | Signed installers for Windows + Linux via vanilla jpackage (`nativeDistributions` in `:app`; ADR-022, resolving open question #3 against Conveyor). Windows Msi/Exe + Linux Deb/Rpm; version single-sourced in `gradle.properties`. The Windows MSI is verified locally; Deb/Rpm build on a Linux runner. A tag-triggered `release.yml` builds per-OS, signs (Authenticode / detached GPG, gated on CI secrets — DI-1), publishes SHA-256 sums (DI-2) from the tag (DI-3), and attaches everything to a GitHub Release. Install path per OS in `_docs/INSTALL.md`. Follow-ups: branded `.ico`/`.icns` icons, runtime-module trimming (installer size), and macOS (Dmg) packaging. |
 
 ---
 
@@ -289,7 +289,9 @@ Decide these before or during M0; record outcomes in [`DECISIONS.md`](DECISIONS.
    This affects whether third-party framework packages are realistic, and it is easier to decide now
    than after code exists.
 2. **Jewel vs plain Material 3** for editor chrome — accept the JBR dependency or not?
-3. **Conveyor vs vanilla Compose packaging** — evaluate cost/benefit at M10.
+3. ~~**Conveyor vs vanilla Compose packaging** — evaluate cost/benefit at M10.~~ **Resolved (ADR-022):
+   vanilla jpackage.** Conveyor's auto-update is a network channel excluded by ADR-011; jpackage is
+   already in the Compose plugin, offline, and needs no paid product.
 4. **Export model:** does ViewForge own a directory it regenerates wholesale, or write individual
    files into a user-managed project? (Recommendation: own a dedicated generated directory. It
    sidesteps merge conflicts and makes regeneration safe.)
