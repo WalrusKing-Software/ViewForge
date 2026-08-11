@@ -44,6 +44,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -107,6 +108,7 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.Icon" -> RenderIcon(node, modifier)
         "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, ctx)
         "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, ctx)
+        "compose.material3.Scaffold" -> RenderScaffold(node, modifier, ctx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -299,6 +301,21 @@ private fun RenderTopAppBar(node: Node, modifier: Modifier, ctx: RenderContext) 
 @Composable
 private fun RenderBottomAppBar(node: Node, modifier: Modifier, ctx: RenderContext) {
     BottomAppBar(modifier = modifier) { RenderChildren(node.children, ctx) }
+}
+
+@Composable
+private fun RenderScaffold(node: Node, modifier: Modifier, ctx: RenderContext) {
+    Scaffold(
+        modifier = modifier,
+        topBar = { RenderChildren(node.slots["topBar"].orEmpty(), ctx) },
+        bottomBar = { RenderChildren(node.slots["bottomBar"].orEmpty(), ctx) },
+    ) { innerPadding ->
+        // Wrap content in a padded Column so it consumes the scaffold inset — the exact structure
+        // codegen emits, so canvas and generated output agree (TECHNICAL_NOTES §2).
+        Column(modifier = Modifier.padding(innerPadding)) {
+            RenderChildren(node.children, ctx)
+        }
+    }
 }
 
 @Composable

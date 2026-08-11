@@ -74,8 +74,13 @@ into issues directly.
 > - *Slice 5:* `TopAppBar` (a named `title` slot; **experimental Material3**, so the generated screen is
 >   annotated `@OptIn(ExperimentalMaterial3Api::class)`) · `BottomAppBar` (RowScope content). Introduces
 >   named-slot → named-lambda-arg emission and the opt-in plumbing.
+> - *Slice 6:* `Scaffold` — `topBar`/`bottomBar` named slots + a `content` lambda receiving
+>   `innerPadding: PaddingValues`. Content is wrapped in `Column(Modifier.padding(innerPadding))` in both
+>   the renderer and codegen (consuming the inset — lint-clean — while keeping canvas/output identical).
 >
-> Still to come: `Scaffold` (multi-slot: `topBar`/`bottomBar`/`content` with its `PaddingValues`).
+> **Issue #16 is complete**: every component in the Phase-1 set above (Layout, Content, Input, and the
+> structural Navigation bars) now has a renderer + emitter + golden triple. `NavigationBar` remains a
+> Phase-2 item.
 
 ## 3. Tree / layers panel
 

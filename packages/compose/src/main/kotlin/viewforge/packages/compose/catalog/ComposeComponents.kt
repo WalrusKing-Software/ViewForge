@@ -434,6 +434,36 @@ object ComposeComponents {
         ) {
             Node(id = NodeId.random(), type = "compose.material3.BottomAppBar")
         },
+        Spec(
+            "compose.material3.Scaffold",
+            "Scaffold",
+            CATEGORY_LAYOUT,
+            // Children are the content slot; topBar/bottomBar are named slots.
+            acceptsChildren = true,
+            slots = listOf("topBar", "bottomBar"),
+        ) {
+            Node(
+                id = NodeId.random(),
+                type = "compose.material3.Scaffold",
+                slots = mapOf(
+                    "topBar" to listOf(
+                        Node(
+                            id = NodeId.random(),
+                            type = "compose.material3.TopAppBar",
+                            slots = mapOf(
+                                "title" to listOf(
+                                    Node(
+                                        id = NodeId.random(),
+                                        type = "compose.material3.Text",
+                                        props = mapOf("text" to stringLiteral("Title")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        },
     )
 
     private val byType: Map<String, Spec> = specs.associateBy { it.type }

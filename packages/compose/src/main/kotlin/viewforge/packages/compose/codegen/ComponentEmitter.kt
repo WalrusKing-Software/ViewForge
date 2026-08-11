@@ -67,6 +67,7 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod), content = null)
             "compose.material3.TopAppBar" -> topAppBar(node, mod)
             "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList())
+            "compose.material3.Scaffold" -> scaffold(node, mod)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -216,9 +217,15 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
 
     /**
      * Formats a call: 0 args → `Foo()` (or `Foo` when a trailing lambda follows), 1 arg → single
-     * line, ≥2 → one per line with a trailing comma. [content] non-null appends a `{ … }` lambda.
+     * line, ≥2 → one per line with a trailing comma. [content] non-null appends a `{ … }` lambda;
+     * [contentParam] names its single parameter (`{ innerPadding -> … }`) for slots that receive one.
      */
-    private fun call(callee: MemberName, args: List<CodeBlock>, content: CodeBlock?): CodeBlock {
+    private fun call(
+        callee: MemberName,
+        args: List<CodeBlock>,
+        content: CodeBlock?,
+        contentParam: String? = null,
+    ): CodeBlock {
         val b = CodeBlock.builder()
         when {
             args.isEmpty() -> if (content == null) b.add("%M()", callee) else b.add("%M", callee)
@@ -230,8 +237,37 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             }
         }
         if (content != null) {
-            b.add(" {\n").indent().add(content).unindent().add("}")
+            if (contentParam == null) b.add(" {\n") else b.add(" { %L ->\n", contentParam)
+            b.indent().add(content).unindent().add("}")
         }
         return b.build()
+    }
+
+    /**
+     * `Scaffold`: `topBar`/`bottomBar` named slots (omitted when empty), then a `content` lambda that
+     * receives `innerPadding: PaddingValues`. The content children are wrapped in a
+     * `Column(Modifier.padding(innerPadding))` so the generated code consumes the inset (avoiding
+     * Compose's `UnusedMaterialScaffoldPaddingParameter` lint) — the same wrapping the renderer draws,
+     * so canvas and output still agree (TECHNICAL_NOTES §2). `Scaffold` itself is stable (no opt-in).
+     */
+    private fun scaffold(node: Node, mod: CodeBlock?): CodeBlock {
+        val args = buildList {
+            if (mod != null) add(named("modifier", mod))
+            node.slots["topBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("topBar", it)) }
+            node.slots["bottomBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("bottomBar", it)) }
+        }
+        val content = CodeBlock.builder()
+            .add(
+                "%M(modifier = %T.%M(innerPadding)) {\n",
+                ComposeNames.Column,
+                ComposeNames.Modifier,
+                ComposeNames.padding,
+            )
+            .indent()
+            .add(body(node.children))
+            .unindent()
+            .add("}\n")
+            .build()
+        return call(ComposeNames.Scaffold, args, content = content, contentParam = "innerPadding")
     }
 }
