@@ -51,6 +51,9 @@ class GoldenCodegenTest {
     // Slider (Float prop + raw onValueChange) and the progress indicators (issue #16).
     @Test fun indicators() = assertGolden("Indicators")
 
+    // Icon: a curated Material-icon enum emitted as `Icons.Filled.<name>` (extension-property import; issue #16).
+    @Test fun icons() = assertGolden("Icons")
+
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 }

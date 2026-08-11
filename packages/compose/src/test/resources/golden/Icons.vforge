@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8ICONS",
+  "name": "Icons",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ic",
+      "name": "IconsScreen",
+      "root": {
+        "id": "row_01",
+        "type": "compose.foundation.layout.Row",
+        "children": [
+          {
+            "id": "ic_01",
+            "type": "compose.material3.Icon",
+            "props": {
+              "icon": { "kind": "literal", "value": "Favorite" },
+              "contentDescription": { "kind": "literal", "value": "Like" }
+            }
+          },
+          {
+            "id": "ic_02",
+            "type": "compose.material3.Icon",
+            "props": { "icon": { "kind": "literal", "value": "Settings" } }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

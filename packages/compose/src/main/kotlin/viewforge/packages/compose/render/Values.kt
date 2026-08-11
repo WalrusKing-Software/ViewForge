@@ -154,6 +154,22 @@ internal fun imageScale(name: String?): ImageScale = when (name) {
     else -> ImageScale.Fit
 }
 
+/**
+ * The curated `Icon` allowlist — a small set of common Material icons, all present in
+ * `material-icons-core` (already on the classpath via material3, so no extra dependency). This is the
+ * single source of truth: the catalog advertises it, the renderer maps each to `Icons.Filled.<name>`,
+ * and codegen emits the matching member (kept honest by `CatalogConsistencyTest`). Names are the exact
+ * `Icons.Filled` property names.
+ */
+internal val ICON_NAMES: List<String> = listOf(
+    "Home", "Settings", "Search", "Menu", "Close", "Check", "Add", "Delete", "Edit", "Favorite",
+    "Star", "Info", "Warning", "ArrowBack", "ArrowForward", "Person", "Share", "ShoppingCart",
+    "Refresh", "MoreVert",
+)
+
+/** Normalizes an icon prop to a curated name, falling back to `Star` for anything unknown. */
+internal fun iconName(name: String?): String = if (name in ICON_NAMES) name!! else "Star"
+
 internal fun boxAlign(name: String?): BoxAlign = when (name) {
     "TopStart" -> BoxAlign.TopStart
     "TopCenter" -> BoxAlign.TopCenter

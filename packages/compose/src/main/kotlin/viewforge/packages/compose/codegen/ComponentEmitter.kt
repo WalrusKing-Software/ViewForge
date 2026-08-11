@@ -53,6 +53,7 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.material3.Checkbox" -> call(ComposeNames.Checkbox, toggleArgs(node, mod), content = null)
             "compose.material3.Switch" -> call(ComposeNames.Switch, toggleArgs(node, mod), content = null)
             "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod), content = null)
+            "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod), content = null)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -95,6 +96,13 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
         if (mod != null) add(named("modifier", mod))
         node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
+    }
+
+    /** `Icon`: imageVector (a curated `Icons.Filled.*`), contentDescription, modifier (order mirrors the renderer). */
+    private fun iconArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+        add(named("imageVector", CodegenValues.enum("icon", node.props["icon"])))
+        add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
+        if (mod != null) add(named("modifier", mod))
     }
 
     private fun dividerArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
