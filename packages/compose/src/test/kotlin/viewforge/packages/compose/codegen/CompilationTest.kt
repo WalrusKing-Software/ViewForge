@@ -29,7 +29,7 @@ class CompilationTest {
         listOf(
             "Demo", "RowBox", "Modifiers", "ModifierOrder", "Lazy", "Image",
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
-            "TextStyling", "Gallery",
+            "TextStyling", "ButtonStates", "ImageAdjust", "Gallery",
         )
 
     @Test

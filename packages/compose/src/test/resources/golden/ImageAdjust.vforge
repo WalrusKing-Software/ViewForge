@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8IMAGEADJUST",
+  "name": "ImageAdjust",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_ia",
+      "name": "ImageAdjustScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "img_01",
+            "type": "compose.foundation.Image",
+            "props": {
+              "source": { "kind": "resource", "assetId": "asset_photo" },
+              "contentDescription": { "kind": "literal", "value": "Framed" },
+              "alignment": { "kind": "literal", "value": "BottomEnd" },
+              "alpha": { "kind": "literal", "value": 0.5 }
+            },
+            "modifiers": [ { "id": "im_01", "type": "compose.size", "args": { "all": { "kind": "literal", "value": 96 } } } ]
+          },
+          {
+            "id": "img_02",
+            "type": "compose.foundation.Image",
+            "props": {
+              "source": { "kind": "resource", "assetId": "asset_badge" },
+              "alpha": { "kind": "literal", "value": 0.25 }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": [
+    { "id": "asset_photo", "type": "image/png", "path": "assets/photo.png", "originalName": "photo.png" },
+    { "id": "asset_badge", "type": "image/png", "path": "assets/badge.png", "originalName": "badge.png" }
+  ]
+}

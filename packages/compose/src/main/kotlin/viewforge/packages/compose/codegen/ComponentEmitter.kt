@@ -113,11 +113,15 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         node.props["style"]?.let { add(named("style", CodegenValues.typography(it, theme))) }
     }
 
+    // Arg order mirrors the `Image` composable signature (and RenderImage): painter, contentDescription,
+    // modifier, alignment, contentScale, alpha. Each optional arg is emitted only when its prop is set.
     private fun imageArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
         add(named("painter", CodegenValues.painter(node.props["source"], assetsById)))
         add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
         if (mod != null) add(named("modifier", mod))
+        node.props["alignment"]?.let { add(named("alignment", CodegenValues.enum("alignment", it))) }
         node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
+        node.props["alpha"]?.let { add(named("alpha", CodegenValues.float(it))) }
     }
 
     /** `Icon`: imageVector (a curated `Icons.Filled.*`), contentDescription, modifier (order mirrors the renderer). */
@@ -185,11 +189,12 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
         .add("}")
         .build()
 
-    /** `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, then a content slot. */
+    /** `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, enabled, then a content slot. */
     private fun button(callee: MemberName, node: Node, mod: CodeBlock?): CodeBlock {
         val args = buildList {
             add(named("onClick", CodegenValues.lambda(node.props["onClick"])))
             if (mod != null) add(named("modifier", mod))
+            node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
         }
         return call(callee, args, content = body(node.slots["content"].orEmpty()))
     }
