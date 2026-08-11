@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8BUTTONSHAPE",
+  "name": "ButtonShape",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_bsh",
+      "name": "ButtonShapeScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "b_01",
+            "type": "compose.material3.Button",
+            "props": {
+              "shape": { "kind": "literal", "value": 12 },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Rounded" } } }
+              ]
+            }
+          },
+          {
+            "id": "b_02",
+            "type": "compose.material3.Button",
+            "props": {
+              "shape": { "kind": "theme", "token": "shapes.large" },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Themed" } } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

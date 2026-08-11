@@ -29,7 +29,8 @@ class CompilationTest {
         listOf(
             "Demo", "RowBox", "Modifiers", "ModifierOrder", "Lazy", "Image",
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
-            "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling", "Gallery",
+            "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling",
+            "ButtonShape", "Gallery",
         )
 
     @Test
