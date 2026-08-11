@@ -36,6 +36,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.FrameWindowScope
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.Inspector
@@ -46,23 +47,33 @@ import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
 
 /**
- * The top of the editor UI (ARCHITECTURE §2): a toolbar plus the four working surfaces — palette,
- * tree, canvas, inspector. From M4 the palette is a real mutation surface and the toolbar carries
- * undo/redo/duplicate/delete; global keyboard shortcuts are wired at the focusable root.
+ * The top of the editor UI (ARCHITECTURE §2): the application menu bar plus a toolbar and the four
+ * working surfaces — palette, tree, canvas, inspector. From M4 the palette is a real mutation surface
+ * and the toolbar carries undo/redo/duplicate/delete; global keyboard shortcuts are wired at the
+ * focusable root.
  *
- * The shell wraps everything in its **own** `MaterialTheme` — the editor chrome theme, kept
- * deliberately separate from the *project's* theme the canvas renders (FEATURES S3).
+ * It is a [FrameWindowScope] extension so it can host the native [AppMenuBar] (#19) itself, reusing its
+ * own export controller and theme-dialog state — the menu wiring stays here in the shell rather than
+ * leaking up into `:app`. The shell wraps the working surfaces in its **own** `MaterialTheme` — the
+ * editor chrome theme, kept deliberately separate from the *project's* theme the canvas renders (S3);
+ * the menu bar is native OS chrome and sits outside that theme.
  */
 @Composable
-fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: ProjectExportService) {
+fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: ProjectExportService) {
+    // The theme editor is a modal dialog (M8), opened from the toolbar or the View menu; its state lives
+    // here so it survives recomposition and can be dismissed from either the dialog or a re-click.
+    var showThemeEditor by remember { mutableStateOf(false) }
+    // Export is driven from both the toolbar and the File menu, so its flow is hoisted to a controller.
+    val export = rememberExportController(state, exportService)
+
+    AppMenuBar(state, onExport = export::start, onOpenThemeEditor = { showThemeEditor = true })
+
     MaterialTheme(colorScheme = darkColorScheme()) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
 
-        // The theme editor is a modal dialog (M8), opened from the toolbar; its state lives here so it
-        // survives toolbar recomposition and can be dismissed from either the dialog or a re-click.
-        var showThemeEditor by remember { mutableStateOf(false) }
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
+        ExportDialogs(export)
 
         Surface(Modifier.fillMaxSize()) {
             Column(
@@ -74,7 +85,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: Pro
                     // search, inline rename — consumes its keys first and typing is never hijacked.
                     .onKeyEvent { handleShortcut(it, state) },
             ) {
-                Toolbar(state, exportService, onOpenThemeEditor = { showThemeEditor = true })
+                Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     Palette(state, Modifier.width(180.dp).fillMaxHeight())
@@ -91,7 +102,7 @@ fun EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: Pro
 }
 
 @Composable
-private fun Toolbar(state: EditorState, exportService: ProjectExportService, onOpenThemeEditor: () -> Unit) {
+private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEditor: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -113,7 +124,7 @@ private fun Toolbar(state: EditorState, exportService: ProjectExportService, onO
                 enabled = true,
                 onClick = state::toggleCanvasDark,
             )
-            ExportBar(state, exportService)
+            ExportBar(export)
         }
     }
 }

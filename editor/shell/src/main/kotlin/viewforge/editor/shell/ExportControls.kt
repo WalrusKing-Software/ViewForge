@@ -15,45 +15,77 @@ import java.nio.file.Path
 import javax.swing.JFileChooser
 
 /**
- * The minimal in-editor export surface (M7): two toolbar actions — loose `.kt` files (G4) and a full
- * runnable Gradle project (G5) — each picking a destination directory, confirming any overwrite
- * (FW-5), and reporting the result. It drives everything through the Compose-free [ProjectExportService]
- * seam, so the shell never names the framework package (ADR-013).
+ * The in-editor export flow (M7): two actions — loose `.kt` files (G4) and a full runnable Gradle
+ * project (G5) — each picking a destination directory, confirming any overwrite (FW-5), and reporting
+ * the result. Everything runs through the Compose-free [ProjectExportService] seam, so the shell never
+ * names the framework package (ADR-013).
  *
- * Export runs synchronously on the UI thread here: a project is a handful of small files, so the brief
- * block is unnoticeable. Moving codegen/IO to `Dispatchers.IO` (ARCHITECTURE §8) is a worthwhile
- * refinement once export grows (large trees, many screens), not needed for this minimal surface.
+ * Hoisted into a controller (remembered once in the shell) rather than living inside a single button,
+ * so the toolbar *and* the File menu (#19) trigger the very same flow — the menu stays a thin view with
+ * no duplicated logic. The confirm/result dialogs are rendered once from the shell via [ExportDialogs].
+ *
+ * Export runs synchronously on the UI thread: a project is a handful of small files, so the brief block
+ * is unnoticeable. Moving codegen/IO to `Dispatchers.IO` (ARCHITECTURE §8) is a worthwhile refinement
+ * once export grows (large trees, many screens), not needed for this minimal surface.
  */
-@Composable
-internal fun ExportBar(state: EditorState, service: ProjectExportService) {
-    var confirm by remember { mutableStateOf<PendingExport?>(null) }
-    var result by remember { mutableStateOf<String?>(null) }
+internal class ExportController(private val state: EditorState, private val service: ProjectExportService) {
+    var pending by mutableStateOf<PendingExport?>(null)
+        private set
+    var result by mutableStateOf<String?>(null)
+        private set
 
-    fun write(mode: ExportMode, dir: Path) {
+    /** Pick a directory and export, deferring to an overwrite confirmation when files would clash. */
+    fun start(mode: ExportMode) {
+        val dir = chooseDirectory("Export ${state.document.name}") ?: return
+        runCatching { service.conflicts(state.document, dir, mode) }
+            .fold(
+                onSuccess = { conflicts ->
+                    if (conflicts.isEmpty()) write(mode, dir) else pending = PendingExport(mode, dir, conflicts)
+                },
+                onFailure = { e -> result = "Export failed: ${e.message}" },
+            )
+    }
+
+    fun confirmOverwrite() {
+        val p = pending ?: return
+        pending = null
+        write(p.mode, p.dir)
+    }
+
+    fun dismissConfirm() {
+        pending = null
+    }
+
+    fun dismissResult() {
+        result = null
+    }
+
+    private fun write(mode: ExportMode, dir: Path) {
         result = runCatching { service.export(state.document, dir, mode) }
             .fold(
                 onSuccess = { written -> "Exported ${written.size} file(s) to $dir" },
                 onFailure = { e -> "Export failed: ${e.message}" },
             )
     }
+}
 
-    fun start(mode: ExportMode) {
-        val dir = chooseDirectory("Export ${state.document.name}") ?: return
-        runCatching { service.conflicts(state.document, dir, mode) }
-            .fold(
-                onSuccess = { conflicts ->
-                    if (conflicts.isEmpty()) write(mode, dir) else confirm = PendingExport(mode, dir, conflicts)
-                },
-                onFailure = { e -> result = "Export failed: ${e.message}" },
-            )
-    }
+@Composable
+internal fun rememberExportController(state: EditorState, service: ProjectExportService): ExportController =
+    remember(state, service) { ExportController(state, service) }
 
-    ToolbarButton("Export .kt", enabled = true) { start(ExportMode.LOOSE_FILES) }
-    ToolbarButton("Export Project", enabled = true) { start(ExportMode.GRADLE_PROJECT) }
+/** The toolbar's two export buttons — a thin trigger over [controller]. */
+@Composable
+internal fun ExportBar(controller: ExportController) {
+    ToolbarButton("Export .kt", enabled = true) { controller.start(ExportMode.LOOSE_FILES) }
+    ToolbarButton("Export Project", enabled = true) { controller.start(ExportMode.GRADLE_PROJECT) }
+}
 
-    confirm?.let { pending ->
+/** The overwrite-confirmation and result dialogs, rendered once at the shell root. */
+@Composable
+internal fun ExportDialogs(controller: ExportController) {
+    controller.pending?.let { pending ->
         AlertDialog(
-            onDismissRequest = { confirm = null },
+            onDismissRequest = controller::dismissConfirm,
             title = { Text("Overwrite ${pending.conflicts.size} file(s)?") },
             text = {
                 Text(
@@ -61,28 +93,22 @@ internal fun ExportBar(state: EditorState, service: ProjectExportService) {
                         pending.conflicts.joinToString("\n"),
                 )
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val p = pending
-                    confirm = null
-                    write(p.mode, p.dir)
-                }) { Text("Overwrite") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = controller::confirmOverwrite) { Text("Overwrite") } },
+            dismissButton = { TextButton(onClick = controller::dismissConfirm) { Text("Cancel") } },
         )
     }
 
-    result?.let { message ->
+    controller.result?.let { message ->
         AlertDialog(
-            onDismissRequest = { result = null },
+            onDismissRequest = controller::dismissResult,
             title = { Text("Export") },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { result = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = controller::dismissResult) { Text("OK") } },
         )
     }
 }
 
-private data class PendingExport(val mode: ExportMode, val dir: Path, val conflicts: List<String>)
+internal data class PendingExport(val mode: ExportMode, val dir: Path, val conflicts: List<String>)
 
 /**
  * A native directory picker. Runs modally on the calling (UI) thread — standard for a file dialog.
