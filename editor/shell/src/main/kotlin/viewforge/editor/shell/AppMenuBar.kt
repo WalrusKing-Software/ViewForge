@@ -78,9 +78,10 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Zoom Out", "Ctrl+-"), enabled = view.canZoomOut, onClick = state::zoomOut)
             Item(withAccel("Reset Zoom", "Ctrl+0"), enabled = view.canResetZoom, onClick = state::resetZoom)
             Separator()
-            Item("Toggle Palette", enabled = false, onClick = {})
-            Item("Toggle Tree", enabled = false, onClick = {})
-            Item("Toggle Inspector", enabled = false, onClick = {})
+            // Panel visibility (S1, #39) — checked when shown, mirroring the Dark canvas toggle above.
+            CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { state.togglePalette() })
+            CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { state.toggleTree() })
+            CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { state.toggleInspector() })
         }
     }
 }
