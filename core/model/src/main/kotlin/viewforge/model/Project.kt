@@ -19,8 +19,20 @@ data class FrameworkRef(val packageId: String, val packageVersion: String)
 data class Parameter(val name: String, val type: String, val default: PropValue? = null)
 
 /**
+ * The schema conventions for a user-component *instance* node (DATA_MODEL §4): its [Node.type] and the
+ * prop key under which it carries the referenced [ComponentDef.id] (a `literal` string). An instance is
+ * a thin reference — the definition is resolved at render and codegen time, never inlined into the IR
+ * (ADR-024) — so these constants are the single source of that contract, shared by the validator,
+ * renderer, and generator alike.
+ */
+object UserComponent {
+    const val TYPE: String = "vforge.userComponent"
+    const val COMPONENT_ID_PROP: String = "componentId"
+}
+
+/**
  * A reusable, user-defined composable (DATA_MODEL §4). Instances reference it via a node of type
- * "vforge.userComponent". A component must never contain itself directly or transitively — cycle
+ * [UserComponent.TYPE]. A component must never contain itself directly or transitively — cycle
  * detection runs on load, not just on edit (PF-3).
  */
 @Serializable

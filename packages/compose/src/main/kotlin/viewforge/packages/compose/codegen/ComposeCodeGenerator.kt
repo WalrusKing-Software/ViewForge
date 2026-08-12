@@ -5,6 +5,8 @@ import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.ParameterSpec
 import viewforge.model.Asset
+import viewforge.model.ComponentDef
+import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.Screen
 import viewforge.model.Theme
@@ -24,12 +26,36 @@ import viewforge.spi.GeneratedFile
 class ComposeCodeGenerator : CodeGenerator {
     override fun generate(project: Project): List<GeneratedFile> {
         val sourceName = project.name.ifBlank { "Project" }
-        return project.screens.map { screen ->
+        val screens = project.screens.map { screen ->
             GeneratedFile(
                 path = "${KotlinIdentifiers.requireFunctionName(screen.name)}.kt",
-                content = generateScreen(screen, project.theme, sourceName, project.schemaVersion, project.assets),
+                content = generateScreen(
+                    screen,
+                    project.theme,
+                    sourceName,
+                    project.schemaVersion,
+                    project.assets,
+                    project.components,
+                ),
             )
         }
+        // Each user component becomes its own composable file; instances call it by name (ADR-024), so a
+        // definition edit reaches every instance. Emitted after the screens — order is irrelevant to the
+        // compiler, and a component-free project stays exactly one file per screen as before.
+        val components = project.components.map { component ->
+            GeneratedFile(
+                path = "${KotlinIdentifiers.requireFunctionName(component.name)}.kt",
+                content = generateComponent(
+                    component,
+                    project.theme,
+                    sourceName,
+                    project.schemaVersion,
+                    project.assets,
+                    project.components,
+                ),
+            )
+        }
+        return screens + components
     }
 
     /**
@@ -49,11 +75,56 @@ class ComposeCodeGenerator : CodeGenerator {
         sourceName: String,
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
+        components: List<ComponentDef> = emptyList(),
+    ): String = generateComposable(
+        KotlinIdentifiers.requireFunctionName(screen.name),
+        screen.root,
+        theme,
+        sourceName,
+        schemaVersion,
+        assets,
+        components,
+    )
+
+    /**
+     * Generates the source text for a single user [component] — the same `@Composable fun Name(modifier)`
+     * shape as a screen (D7). Instances reference it by a call, so this one definition backs every use.
+     */
+    fun generateComponent(
+        component: ComponentDef,
+        theme: Theme,
+        sourceName: String,
+        schemaVersion: Int,
+        assets: List<Asset> = emptyList(),
+        components: List<ComponentDef> = emptyList(),
+    ): String = generateComposable(
+        KotlinIdentifiers.requireFunctionName(component.name),
+        component.root,
+        theme,
+        sourceName,
+        schemaVersion,
+        assets,
+        components,
+    )
+
+    /**
+     * The shared lowering for a top-level composable (a screen or a user component): emit [root] under a
+     * `@Composable fun [fnName](modifier: Modifier = Modifier)`, chaining the root's own modifier chain
+     * onto the caller's `modifier` (DATA_MODEL §12.1). [components] lets a `vforge.userComponent` instance
+     * in the tree resolve to a call.
+     */
+    private fun generateComposable(
+        fnName: String,
+        root: Node,
+        theme: Theme,
+        sourceName: String,
+        schemaVersion: Int,
+        assets: List<Asset>,
+        components: List<ComponentDef>,
     ): String {
-        val fnName = KotlinIdentifiers.requireFunctionName(screen.name)
-        val emitter = ComponentEmitter(theme, assets)
+        val emitter = ComponentEmitter(theme, assets, components)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
-        val body = if (screen.root.hidden) null else emitter.emit(screen.root, isRoot = true)
+        val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
         val function = FunSpec.builder(fnName)
             .apply {
                 // Emitting the body first sets the opt-in flag for any experimental API used (TopAppBar).

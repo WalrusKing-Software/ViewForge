@@ -1,6 +1,7 @@
 package viewforge.packages.compose.codegen
 
 import viewforge.project.ProjectCodec
+import viewforge.spi.GeneratedFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -24,6 +25,12 @@ class GoldenCodegenTest {
         val generated = ComposeCodeGenerator().generate(project).single().content
         // Normalize only the trailing newline so the check is about content, not editor line-ending.
         assertEquals(resource("/golden/$name.kt").trimEnd('\n'), generated.trimEnd('\n'))
+    }
+
+    /** Asserts the generated file at [path] matches the sibling golden [resourceName].kt. */
+    private fun assertGeneratedFile(files: List<GeneratedFile>, path: String, resourceName: String) {
+        val content = files.first { it.path == path }.content
+        assertEquals(resource("/golden/$resourceName.kt").trimEnd('\n'), content.trimEnd('\n'))
     }
 
     @Test fun demo() = assertGolden("Demo")
@@ -86,4 +93,15 @@ class GoldenCodegenTest {
 
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
+
+    // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
+    // call and the component emits its own composable file. One .vforge, two generated files — the
+    // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.
+    @Test
+    fun reusableComponent() {
+        val project = ProjectCodec.decode(resource("/golden/ReusableComponent.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "HomeScreen.kt", "ReusableComponent")
+        assertGeneratedFile(files, "PrimaryButton.kt", "ReusableComponent.PrimaryButton")
+    }
 }
