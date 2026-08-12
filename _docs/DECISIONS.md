@@ -727,6 +727,65 @@ rearrangement remains open.
 
 ---
 
+## ADR-024 — Reusable components: reference-not-inline, resolved at render and codegen
+
+**Status:** Accepted
+
+**Context.** D7 asks for extracting a selection into a reusable component whose instances "update on
+edit," plus enforced cycle detection; P6a asks for user components in the palette. The schema was built
+ahead for this: `core/model` already carries `ComponentDef(id, name, parameters, root)`,
+`Project.components`, and `ProjectValidator.detectComponentCycles`, and instances were always intended
+to be a node of a dedicated type carrying the referenced component id (DATA_MODEL §4). What was
+undecided is *how an instance relates to its definition* through the whole pipeline — model, render,
+codegen, palette — and where cycle detection bites.
+
+**Decision.** An instance is a thin **reference**, never an inlined copy. A `vforge.userComponent` node
+carries the definition's id under a `componentId` literal prop (both constants now canonical in
+`model.UserComponent`), and the definition is resolved **at render and at codegen time**, not expanded
+into the IR:
+
+- **Codegen** emits each `ComponentDef` as its own `@Composable fun Name(modifier: Modifier = Modifier)`
+  file, and an instance emits a *call* — `PrimaryButton(modifier = …)` — passing the instance's own
+  modifier chain as the component's `modifier`. One definition, many call sites.
+- **Render** threads the component map through `RenderContext` and draws an instance by rendering the
+  definition's root inside a `Box` carrying the instance modifier, so the instance is selected and
+  instrumented as a single unit while its internals are not.
+- **Extract** (`extractComponent`, a `CompositeCommand` of `AddComponent` + `ReplaceNode`) moves the
+  selected subtree into a new definition (ids preserved) and swaps in an instance in one undoable step.
+- **Cycle policy** stays load-time (PF-3) *and* gains a render-time guard (`RenderContext.expanding`),
+  because the canvas renders mid-edit before validation runs. Extraction itself can never form a cycle.
+- **Parameters are deferred.** `ComponentDef.parameters` stays `[]`; components are zero-argument
+  reusable blocks for now. Adding parameters later is additive (an optional field already in the schema),
+  so no bump is owed.
+
+**Rationale.** The reference model is what actually delivers "instances update on edit": because the
+instance holds only an id, editing the definition changes every instance for free, in both the canvas
+and the generated code — a call site needs no rewrite. Resolving at the edges (render, codegen) keeps the
+IR small and framework-agnostic and needs **no `.vforge` schema change, no migration, no fixture**: every
+field already exists in schema 1. One composable per component is idiomatic Compose and makes the compile
+gate meaningful (the instance call must resolve against the emitted function).
+
+**Rejected.** **Inlining/expanding an instance's subtree into the IR** — breaks update-on-edit (each
+instance becomes an independent copy), bloats the document, and duplicates node ids. **A new
+`ComponentRenderer`/registry SPI for components** — premature abstraction with one implementation
+(ADR-007); threading a component map through the existing `RenderContext`/emitter is enough. **Emitting
+component composables into each screen file** — duplicate top-level functions collide when screens are
+compiled together. **Parameter inference during extract** — a large sub-feature (which props become
+params, instance arg editing in the inspector) with no acceptance pressure yet; deferred behind the
+already-present schema field.
+
+**Consequences.** Extract, palette insertion, canvas render, and codegen all agree on one instance shape,
+single-sourced by `model.UserComponent`. Adding parameters, a "go to / edit component" surface, and
+component rename/delete-with-reference-safety are clean additive follow-ups. Honest gaps: **editing a
+component's internals** is not yet a first-class surface — a component is edited only where it is defined,
+and the "update on edit" guarantee is proven through the command/codegen/render tests rather than a live
+in-place edit gesture; the **extract and palette-drag gestures are not headless-testable** (the same
+class of gap as the prior drag/switcher work), so they are covered by the pure command/state tests and
+verified by running the app; and **removing an in-use component** is left to the editor to gate rather
+than cascade.
+
+---
+
 ## Template
 
 ```markdown

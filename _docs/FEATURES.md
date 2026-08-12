@@ -35,7 +35,7 @@ into issues directly.
 | P3a | Search/filter | P0 | Type-ahead filtering by name and category. |
 | P4a | Insert into tree panel | P1 | Can add via the tree as well as the canvas — needed when targets are tiny. |
 | P5a | Favorites / recent | P2 | — |
-| P6a | Custom user components in palette | P1 | User-defined components appear alongside built-ins. |
+| P6a | Custom user components in palette | P1 | User-defined components appear alongside built-ins. (#18: `EditorState.palette` appends the document's components as instance entries beneath the built-ins, updating as they are extracted; click/drag inserts an instance. ADR-024.) |
 
 ### Phase 1 component set (deliberately small)
 
@@ -122,7 +122,7 @@ into issues directly.
 | D4 | Autosave + crash recovery | P0 | Timer-based sidecar; on next launch, offer to restore. |
 | D5 | Copy / paste / duplicate | P0 | Fresh IDs generated; paste targets current selection. |
 | D6 | Multiple screens per project | P0 | Screen switcher; each exports its own composable. |
-| D7 | Reusable user components | P1 | Extract selection → component; instance references update on edit. Cycle detection enforced. |
+| D7 | Reusable user components | P1 | Extract selection → component; instance references update on edit. Cycle detection enforced. (#18: `extractComponent` command + Edit → Extract to Component; instances are references resolved at render/codegen, so a definition edit reaches every instance; cycles guarded on load and at render. Parameters deferred. ADR-024.) |
 | D8 | Recent projects list | P1 | — |
 | D9 | Schema migration on load | P0 | Older files migrate with a backup written first. |
 
