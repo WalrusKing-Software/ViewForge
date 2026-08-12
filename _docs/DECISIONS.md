@@ -891,6 +891,56 @@ the same registry.
 
 ---
 
+## ADR-027 — Root-agnostic node editing: one command family edits screens and components alike
+
+**Status:** Accepted
+
+**Context.** A reusable component (`ComponentDef.root`) is only editable where it was defined; "instances
+update on edit" is a tested property, not a live gesture (ADR-024 deferred an in-place editing surface).
+Making a component's own tree a first-class editing surface (D7 follow-up, the prerequisite for component
+parameters) starts at the command layer: every node command (`AddNode`, `RemoveNode`, `MoveNode`,
+`RenameNode`, `SetNodeFlags`, `SetProp`, `SetModifiers`, `SetModifierArg`, `ReplaceNode`) carried a
+`screenId: String` and routed through `Project.updateScreenRoot(screenId, …)`, reading invert pre-state
+from `doc.screens.firstOrNull{…}.root`. Screens were the only editable root.
+
+**Decision.** Generalize the editing target from *screen* to *any root container* (a screen **or** a
+component), keyed by id. Because screen ids and component ids are globally-unique ULIDs, this needs no new
+type on the command:
+- **New model primitives** (`core/model`): `Project.updateComponentRoot(id, transform)` (the component
+  twin of `updateScreenRoot`), `Project.updateRoot(id, transform)` (dispatches to whichever container the
+  id names; an unknown id is a no-op), and `Project.findRoot(id): Node?`. All preserve structural sharing
+  and return the same instance when nothing changed, exactly like `updateScreenRoot`.
+- **Commands point at the primitives.** The shared edit helper becomes `editRoot(rootId)` over
+  `updateRoot`, and every invert pre-state lookup becomes `doc.findRoot(rootId)`. The `screenId` field is
+  renamed `rootId` on all node commands — an honest name, since it may now hold a component id. Signatures
+  stay `String`, so the editor's positional command construction is unaffected.
+- **This slice is the primitive only.** No editor wiring: commands *can* target a component, but nothing
+  in the editor does yet. The "active edit surface" in `EditorState` (routing canvas/tree/inspector/
+  selection to a component root) and the open/return UX are the next slices of the epic.
+
+**Rationale.** Globally-unique ids mean one dispatch (`updateRoot`) covers both containers without a
+discriminated `EditTarget` type or retyping every command — the smallest change that unlocks component
+editing, and a safe one: screen editing behavior is byte-identical (the full existing command/history
+suite, incl. the undo/redo property test, stays green), so the refactor lands with zero user-visible
+change and de-risks the slices that follow. Renaming `screenId`→`rootId` avoids the "stale name" trap
+(a `screenId` holding a component id) called out in CLAUDE.md's anti-patterns. **No `.vforge` schema
+change**: screens and components already exist.
+
+**Rejected.** **A discriminated `EditTarget = Screen(id) | Component(id)` on every command** — retypes the
+whole command API and all call sites for no gain over a unique-id dispatch. **Keeping `screenId` but
+letting it hold component ids** — exactly the stale-naming anti-pattern; the field is now honestly
+`rootId`. **Inlining a component for editing** (edit the expanded copy, re-extract on save) — breaks the
+reference model (ADR-024) and update-on-edit. **Doing the editor wiring in this slice** — would make one
+large, hard-to-review diff; the epic is sliced so the core primitive merges and is proven on its own.
+
+**Consequences.** Any node command now edits a component root by passing its id — the foundation for
+edit-a-component-in-place and, after it, component parameters. Next slices add the active-edit-surface
+state and the open/return UX. Honest gap: nothing in the editor targets a component yet, so this slice is
+proven by command/model unit tests (each command round-trips against a component root; `updateRoot`/
+`findRoot` dispatch and no-op correctly), not by a gesture.
+
+---
+
 ## Template
 
 ```markdown

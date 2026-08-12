@@ -162,4 +162,52 @@ class NodeEditTest {
         val unchanged = project.updateScreenRoot("s1") { it } // returns same root
         assertSame(project, unchanged)
     }
+
+    // --- root-agnostic editing (edit-in-place slice 1, ADR-027) -----------------------------------
+
+    private val component = ComponentDef(id = "c1", name = "PrimaryButton", root = b)
+
+    private fun projectWith(screen: Screen, comp: ComponentDef) = Project(
+        id = "p",
+        name = "P",
+        framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+        screens = listOf(screen),
+        components = listOf(comp),
+    )
+
+    @Test
+    fun `updateComponentRoot transforms a component and shares others and no-ops when unchanged`() {
+        val other = ComponentDef(id = "c2", name = "Other", root = a)
+        val project = projectWith(Screen("s1", "A", root), component).copy(components = listOf(component, other))
+
+        val edited = project.updateComponentRoot("c1") { it.removeChild(NodeId("leaf")) }
+        assertNotSame(project, edited)
+        assertSame(other, edited.components[1]) // untouched component shared
+        assertSame(project.screens[0], edited.screens[0]) // screens untouched
+
+        assertSame(project, project.updateComponentRoot("c1") { it }) // same root ⇒ same project
+    }
+
+    @Test
+    fun `updateRoot dispatches to a screen or a component by id and no-ops on an unknown id`() {
+        val project = projectWith(Screen("s1", "A", root), component)
+
+        val screenEdited = project.updateRoot("s1") { it.removeChild(NodeId("a")) }
+        assertNull(screenEdited.screens[0].root.findById(NodeId("a")))
+        assertSame(project.components[0], screenEdited.components[0]) // component untouched
+
+        val compEdited = project.updateRoot("c1") { it.removeChild(NodeId("leaf")) }
+        assertNull(compEdited.components[0].root.findById(NodeId("leaf")))
+        assertSame(project.screens[0], compEdited.screens[0]) // screen untouched
+
+        assertSame(project, project.updateRoot("nope") { it.removeChild(NodeId("a")) })
+    }
+
+    @Test
+    fun `findRoot resolves a screen root, a component root, or null`() {
+        val project = projectWith(Screen("s1", "A", root), component)
+        assertSame(root, project.findRoot("s1"))
+        assertSame(b, project.findRoot("c1"))
+        assertNull(project.findRoot("nope"))
+    }
 }

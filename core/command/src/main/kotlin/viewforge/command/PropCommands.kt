@@ -1,13 +1,13 @@
 package viewforge.command
 
 import viewforge.model.ModifierEntry
-import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.PropValue
 import viewforge.model.findById
+import viewforge.model.findRoot
 import viewforge.model.replaceNode
-import viewforge.model.updateScreenRoot
+import viewforge.model.updateRoot
 import viewforge.model.withModifiers
 import viewforge.model.withProp
 
@@ -22,7 +22,7 @@ import viewforge.model.withProp
  * Coalesces per (node, prop) so typing into a field is one history entry.
  */
 data class SetProp(
-    val screenId: String,
+    val rootId: String,
     val nodeId: NodeId,
     val key: String,
     val value: PropValue?,
@@ -30,14 +30,14 @@ data class SetProp(
 ) : Command {
     override val coalesceKey: Any = Triple(nodeId, "prop", key)
 
-    override fun apply(doc: Project): Project = doc.updateScreen(screenId) { root ->
-        val node = root.findById(nodeId) ?: return@updateScreen root
+    override fun apply(doc: Project): Project = doc.updateRoot(rootId) { root ->
+        val node = root.findById(nodeId) ?: return@updateRoot root
         root.replaceNode(nodeId, node.withProp(key, value))
     }
 
     override fun invert(doc: Project): Command {
-        val old = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(nodeId)?.props?.get(key)
-        return SetProp(screenId, nodeId, key, old, label)
+        val old = doc.findRoot(rootId)?.findById(nodeId)?.props?.get(key)
+        return SetProp(rootId, nodeId, key, old, label)
     }
 }
 
@@ -47,19 +47,19 @@ data class SetProp(
  * structural edit. Order is preserved exactly (ADR-005).
  */
 data class SetModifiers(
-    val screenId: String,
+    val rootId: String,
     val nodeId: NodeId,
     val modifiers: List<ModifierEntry>,
     override val label: String = "Edit modifiers",
 ) : Command {
-    override fun apply(doc: Project): Project = doc.updateScreen(screenId) { root ->
-        val node = root.findById(nodeId) ?: return@updateScreen root
+    override fun apply(doc: Project): Project = doc.updateRoot(rootId) { root ->
+        val node = root.findById(nodeId) ?: return@updateRoot root
         root.replaceNode(nodeId, node.withModifiers(modifiers))
     }
 
     override fun invert(doc: Project): Command {
-        val old = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(nodeId)?.modifiers.orEmpty()
-        return SetModifiers(screenId, nodeId, old, label)
+        val old = doc.findRoot(rootId)?.findById(nodeId)?.modifiers.orEmpty()
+        return SetModifiers(rootId, nodeId, old, label)
     }
 }
 
@@ -69,7 +69,7 @@ data class SetModifiers(
  * modifier isn't present.
  */
 data class SetModifierArg(
-    val screenId: String,
+    val rootId: String,
     val nodeId: NodeId,
     val modifierId: String,
     val key: String,
@@ -78,8 +78,8 @@ data class SetModifierArg(
 ) : Command {
     override val coalesceKey: Any = Triple(nodeId, modifierId, key)
 
-    override fun apply(doc: Project): Project = doc.updateScreen(screenId) { root ->
-        val node = root.findById(nodeId) ?: return@updateScreen root
+    override fun apply(doc: Project): Project = doc.updateRoot(rootId) { root ->
+        val node = root.findById(nodeId) ?: return@updateRoot root
         val updated = node.modifiers.map { entry ->
             if (entry.id != modifierId) {
                 entry
@@ -92,12 +92,8 @@ data class SetModifierArg(
     }
 
     override fun invert(doc: Project): Command {
-        val old = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(nodeId)
+        val old = doc.findRoot(rootId)?.findById(nodeId)
             ?.modifiers?.firstOrNull { it.id == modifierId }?.args?.get(key)
-        return SetModifierArg(screenId, nodeId, modifierId, key, old, label)
+        return SetModifierArg(rootId, nodeId, modifierId, key, old, label)
     }
 }
-
-/** Shared screen-root transform, mirroring the private helper the M4 commands use (kept identical). */
-private fun Project.updateScreen(screenId: String, transform: (Node) -> Node): Project =
-    updateScreenRoot(screenId, transform)

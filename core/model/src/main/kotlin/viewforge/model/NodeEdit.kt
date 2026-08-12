@@ -121,6 +121,40 @@ fun Project.updateScreenRoot(screenId: String, transform: (Node) -> Node): Proje
     return if (changed) copy(screens = newScreens) else this
 }
 
+/**
+ * A copy of this [Project] with the component [componentId]'s root transformed — the reusable-component
+ * twin of [updateScreenRoot], for editing a component's own tree in place (D7 follow-up, ADR-027). Other
+ * components keep their identity, and an unchanged root returns the whole project unchanged.
+ */
+fun Project.updateComponentRoot(componentId: String, transform: (Node) -> Node): Project {
+    var changed = false
+    val newComponents = components.map { component ->
+        if (component.id != componentId) return@map component
+        val newRoot = transform(component.root)
+        if (newRoot === component.root) {
+            component
+        } else {
+            changed = true
+            component.copy(root = newRoot)
+        }
+    }
+    return if (changed) copy(components = newComponents) else this
+}
+
+/**
+ * Transform the root of the screen **or** component identified by [rootId], rebuilding only that
+ * container. Screen and component ids are globally-unique ULIDs, so at most one matches; an id matching
+ * neither returns the project unchanged. This is the root-agnostic editing primitive (ADR-027) that lets
+ * one node command target either editing surface — the editor decides *which* root is active, the
+ * command layer doesn't care.
+ */
+fun Project.updateRoot(rootId: String, transform: (Node) -> Node): Project =
+    if (screens.any { it.id == rootId }) updateScreenRoot(rootId, transform) else updateComponentRoot(rootId, transform)
+
+/** The current root node of the screen **or** component identified by [rootId], or null if neither matches. */
+fun Project.findRoot(rootId: String): Node? =
+    screens.firstOrNull { it.id == rootId }?.root ?: components.firstOrNull { it.id == rootId }?.root
+
 // --- internals -----------------------------------------------------------------------------------
 
 /**
