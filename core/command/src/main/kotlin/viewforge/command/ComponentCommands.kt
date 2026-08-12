@@ -5,8 +5,9 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.findById
+import viewforge.model.findRoot
 import viewforge.model.replaceNode
-import viewforge.model.updateScreenRoot
+import viewforge.model.updateRoot
 
 /**
  * Reusable-component commands (D7). A [ComponentDef] is a top-level document entry — like a [Screen] —
@@ -72,30 +73,31 @@ data class RenameComponent(val id: String, val name: String, override val label:
 }
 
 /**
- * Replace the node [id] in [screenId] with [replacement], keeping its position — the mechanical half of
- * [extractComponent] (swap a selected subtree for an instance node) and its exact inverse (swap the
- * instance back for the original subtree). Self-inverting: [invert] reads the node currently at [id] out
- * of the pre-apply document and swaps [replacement] back for it. Absent id ⇒ a no-op with a no-op
- * inverse.
+ * Replace the node [id] in the root [rootId] (a screen or component, ADR-027) with [replacement],
+ * keeping its position — the mechanical half of [extractComponent] (swap a selected subtree for an
+ * instance node) and its exact inverse (swap the instance back for the original subtree). Self-inverting:
+ * [invert] reads the node currently at [id] out of the pre-apply document and swaps [replacement] back
+ * for it. Absent id ⇒ a no-op with a no-op inverse.
  */
 data class ReplaceNode(
-    val screenId: String,
+    val rootId: String,
     val id: NodeId,
     val replacement: Node,
     override val label: String = "Replace",
 ) : Command {
-    override fun apply(doc: Project): Project = doc.updateScreenRoot(screenId) { it.replaceNode(id, replacement) }
+    override fun apply(doc: Project): Project = doc.updateRoot(rootId) { it.replaceNode(id, replacement) }
 
     override fun invert(doc: Project): Command {
-        val old = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(id) ?: return NoOp
-        return ReplaceNode(screenId, replacement.id, old)
+        val old = doc.findRoot(rootId)?.findById(id) ?: return NoOp
+        return ReplaceNode(rootId, replacement.id, old)
     }
 }
 
 /**
- * Extract the selected subtree [targetNodeId] in [screenId] into the reusable [component], leaving an
- * [instance] node (a `vforge.userComponent` referencing [component].id) in its place (D7). One undoable
- * step: the composite adds the definition, then swaps the subtree for the instance; undo reverses both.
+ * Extract the selected subtree [targetNodeId] in the root [rootId] (a screen or component) into the
+ * reusable [component], leaving an [instance] node (a `vforge.userComponent` referencing [component].id)
+ * in its place (D7). One undoable step: the composite adds the definition, then swaps the subtree for the
+ * instance; undo reverses both.
  *
  * The caller builds both [component] (its `root` is the extracted subtree, keeping the subtree's node
  * ids so undo restores them intact) and [instance] (a fresh id, `componentId` = [component].id), so the
@@ -104,11 +106,11 @@ data class ReplaceNode(
  * nothing that references it), so no cycle guard is needed here; inserting an instance *into* a
  * component is where [viewforge.project] cycle validation applies.
  */
-fun extractComponent(screenId: String, targetNodeId: NodeId, component: ComponentDef, instance: Node): Command =
+fun extractComponent(rootId: String, targetNodeId: NodeId, component: ComponentDef, instance: Node): Command =
     CompositeCommand(
         commands = listOf(
             AddComponent(component, index = Int.MAX_VALUE),
-            ReplaceNode(screenId, targetNodeId, instance),
+            ReplaceNode(rootId, targetNodeId, instance),
         ),
         label = "Extract component",
     )

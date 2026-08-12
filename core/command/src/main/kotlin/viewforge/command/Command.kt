@@ -5,11 +5,12 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.findById
+import viewforge.model.findRoot
 import viewforge.model.insertChild
 import viewforge.model.locate
 import viewforge.model.removeChild
 import viewforge.model.replaceNode
-import viewforge.model.updateScreenRoot
+import viewforge.model.updateRoot
 
 /**
  * A single undoable document mutation (ARCHITECTURE §5, CLAUDE.md rule 3). Every change to the IR is
@@ -44,73 +45,77 @@ interface Command {
 }
 
 /**
- * A no-op-safe wrapper so the same tree edit reads identically across commands: locate the screen,
- * transform its root, keep every other screen by identity ([Project.updateScreenRoot]).
+ * A no-op-safe wrapper so the same tree edit reads identically across commands: locate the target root
+ * — a screen **or** a component (ADR-027) — transform it, keep every other container by identity
+ * ([Project.updateRoot]).
  */
-private fun Project.editScreen(screenId: String, transform: (Node) -> Node): Project =
-    updateScreenRoot(screenId, transform)
+private fun Project.editRoot(rootId: String, transform: (Node) -> Node): Project = updateRoot(rootId, transform)
 
-/** Insert [node] at [address] within [screenId]. Inverse removes it again. */
+/**
+ * Insert [node] at [address] within the root [rootId] (a screen or component, ADR-027). Inverse removes
+ * it again.
+ */
 data class AddNode(
-    val screenId: String,
+    val rootId: String,
     val address: ChildAddress,
     val node: Node,
     override val label: String = "Add ${node.type.substringAfterLast('.')}",
 ) : Command {
-    override fun apply(doc: Project): Project = doc.editScreen(screenId) { it.insertChild(address, node) }
+    override fun apply(doc: Project): Project = doc.editRoot(rootId) { it.insertChild(address, node) }
 
-    override fun invert(doc: Project): Command = RemoveNode(screenId, node.id)
+    override fun invert(doc: Project): Command = RemoveNode(rootId, node.id)
 }
 
 /**
- * Remove the node [id] from [screenId], wherever it sits. The inverse restores it to the exact same
- * position, so [invert] must read the node and its address out of the pre-apply document.
+ * Remove the node [id] from the root [rootId] (a screen or component), wherever it sits. The inverse
+ * restores it to the exact same position, so [invert] must read the node and its address out of the
+ * pre-apply document.
  */
-data class RemoveNode(val screenId: String, val id: NodeId, override val label: String = "Delete") : Command {
-    override fun apply(doc: Project): Project = doc.editScreen(screenId) { it.removeChild(id) }
+data class RemoveNode(val rootId: String, val id: NodeId, override val label: String = "Delete") : Command {
+    override fun apply(doc: Project): Project = doc.editRoot(rootId) { it.removeChild(id) }
 
     override fun invert(doc: Project): Command {
-        val root = doc.screens.firstOrNull { it.id == screenId }?.root
+        val root = doc.findRoot(rootId)
         val address = root?.locate(id)
         val node = root?.findById(id)
         // If the node isn't present, apply() is a no-op; a no-op inverse keeps History consistent.
-        return if (address != null && node != null) AddNode(screenId, address, node) else NoOp
+        return if (address != null && node != null) AddNode(rootId, address, node) else NoOp
     }
 }
 
 /**
- * Move [id] to [target] within [screenId] — the single command behind both reorder and reparent.
+ * Move [id] to [target] within the root [rootId] — the single command behind both reorder and reparent.
  * Apply is remove-then-insert, so [target].index is interpreted against the post-removal list
  * (see [ChildAddress]). The inverse moves it back to where it started.
  */
 data class MoveNode(
-    val screenId: String,
+    val rootId: String,
     val id: NodeId,
     val target: ChildAddress,
     override val label: String = "Move",
 ) : Command {
-    override fun apply(doc: Project): Project = doc.editScreen(screenId) { root ->
-        val node = root.findById(id) ?: return@editScreen root
+    override fun apply(doc: Project): Project = doc.editRoot(rootId) { root ->
+        val node = root.findById(id) ?: return@editRoot root
         root.removeChild(id).insertChild(target, node)
     }
 
     override fun invert(doc: Project): Command {
-        val origin = doc.screens.firstOrNull { it.id == screenId }?.root?.locate(id)
-        return if (origin != null) MoveNode(screenId, id, origin) else NoOp
+        val origin = doc.findRoot(rootId)?.locate(id)
+        return if (origin != null) MoveNode(rootId, id, origin) else NoOp
     }
 }
 
 /** Set (or clear) [Node.name] on [id]. Rename never affects codegen structure (T3). */
-data class RenameNode(val screenId: String, val id: NodeId, val name: String?, override val label: String = "Rename") :
+data class RenameNode(val rootId: String, val id: NodeId, val name: String?, override val label: String = "Rename") :
     Command {
-    override fun apply(doc: Project): Project = doc.editScreen(screenId) { root ->
-        val node = root.findById(id) ?: return@editScreen root
+    override fun apply(doc: Project): Project = doc.editRoot(rootId) { root ->
+        val node = root.findById(id) ?: return@editRoot root
         root.replaceNode(id, node.copy(name = name?.takeIf { it.isNotBlank() }))
     }
 
     override fun invert(doc: Project): Command {
-        val old = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(id)?.name
-        return RenameNode(screenId, id, old)
+        val old = doc.findRoot(rootId)?.findById(id)?.name
+        return RenameNode(rootId, id, old)
     }
 }
 
@@ -119,14 +124,14 @@ data class RenameNode(val screenId: String, val id: NodeId, val name: String?, o
  * render and codegen (T4, DATA_MODEL §5). A null argument leaves that flag untouched.
  */
 data class SetNodeFlags(
-    val screenId: String,
+    val rootId: String,
     val id: NodeId,
     val locked: Boolean? = null,
     val hidden: Boolean? = null,
     override val label: String = "Toggle flag",
 ) : Command {
-    override fun apply(doc: Project): Project = doc.editScreen(screenId) { root ->
-        val node = root.findById(id) ?: return@editScreen root
+    override fun apply(doc: Project): Project = doc.editRoot(rootId) { root ->
+        val node = root.findById(id) ?: return@editRoot root
         root.replaceNode(
             id,
             node.copy(
@@ -137,9 +142,9 @@ data class SetNodeFlags(
     }
 
     override fun invert(doc: Project): Command {
-        val node = doc.screens.firstOrNull { it.id == screenId }?.root?.findById(id)
+        val node = doc.findRoot(rootId)?.findById(id)
         return SetNodeFlags(
-            screenId,
+            rootId,
             id,
             locked = if (locked != null) node?.locked else null,
             hidden = if (hidden != null) node?.hidden else null,
