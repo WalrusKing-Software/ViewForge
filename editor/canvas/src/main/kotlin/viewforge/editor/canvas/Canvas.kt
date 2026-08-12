@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -63,9 +64,13 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
         } else {
             val bounds = remember { NodeBounds() }
             val viewport = state.viewport
+            // The frame is sized to the screen's device profile (C6) rather than filling the viewport, so
+            // the canvas clips to a real device size and a `fillMaxSize` root fills the *device*. The C5
+            // zoom/pan graphicsLayer wraps it, so a frame larger than the viewport stays navigable.
+            val profile = state.activeDeviceProfile
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .size(profile.width.dp, profile.height.dp)
                     .graphicsLayer {
                         scaleX = viewport.zoom
                         scaleY = viewport.zoom

@@ -84,4 +84,23 @@ class ScreenCommandTest {
         val before = doc()
         assertTrue(RemoveScreen("nope").invert(before) is NoOp)
     }
+
+    @Test
+    fun `SetPreviewProfile sets the screen profile and inverts to the prior value`() {
+        val before = doc() // both screens start with previewProfile = null
+        val cmd = SetPreviewProfile("s1", "desktop_1440x900")
+        val after = cmd.apply(before)
+        assertEquals("desktop_1440x900", after.screens.first { it.id == "s1" }.previewProfile)
+        // Other screens and the node tree untouched.
+        assertEquals(before.screens[1], after.screens[1])
+        assertEquals(before.screens[0].root, after.screens[0].root)
+
+        val restored = cmd.invert(before).apply(after)
+        assertEquals(before.screens, restored.screens) // inverts back to null exactly
+    }
+
+    @Test
+    fun `SetPreviewProfile of an absent id inverts to a no-op`() {
+        assertTrue(SetPreviewProfile("nope", "desktop_1280x800").invert(doc()) is NoOp)
+    }
 }

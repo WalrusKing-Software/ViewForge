@@ -2,6 +2,7 @@ package viewforge.editor.shell
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,6 +48,7 @@ import viewforge.editor.panels.Palette
 import viewforge.editor.panels.ThemeEditor
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.CodePreviewService
+import viewforge.editor.state.DeviceProfiles
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
 import java.nio.file.Path
@@ -175,6 +179,7 @@ private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEdi
             ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
             ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
             ToolbarButton("Theme…", enabled = true, onClick = onOpenThemeEditor)
+            DeviceProfileSelector(state)
             // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
             ToolbarButton(
                 if (state.canvasDark) "◐ Dark" else "◑ Light",
@@ -182,6 +187,30 @@ private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEdi
                 onClick = state::toggleCanvasDark,
             )
             ExportBar(export)
+        }
+    }
+}
+
+/**
+ * The device-preview-frame selector (C6): a dropdown showing the active screen's profile and offering
+ * the Phase-1 desktop sizes. Selecting one runs the undoable `SetPreviewProfile` command through
+ * [EditorState], and the canvas reframes to it. A view over state like the rest of the toolbar.
+ */
+@Composable
+private fun DeviceProfileSelector(state: EditorState) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        ToolbarButton("◱ ${state.activeDeviceProfile.label}", enabled = true, onClick = { expanded = true })
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DeviceProfiles.ALL.forEach { profile ->
+                DropdownMenuItem(
+                    text = { Text(profile.label) },
+                    onClick = {
+                        expanded = false
+                        state.setPreviewProfile(profile.id)
+                    },
+                )
+            }
         }
     }
 }

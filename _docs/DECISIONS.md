@@ -841,6 +841,56 @@ the app); the **autosave interval is fixed** until S5 (#55); and a **save-prompt
 
 ---
 
+## ADR-026 — Device preview frames: a fixed profile registry, per-screen selection as a command, a framed canvas
+
+**Status:** Accepted
+
+**Context.** C6 (P0) asks for selectable viewport profiles (desktop sizes in Phase 1) with the canvas
+clipping to the chosen frame. The schema was ready: `Screen.previewProfile: String?` already exists (the
+sample carries `desktop_1280x800`), but nothing consumed it — the canvas rendered the root as
+`fillMaxSize()` filling the whole viewport, with no device sizing, selector, or profile set. Undecided:
+where the profile *definitions* live, whether selecting one is document mutation or view state, and how a
+fixed frame coexists with the C5 zoom/pan transform.
+
+**Decision.**
+- **A fixed profile registry in `editor/state`.** `DeviceProfile(id, label, width, height)` and a
+  `DeviceProfiles` object holding the Phase-1 desktop sizes. Sizes are plain `Float` dp (the module has
+  the Compose *runtime* only, not the UI unit types — the panel-width precedent); the canvas attaches
+  `.dp`. Ids follow the existing `desktop_<w>x<h>` convention so stored documents resolve. `forId(null
+  or unknown)` falls back to a default, so the canvas always has a frame size.
+- **Selection is a command.** `previewProfile` is document data (persisted in `.vforge`), so changing it
+  goes through `SetPreviewProfile(screenId, profileId?)` (core/command, undoable, mirroring
+  `RenameScreen`) — not ad-hoc mutation (rule 3). `profileId` is nullable so the inverse restores a
+  never-set screen exactly. It is preview-only: it never affects codegen.
+- **A framed canvas.** The inner frame is sized to the active screen's resolved profile
+  (`Modifier.size(w.dp, h.dp)`, centered) instead of `fillMaxSize`, so the canvas clips to a real device
+  size and a `fillMaxSize` root fills the *device*. The C5 zoom/pan `graphicsLayer` still wraps the
+  frame, so a frame larger than the viewport stays navigable (zoom out / pan to see it all). A compact
+  toolbar dropdown selects the profile.
+
+**Rationale.** Keeping the definitions in `editor/state` shares them between the toolbar selector and the
+canvas without either naming the framework package, and matches how panel widths model dp as `Float`.
+Modelling selection as a command keeps it consistent with undo/redo and persistence for free — the frame
+choice round-trips through save/load. Sizing the frame *inside* the existing zoom/pan layer means C6
+reuses C5's one canonical transform rather than adding coordinate math. **No `.vforge` schema change**:
+the field already exists.
+
+**Rejected.** **Profile selection as transient view state (not persisted)** — the schema already stores
+it per screen and users expect a screen to remember its frame; a command persists it undoably. **A
+profile registry supplied by the framework package (via the catalog SPI)** — device sizes are
+framework-agnostic and there is one package until Phase 5 (ADR-007); a plain editor-side list is enough.
+**Auto-fitting the zoom to the frame on selection** — nice, but extra logic; C5's manual zoom/pan already
+makes a large frame navigable, so fit-to-view is a deferred follow-up rather than P0 scope.
+
+**Consequences.** The canvas now previews at real desktop sizes and the choice persists and undoes.
+Adding a profile is a one-line registry entry. Honest gaps: at 100% zoom a profile larger than the
+viewport shows clipped until the user zooms out — **auto-fit-to-viewport** is a noted follow-up; and the
+**dropdown gesture and the visual frame are not headless-testable** (the command and resolution are
+covered by unit tests, the rest by running the app). Phase 2 device profiles (mobile/tablet) slot into
+the same registry.
+
+---
+
 ## Template
 
 ```markdown
