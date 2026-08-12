@@ -74,8 +74,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.PropValue
+import viewforge.model.UserComponent
 
 /**
  * The interpreter walk (ARCHITECTURE §4.2): map a node's `type` to a real Compose composable, fold
@@ -119,7 +121,58 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, ctx)
         "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, ctx)
         "compose.material3.Scaffold" -> RenderScaffold(node, modifier, ctx)
+        UserComponent.TYPE -> RenderUserComponent(node, modifier, ctx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
+    }
+}
+
+/** The outcome of resolving a `vforge.userComponent` instance against the available definitions. */
+internal sealed interface InstanceResolution {
+    /** The instance references [def], which can be drawn. */
+    data class Resolved(val def: ComponentDef) : InstanceResolution
+
+    /** No component matches the instance's `componentId` ([id] is that value, or null if the prop is absent). */
+    data class Missing(val id: String?) : InstanceResolution
+
+    /** [def] is already mid-render above this instance — drawing it would recurse forever (PF-3). */
+    data class Cycle(val def: ComponentDef) : InstanceResolution
+}
+
+/**
+ * Resolve a `vforge.userComponent` instance [node] to its definition, or report why it can't be drawn.
+ * Pure so the decision is unit-testable without a composition; [RenderUserComponent] draws each outcome
+ * (ADR-024).
+ */
+internal fun resolveUserComponent(
+    node: Node,
+    components: Map<String, ComponentDef>,
+    expanding: Set<String>,
+): InstanceResolution {
+    val id = (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)?.value?.content
+    val def = id?.let { components[it] } ?: return InstanceResolution.Missing(id)
+    return if (def.id in expanding) InstanceResolution.Cycle(def) else InstanceResolution.Resolved(def)
+}
+
+/**
+ * A `vforge.userComponent` instance draws the component it references (ADR-024): render its root inside
+ * a [Box] carrying the instance's own [modifier], so the instance selects and is instrumented as a
+ * single unit on the canvas while its internals are not — those are edited by opening the component, not
+ * through the instance. A missing reference or a cycle draws a loud placeholder rather than a blank or
+ * an infinite recursion (PF-6).
+ */
+@Composable
+private fun RenderUserComponent(node: Node, modifier: Modifier, ctx: RenderContext) {
+    when (val resolution = resolveUserComponent(node, ctx.components, ctx.expanding)) {
+        is InstanceResolution.Missing -> ErrorPlaceholder("Unresolved component:\n${resolution.id ?: "?"}", modifier)
+        is InstanceResolution.Cycle -> ErrorPlaceholder("Component cycle:\n${resolution.def.name}", modifier)
+        is InstanceResolution.Resolved -> Box(modifier) {
+            // The internals are not the active tree's nodes: suppress per-node instrumentation so a click
+            // selects the instance (the Box above), and mark this id as expanding to break any cycle.
+            RenderNode(
+                resolution.def.root,
+                ctx.copy(expanding = ctx.expanding + resolution.def.id, instrument = { Modifier }),
+            )
+        }
     }
 }
 

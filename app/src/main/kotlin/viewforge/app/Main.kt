@@ -54,6 +54,7 @@ fun main() = application {
                 dark = state.canvasDark,
                 instrument = instrument,
                 imageLoader = images::load,
+                components = state.document.components,
             )
         }
 

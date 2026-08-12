@@ -2,6 +2,7 @@ package viewforge.packages.compose.render
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import viewforge.model.ComponentDef
 import viewforge.model.NodeId
 import viewforge.model.Theme
 
@@ -20,10 +21,20 @@ import viewforge.model.Theme
  * canvas draws a loud placeholder rather than a blank — ARCHITECTURE §9). Decoding lives with the
  * caller (`:app` reads it from the project), keeping the render layer free of disk access; it defaults
  * to "no images" so the interpreter stays unit-testable without an asset store.
+ *
+ * [components] resolves a `vforge.userComponent` instance to its definition so the canvas draws the
+ * referenced component (ADR-024) — the render twin of codegen's instance-as-call. [expanding] is the
+ * set of component ids currently mid-render: an id already in it means an instance re-entered its own
+ * definition, so the canvas draws a loud cycle placeholder rather than recursing forever. Load-time
+ * validation forbids cycles (PF-3), but the canvas renders mid-edit before that runs, so the guard is a
+ * necessary defence, not a duplicate. Both default to empty so the interpreter stays usable — and
+ * unit-testable — for a project with no user components.
  */
 data class RenderContext(
     val theme: Theme,
     val dark: Boolean,
     val instrument: (NodeId) -> Modifier = { Modifier },
     val imageLoader: (assetId: String) -> ImageBitmap? = { null },
+    val components: Map<String, ComponentDef> = emptyMap(),
+    val expanding: Set<String> = emptySet(),
 )
