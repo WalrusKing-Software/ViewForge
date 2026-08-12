@@ -109,6 +109,17 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * The live code-preview panel (G3, #50). Transient editor chrome like the other panels, but — unlike
+     * them — **not yet persisted** (#52 folds it into [PanelLayout] later), so it is hidden by default and
+     * the View menu toggles it directly. The width is clamped through the same [PanelLayout] bound; it is
+     * wider than the side panels by default since it shows source. The panel itself is read-only.
+     */
+    var codePreviewVisible: Boolean by mutableStateOf(false)
+        private set
+    var codePreviewWidth: Float by mutableStateOf(PanelLayout.clampWidth(340f))
+        private set
+
+    /**
      * The canvas zoom & pan (C5). Transient view state — where the editor is looking, never part of
      * the document. The menu, keyboard shortcuts and canvas gestures all mutate this one value; the
      * canvas realises it as a single `graphicsLayer`, so hit-testing stays correct at every level.
@@ -665,6 +676,16 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Grow/shrink the inspector by [delta] dp (splitter drag), clamped. */
     fun resizeInspector(delta: Float) {
         inspectorWidth = PanelLayout.clampWidth(inspectorWidth + delta)
+    }
+
+    /** Show/hide the code-preview panel (G3, #50). */
+    fun toggleCodePreview() {
+        codePreviewVisible = !codePreviewVisible
+    }
+
+    /** Grow/shrink the code-preview panel by [delta] dp (splitter drag), clamped. */
+    fun resizeCodePreview(delta: Float) {
+        codePreviewWidth = PanelLayout.clampWidth(codePreviewWidth + delta)
     }
 
     /**

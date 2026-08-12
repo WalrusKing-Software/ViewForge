@@ -92,6 +92,11 @@ internal fun FrameWindowScope.AppMenuBar(
             CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { prefs.togglePalette() })
             CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { prefs.toggleTree() })
             CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { prefs.toggleInspector() })
+            // The live code preview (G3, #50). Transient (not yet persisted, #52), so it routes straight
+            // to state like the Dark-canvas toggle above rather than through the preferences controller.
+            CheckboxItem("Code preview", checked = state.codePreviewVisible, onCheckedChange = {
+                state.toggleCodePreview()
+            })
         }
     }
 }
