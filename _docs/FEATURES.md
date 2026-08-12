@@ -143,7 +143,7 @@ into issues directly.
 |---|---------|-----|------------|
 | G1 | Generate Kotlin for all supported nodes | P0 | Golden test per component and modifier. |
 | G2 | Generated output compiles | P0 | **CI compiles the generated fixtures.** Not just string comparison. |
-| G3 | Live code preview panel | P0 | Side-by-side view updating with selection; read-only in v1. |
+| G3 | Live code preview panel | P0 | Side-by-side view updating with selection; read-only in v1. (#50: a read-only, selectable monospace panel showing the active screen's generated Kotlin, refreshing as the document changes. Reaches the generator through the Compose-free `CodePreviewService` seam (ADR-013), bound in `:app` to `generateScreen`; toggled from the View menu, resizable. Generation failures render a visible in-panel error. **Per-node selection→code highlight deferred (#51)**; **panel-layout persistence deferred (#52)** — visibility/width are transient for now.) |
 | G4 | Export loose `.kt` files | P0 | To a user-chosen directory, with overwrite confirmation. |
 | G5 | Export runnable Gradle project | P0 | Scaffolds a Compose Desktop project that runs with `./gradlew run` unmodified. |
 | G6 | Generated-file header | P0 | Names source file, schema version, and warns about hand-edits. |

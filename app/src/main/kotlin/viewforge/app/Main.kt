@@ -7,6 +7,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.shell.EditorShell
+import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.ComponentCatalog
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ExportMode
@@ -16,8 +17,10 @@ import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.PropDefinition
+import viewforge.model.Screen
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
+import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
@@ -64,8 +67,27 @@ fun main() = application {
         state = windowState,
         title = "ViewForge",
     ) {
-        EditorShell(state, renderer, DesktopExportService)
+        EditorShell(state, renderer, DesktopExportService, DesktopCodePreviewService)
     }
+}
+
+/**
+ * Binds the editor's Compose-free [CodePreviewService] seam (G3) to the Compose code generator, the same
+ * bootstrapping role `Main` plays for the renderer, catalog, and export (ADR-013) — the live code panel
+ * shows generated source without the editor ever naming the framework package. Read-only: it calls
+ * `generateScreen`, the same lowering the golden suite asserts on, so the panel and the export agree.
+ */
+private object DesktopCodePreviewService : CodePreviewService {
+    private val generator = ComposeCodeGenerator()
+
+    override fun previewScreen(project: Project, screen: Screen): String = generator.generateScreen(
+        screen,
+        project.theme,
+        project.name.ifBlank { "Project" },
+        project.schemaVersion,
+        project.assets,
+        project.components,
+    )
 }
 
 /**

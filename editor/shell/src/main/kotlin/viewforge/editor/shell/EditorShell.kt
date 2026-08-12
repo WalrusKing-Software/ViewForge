@@ -38,10 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
+import viewforge.editor.panels.CodePreview
 import viewforge.editor.panels.Inspector
 import viewforge.editor.panels.Palette
 import viewforge.editor.panels.ThemeEditor
 import viewforge.editor.panels.TreePanel
+import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
 
@@ -58,7 +60,12 @@ import viewforge.editor.state.ProjectExportService
  * the menu bar is native OS chrome and sits outside that theme.
  */
 @Composable
-fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, exportService: ProjectExportService) {
+fun FrameWindowScope.EditorShell(
+    state: EditorState,
+    renderer: CanvasRenderer,
+    exportService: ProjectExportService,
+    previewService: CodePreviewService,
+) {
     // The theme editor is a modal dialog (M8), opened from the toolbar or the View menu; its state lives
     // here so it survives recomposition and can be dismissed from either the dialog or a re-click.
     var showThemeEditor by remember { mutableStateOf(false) }
@@ -123,6 +130,13 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
                     if (state.inspectorVisible) {
                         ResizableDivider(onResize = { state.resizeInspector(-it) }, onCommit = prefs::persist)
                         Inspector(state, Modifier.width(state.inspectorWidth.dp).fillMaxHeight())
+                    }
+                    // The live code preview (G3, #50) sits furthest right. It is transient chrome not yet
+                    // in the persisted layout (#52), so its resize commits nothing — hence the empty
+                    // onCommit, unlike the persisted side panels above.
+                    if (state.codePreviewVisible) {
+                        ResizableDivider(onResize = { state.resizeCodePreview(-it) }, onCommit = {})
+                        CodePreview(state, previewService, Modifier.width(state.codePreviewWidth.dp).fillMaxHeight())
                     }
                 }
             }
