@@ -28,6 +28,23 @@ data class RenameScreen(val id: String, val name: String, override val label: St
 }
 
 /**
+ * Set screen [id]'s device preview profile to [profileId] (C6) — the canvas viewport the screen is
+ * framed to (`Screen.previewProfile`). A preview-only concern: it never affects codegen. [profileId] is
+ * nullable so the inverse can restore a screen that had none exactly, keeping undo precise. Absent id ⇒
+ * a no-op inverse, like the other screen commands.
+ */
+data class SetPreviewProfile(val id: String, val profileId: String?, override val label: String = "Set preview size") :
+    Command {
+    override fun apply(doc: Project): Project =
+        doc.copy(screens = doc.screens.map { if (it.id == id) it.copy(previewProfile = profileId) else it })
+
+    override fun invert(doc: Project): Command {
+        val old = doc.screens.firstOrNull { it.id == id } ?: return NoOp
+        return SetPreviewProfile(id, old.previewProfile)
+    }
+}
+
+/**
  * Insert [screen] at [index] in the screen list. The inverse removes it again. [index] is clamped into
  * range on apply so an out-of-range request appends rather than throwing.
  */

@@ -16,6 +16,7 @@ import viewforge.command.RenameThemeToken
 import viewforge.command.SetModifierArg
 import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
+import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
@@ -332,6 +333,21 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val trimmed = name.trim()
         if (screenNameError(trimmed, excludingId = id) != null) return
         execute(RenameScreen(id, trimmed), selectAfter = selectedId)
+    }
+
+    /**
+     * The device profile the active screen is framed to on the canvas (C6), resolving the screen's stored
+     * [previewProfile][Screen.previewProfile] against the [DeviceProfiles] registry — falling back to the
+     * default for a screen with no or an unrecognized profile, so the canvas always has a frame size.
+     */
+    val activeDeviceProfile: DeviceProfile
+        get() = DeviceProfiles.forId(activeScreen?.previewProfile)
+
+    /** Set the active screen's device preview profile (C6); undoable, preview-only (no codegen effect). */
+    fun setPreviewProfile(profileId: String) {
+        val screen = activeScreen ?: return
+        if (screen.previewProfile == profileId) return
+        execute(SetPreviewProfile(screen.id, profileId), selectAfter = selectedId)
     }
 
     /**
