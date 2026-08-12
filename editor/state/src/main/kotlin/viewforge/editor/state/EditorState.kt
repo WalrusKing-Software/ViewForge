@@ -4,11 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import viewforge.command.AddNode
+import viewforge.command.AddScreen
 import viewforge.command.Command
 import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
+import viewforge.command.RemoveScreen
 import viewforge.command.RenameNode
+import viewforge.command.RenameScreen
 import viewforge.command.RenameThemeToken
 import viewforge.command.SetModifierArg
 import viewforge.command.SetModifiers
@@ -116,6 +119,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * being typed into a field — and the canvas reads it to switch a drag from select to pan.
      */
     var isSpaceHeld: Boolean by mutableStateOf(false)
+
+    /**
+     * A pending request to rename a node inline (T3, F2). Transient view state: the shell's focus-aware
+     * key handler sets it (F2 acts on the selection regardless of which surface has focus), and the tree
+     * panel — which owns the inline edit field — observes it, enters rename mode for that node, and
+     * clears it. Null when no rename is pending.
+     */
+    var renameRequest: NodeId? by mutableStateOf(null)
+        private set
 
     /**
      * An in-flight palette→canvas drag (P2a). Transient view state spanning two panels: the palette is
@@ -246,7 +258,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun newDocument() {
         val rootType = catalog.palette.firstOrNull { catalog.acceptsChildren(it.type) }?.type
             ?: catalog.palette.first().type
-        val screen = Screen(id = Ulid.next(), name = "Screen 1", root = catalog.newNode(rootType))
+        // "Screen1" (no space) so it is a legal identifier and a fresh document exports without a rename (GC-3).
+        val screen = Screen(id = Ulid.next(), name = "Screen1", root = catalog.newNode(rootType))
         replaceDocument(
             Project(id = Ulid.next(), name = "Untitled", framework = document.framework, screens = listOf(screen)),
             path = null,
@@ -257,6 +270,71 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun markSaved(path: Path) {
         currentPath = path
         isDirty = false
+    }
+
+    // --- screen session (D6) ----------------------------------------------------------------------
+    // Screens are document data, so add/remove/rename all go through commands (rule 3) and thus
+    // undo/redo. The active screen is transient view state, managed here alongside the edit.
+
+    /**
+     * Why [name] cannot be used for the screen identified by [excludingId] (null when naming a new
+     * screen), or null if it is acceptable. A name must be non-blank, a legal identifier for the
+     * framework (GC-3, via the catalog), and unique among the other screens — two screens sharing a
+     * name would generate colliding composables/files (D6). This is the edit-time check the switcher
+     * shows so a bad name fails loudly here, not at export.
+     */
+    fun screenNameError(name: String, excludingId: String?): String? {
+        val trimmed = name.trim()
+        return when {
+            trimmed.isBlank() -> "Name cannot be empty"
+            !catalog.isValidScreenName(trimmed) -> "Not a valid name (must be a legal Kotlin identifier)"
+            document.screens.any { it.id != excludingId && it.name == trimmed } ->
+                "A screen named “$trimmed” already exists"
+            else -> null
+        }
+    }
+
+    /** Rename screen [id]; a no-op (with no history entry) if the name is invalid or a duplicate. */
+    fun renameScreen(id: String, name: String) {
+        val trimmed = name.trim()
+        if (screenNameError(trimmed, excludingId = id) != null) return
+        execute(RenameScreen(id, trimmed), selectAfter = selectedId)
+    }
+
+    /**
+     * Add a fresh, empty screen after the last one and make it active. It is auto-named to the first
+     * unused `Screen<n>` — a valid identifier, so it exports without a rename — and rooted in the
+     * catalog's first container type, mirroring [newDocument].
+     */
+    fun addScreen() {
+        val rootType = catalog.palette.firstOrNull { catalog.acceptsChildren(it.type) }?.type
+            ?: catalog.palette.first().type
+        val screen = Screen(id = Ulid.next(), name = uniqueScreenName(), root = catalog.newNode(rootType))
+        execute(AddScreen(screen, document.screens.size), selectAfter = null)
+        activeScreenId = screen.id
+    }
+
+    /**
+     * Remove screen [id]; a no-op if it is the only screen (a project always keeps one). If the removed
+     * screen was active, the previous screen (or the first) becomes active. Selection is left to
+     * reconcile against the new active screen.
+     */
+    fun removeScreen(id: String) {
+        if (document.screens.size <= 1) return
+        val removingActive = id == activeScreenId
+        val index = document.screens.indexOfFirst { it.id == id }
+        execute(RemoveScreen(id), selectAfter = null)
+        if (removingActive) {
+            activeScreenId = document.screens.getOrNull((index - 1).coerceAtLeast(0))?.id
+        }
+    }
+
+    /** The first `Screen<n>` name (n ≥ 1) not already taken — always a legal identifier. */
+    private fun uniqueScreenName(): String {
+        val taken = document.screens.mapTo(HashSet()) { it.name }
+        var n = 1
+        while ("Screen$n" in taken) n++
+        return "Screen$n"
     }
 
     // --- high-level operations --------------------------------------------------------------------
@@ -337,6 +415,16 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun renameNode(id: NodeId, name: String?) {
         val screen = activeScreen ?: return
         execute(RenameNode(screen.id, id, name), selectAfter = selectedId)
+    }
+
+    /** Request an inline rename of the current selection (F2); the tree panel picks this up. No-op if nothing is selected. */
+    fun requestRenameSelected() {
+        renameRequest = selectedId
+    }
+
+    /** Clear a consumed rename request (called by the tree once it has entered rename mode). */
+    fun clearRenameRequest() {
+        renameRequest = null
     }
 
     /** Toggle a node's hidden flag (removes it from render and codegen, DATA_MODEL §5). */

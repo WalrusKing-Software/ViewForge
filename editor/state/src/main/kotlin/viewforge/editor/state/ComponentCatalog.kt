@@ -45,4 +45,18 @@ interface ComponentCatalog {
 
     /** The schema for one modifier [type] (for editing its args), or null if not in the catalog. */
     fun modifierDef(type: String): ModifierDefinition?
+
+    /**
+     * Whether [name] is a legal name for a screen in this framework — i.e. it normalizes to a valid
+     * function/file identifier for the generated composable (GC-3, D6). The editor consults this for
+     * **edit-time** validation feedback so a bad name fails loudly in the screen switcher rather than
+     * only at export. This is a framework-specific rule (Kotlin's identifier grammar and keywords), so
+     * it belongs on the seam; the concrete package delegates to its own identifier validator, keeping
+     * the keyword list single-sourced.
+     *
+     * The default is permissive so non-validating test doubles need no override; the real adapter
+     * always overrides it. Uniqueness among a document's screens is *not* a framework rule and is
+     * enforced by the editor itself, not here.
+     */
+    fun isValidScreenName(name: String): Boolean = name.isNotBlank()
 }
