@@ -18,8 +18,10 @@ import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
 import viewforge.command.SetProp
 import viewforge.command.SetTheme
+import viewforge.command.extractComponent
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
+import viewforge.model.ComponentDef
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -31,6 +33,7 @@ import viewforge.model.Theme
 import viewforge.model.ThemeCategory
 import viewforge.model.TypographyToken
 import viewforge.model.Ulid
+import viewforge.model.UserComponent
 import viewforge.model.findById
 import viewforge.model.locate
 import viewforge.model.subtreeContains
@@ -143,6 +146,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
     var paletteDragY: Float? by mutableStateOf(null)
         private set
+
+    /**
+     * The user-component id being dragged, when the drag source is a user component (P6a); null for a
+     * framework built-in. Kept beside [paletteDragType] so the release knows whether to insert an
+     * instance node or a fresh built-in — the canvas overlay treats the drag opaquely (it only needs
+     * [paletteDragType]'s presence), so this rides along without touching the geometry resolution.
+     */
+    private var paletteDragComponentId: String? = null
 
     /** The canvas-resolved drop for the live palette drag; a plain field — only [dropPaletteDrag] reads it. */
     private var paletteDropAddress: ChildAddress? = null
@@ -339,25 +350,47 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     // --- high-level operations --------------------------------------------------------------------
 
-    /** Add a fresh [type] node from the palette at the current insertion point, and select it. */
-    fun addFromPalette(type: String) {
+    /**
+     * The palette shown in the UI (P1a/P6a): the framework built-ins, then this document's user
+     * components as instance entries. Recomputed from the live document, so extracting or removing a
+     * component updates the palette immediately. User components share one category so they cluster
+     * together beneath the built-ins.
+     */
+    val palette: List<PaletteEntry>
+        get() = catalog.palette + document.components.map {
+            PaletteEntry(UserComponent.TYPE, it.name, USER_COMPONENTS_CATEGORY, componentId = it.id)
+        }
+
+    /** A fresh node for a palette entry: an instance node for a user component, else a built-in. */
+    private fun paletteNode(type: String, componentId: String?): Node =
+        if (componentId != null) UserComponent.instance(componentId) else catalog.newNode(type)
+
+    /** Add a fresh node for [entry] at the current insertion point, and select it (P1a/P6a). */
+    fun addFromPalette(entry: PaletteEntry) {
         val screen = activeScreen ?: return
         val address = insertionAddress() ?: return
-        val node = catalog.newNode(type)
+        val node = paletteNode(entry.type, entry.componentId)
         execute(AddNode(screen.id, address, node), selectAfter = node.id)
     }
+
+    /** Convenience for a framework built-in identified by [type] alone (no user-component id). */
+    fun addFromPalette(type: String) = addFromPalette(PaletteEntry(type, type, ""))
 
     // --- palette drag-to-canvas (P2a) -------------------------------------------------------------
     // The palette drives the source half; the canvas overlay resolves the geometry and publishes the
     // target back here, so a drop is an AddNode at a *position* rather than at the selection.
 
-    /** Begin a palette drag of [type]; the pointer starts unknown until the first [updatePaletteDrag]. */
-    fun beginPaletteDrag(type: String) {
-        paletteDragType = type
+    /** Begin a palette drag of [entry] (built-in or user component); pointer unknown until [updatePaletteDrag]. */
+    fun beginPaletteDrag(entry: PaletteEntry) {
+        paletteDragType = entry.type
+        paletteDragComponentId = entry.componentId
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
     }
+
+    /** Convenience for dragging a framework built-in identified by [type] alone. */
+    fun beginPaletteDrag(type: String) = beginPaletteDrag(PaletteEntry(type, type, ""))
 
     /** Stream the drag pointer, in window space, from the palette so the canvas can resolve a drop. */
     fun updatePaletteDrag(x: Float, y: Float) {
@@ -379,7 +412,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val address = paletteDropAddress
         val screen = activeScreen
         if (type != null && address != null && screen != null) {
-            val node = catalog.newNode(type)
+            val node = paletteNode(type, paletteDragComponentId)
             execute(AddNode(screen.id, address, node), selectAfter = node.id)
         }
         cancelPaletteDrag()
@@ -388,6 +421,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Abandon the in-flight palette drag with no change (drag cancelled or released off-target). */
     fun cancelPaletteDrag() {
         paletteDragType = null
+        paletteDragComponentId = null
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
@@ -409,6 +443,59 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val addr = screen.root.locate(node.id) ?: return // root has no sibling slot
         val clone = node.withFreshIds()
         execute(AddNode(screen.id, addr.copy(index = addr.index + 1), clone), selectAfter = clone.id)
+    }
+
+    // --- reusable components (D7) ------------------------------------------------------------------
+
+    /**
+     * Whether the current selection can be extracted into a reusable component: a non-root node on a
+     * screen. The root is excluded — extracting it would leave the screen with nothing but an instance.
+     */
+    val canExtractSelection: Boolean
+        get() {
+            val screen = activeScreen ?: return false
+            val id = selectedId ?: return false
+            return id != screen.root.id
+        }
+
+    /**
+     * Why [name] cannot name a new user component, or null if it is acceptable. Like a screen name it
+     * must be a legal identifier (it becomes a composable function name, GC-3) and unique among the
+     * document's components — two components sharing a name would generate colliding composables/files.
+     */
+    fun componentNameError(name: String): String? {
+        val trimmed = name.trim()
+        return when {
+            trimmed.isBlank() -> "Name cannot be empty"
+            !catalog.isValidScreenName(trimmed) -> "Not a valid name (must be a legal Kotlin identifier)"
+            document.components.any { it.name == trimmed } -> "A component named “$trimmed” already exists"
+            else -> null
+        }
+    }
+
+    /**
+     * Extract the selected subtree into a new reusable component named [name], leaving an instance in its
+     * place (D7). A no-op if there is no eligible selection or the name is invalid/duplicate. The subtree
+     * moves into the definition (ids preserved so undo restores it intact); the instance — a thin
+     * reference resolved at render/codegen time (ADR-024) — is selected.
+     */
+    fun extractSelectionToComponent(name: String) {
+        val screen = activeScreen ?: return
+        val node = selectedNode ?: return
+        if (node.id == screen.root.id) return
+        if (componentNameError(name) != null) return
+        val id = "cmp_${Ulid.next()}"
+        val component = ComponentDef(id = id, name = name.trim(), root = node)
+        val instance = UserComponent.instance(id)
+        execute(extractComponent(screen.id, node.id, component, instance), selectAfter = instance.id)
+    }
+
+    /** The first `Component<n>` name not already taken — a legal identifier default for a fresh extraction. */
+    fun uniqueComponentName(): String {
+        val taken = document.components.mapTo(HashSet()) { it.name }
+        var n = 1
+        while ("Component$n" in taken) n++
+        return "Component$n"
     }
 
     /** Set (or clear) a node's name (T3). */
@@ -756,5 +843,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         if (catalog.acceptsChildren(node.type)) return ChildAddress(node.id, null, node.children.size)
         val slot = catalog.slotsOf(node.type).firstOrNull() ?: return null
         return ChildAddress(node.id, slot, node.slots[slot]?.size ?: 0)
+    }
+
+    companion object {
+        /** The palette category the document's user components cluster under (P6a). */
+        const val USER_COMPONENTS_CATEGORY = "Components"
     }
 }

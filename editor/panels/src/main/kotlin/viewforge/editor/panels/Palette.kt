@@ -28,10 +28,11 @@ import viewforge.editor.state.EditorState
 import viewforge.editor.state.PaletteEntry
 
 /**
- * The component palette (FEATURES P1a/P3a/P4a): a categorized, type-ahead-filtered list built
- * entirely from the framework package's catalog (`state.catalog.palette`). Clicking an entry inserts
- * a fresh node at the current insertion point via a command (`addFromPalette`) — adding a component
- * requires **no palette code**, so the list grows automatically as the package's catalog grows.
+ * The component palette (FEATURES P1a/P3a/P4a/P6a): a categorized, type-ahead-filtered list built from
+ * `state.palette` — the framework package's catalog plus this document's own user components (P6a).
+ * Clicking an entry inserts a node at the current insertion point via a command (`addFromPalette`) —
+ * adding a built-in requires **no palette code**, and user components appear automatically as they are
+ * extracted, so the list grows on its own.
  *
  * Add-by-click into the current selection is M4's insertion gesture; drag-from-palette-to-canvas
  * (P2a) is a deliberate follow-up (see ADR-015).
@@ -42,7 +43,7 @@ fun Palette(state: EditorState, modifier: Modifier = Modifier) {
     Column(modifier) {
         PanelHeader("Palette")
         SearchField(query, onChange = { query = it })
-        val entries = state.catalog.palette.filter { it.matches(query) }
+        val entries = state.palette.filter { it.matches(query) }
         Column(Modifier.verticalScroll(rememberScrollState())) {
             if (entries.isEmpty()) {
                 MutedText("No matches")
@@ -82,11 +83,11 @@ private fun PaletteRow(state: EditorState, entry: PaletteEntry) {
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { coords = it }
-            .pointerInput(entry.type) {
+            .pointerInput(entry) {
                 detectDragGestures(
                     onDragStart = { local ->
                         val window = coords?.localToWindow(local) ?: return@detectDragGestures
-                        state.beginPaletteDrag(entry.type)
+                        state.beginPaletteDrag(entry)
                         state.updatePaletteDrag(window.x, window.y)
                     },
                     onDrag = { change, _ ->
@@ -98,7 +99,7 @@ private fun PaletteRow(state: EditorState, entry: PaletteEntry) {
                     onDragCancel = { state.cancelPaletteDrag() },
                 )
             }
-            .clickable(onClick = { state.addFromPalette(entry.type) })
+            .clickable(onClick = { state.addFromPalette(entry) })
             .padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
     )
 }

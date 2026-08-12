@@ -5,6 +5,7 @@ package viewforge.model
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Records which framework package produced the file (DATA_MODEL §2). */
 @Serializable
@@ -28,6 +29,16 @@ data class Parameter(val name: String, val type: String, val default: PropValue?
 object UserComponent {
     const val TYPE: String = "vforge.userComponent"
     const val COMPONENT_ID_PROP: String = "componentId"
+
+    /**
+     * A fresh instance node referencing the component [componentId] — the one place the instance-node
+     * shape is built, shared by extraction and palette insertion so the wire form stays single-sourced.
+     */
+    fun instance(componentId: String, id: NodeId = NodeId.random()): Node = Node(
+        id = id,
+        type = TYPE,
+        props = mapOf(COMPONENT_ID_PROP to PropValue.Literal(JsonPrimitive(componentId))),
+    )
 }
 
 /**

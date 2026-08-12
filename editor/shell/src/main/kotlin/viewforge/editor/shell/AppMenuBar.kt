@@ -62,6 +62,14 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Paste", "Ctrl+V"), enabled = edit.canPaste, onClick = state::paste)
             Item(withAccel("Duplicate", "Ctrl+D"), enabled = edit.hasSelection, onClick = state::duplicateSelected)
             Separator()
+            // Extract the selection into a reusable component (D7). Auto-named to the first free
+            // Component<n> (a legal identifier); it appears in the palette immediately (P6a).
+            Item(
+                "Extract to Component",
+                enabled = edit.canExtract,
+                onClick = { state.extractSelectionToComponent(state.uniqueComponentName()) },
+            )
+            Separator()
             Item(withAccel("Delete", "Del"), enabled = edit.hasSelection, onClick = state::deleteSelected)
         }
         Menu("View", mnemonic = 'V') {
@@ -106,6 +114,7 @@ internal data class EditMenuModel(
     val canRedo: Boolean,
     val hasSelection: Boolean,
     val canPaste: Boolean,
+    val canExtract: Boolean,
 )
 
 internal fun EditorState.editMenuModel(): EditMenuModel = EditMenuModel(
@@ -113,6 +122,7 @@ internal fun EditorState.editMenuModel(): EditMenuModel = EditMenuModel(
     canRedo = canRedo,
     hasSelection = selectedNode != null,
     canPaste = canPaste,
+    canExtract = canExtractSelection,
 )
 
 /**
