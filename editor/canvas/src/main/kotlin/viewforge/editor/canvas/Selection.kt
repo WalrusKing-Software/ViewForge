@@ -21,9 +21,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import viewforge.editor.state.EditorState
+import viewforge.model.ChildAddress
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.allChildren
+import viewforge.model.findById
 
 /**
  * The per-node spatial index behind hit-testing (ARCHITECTURE §4.4, ADR-009). Each rendered node's
@@ -79,9 +81,118 @@ private class CanvasTransform(private val overlay: LayoutCoordinates) {
 }
 
 /**
+ * Transient state for a canvas drag-to-reparent gesture (C7), the geometric-drop counterpart of the
+ * tree panel's `TreeDragState`. It holds the dragged node and the resolved drop, recomputed on each
+ * drag move from the window-space bounds and the pure [canvasDropAddress]; validity is confirmed by
+ * [EditorState.canDrop] and the move committed via [EditorState.moveNode], so it shares the exact drop
+ * rules and post-removal index semantics the tree uses. All positions are window space (the overlay is
+ * unscaled), so the resolution stays correct at every zoom/pan level.
+ *
+ * The visual feedback is a green insertion caret + target outline when the drop is legal, or a red
+ * outline of whatever the pointer is over when it isn't (into a non-container or the dragged node's own
+ * subtree) — "rejected visually" rather than as an error afterward (TECHNICAL_NOTES §6).
+ */
+internal class CanvasDragState(private val state: EditorState, private val bounds: NodeBounds) {
+    var draggingId by mutableStateOf<NodeId?>(null)
+        private set
+    var dropValid by mutableStateOf(false)
+        private set
+
+    /** The node whose outline the feedback draws — the target when valid, the rejected node otherwise. */
+    var outlineId by mutableStateOf<NodeId?>(null)
+        private set
+
+    /** The insertion-caret endpoints (window space), or null for an into-empty-container drop (outline only). */
+    var caret by mutableStateOf<Pair<Offset, Offset>?>(null)
+        private set
+
+    private var dropAddress: ChildAddress? = null
+
+    /** Begin dragging [id] (the deepest hit under the press); callers must exclude the root and locked nodes. */
+    fun begin(id: NodeId) {
+        draggingId = id
+    }
+
+    /** Resolve the drop for a window-space [point] and update the feedback; a no-op if not dragging. */
+    fun update(point: Offset) {
+        val root = state.activeScreen?.root
+        val dragged = draggingId ?: return
+        if (root == null) return clearTarget()
+        val rects = bounds.snapshot()
+        val address = canvasDropAddress(rects, root, dragged, point, state.catalog::acceptsChildren)
+        if (address != null && state.canDrop(dragged, address)) {
+            dropAddress = address
+            dropValid = true
+            outlineId = address.parentId
+            caret = caretFor(rects, root, dragged, address)
+        } else {
+            // No legal target: show a red outline of whatever is under the pointer (the rejection).
+            dropAddress = null
+            dropValid = false
+            caret = null
+            outlineId = hitTest(rects, root, point)
+        }
+    }
+
+    /** Commit the move if the current target is legal, then reset. Called on drag end. */
+    fun commit() {
+        val id = draggingId
+        val addr = dropAddress
+        if (dropValid && id != null && addr != null) state.moveNode(id, addr)
+        reset()
+    }
+
+    fun reset() {
+        draggingId = null
+        clearTarget()
+    }
+
+    private fun clearTarget() {
+        dropValid = false
+        outlineId = null
+        caret = null
+        dropAddress = null
+    }
+
+    /**
+     * The insertion caret for [address] in window space: a line across the target at the gap the index
+     * names, along the container's inferred axis. Null when the target's default region is empty (the
+     * feedback falls back to the target outline alone).
+     */
+    private fun caretFor(
+        rects: Map<String, Rect>,
+        root: Node,
+        draggedId: NodeId,
+        address: ChildAddress,
+    ): Pair<Offset, Offset>? {
+        val target = root.findById(address.parentId) ?: return null
+        val box = rects[address.parentId.value] ?: return null
+        val childRects = target.children.filter { it.id != draggedId }.mapNotNull { rects[it.id.value] }
+        if (childRects.isEmpty()) return null
+        val i = address.index.coerceIn(0, childRects.size)
+        return if (isVerticalArrangement(childRects)) {
+            val y = when (i) {
+                0 -> childRects.first().top
+                childRects.size -> childRects.last().bottom
+                else -> (childRects[i - 1].bottom + childRects[i].top) / 2f
+            }
+            Offset(box.left, y) to Offset(box.right, y)
+        } else {
+            val x = when (i) {
+                0 -> childRects.first().left
+                childRects.size -> childRects.last().right
+                else -> (childRects[i - 1].right + childRects[i].left) / 2f
+            }
+            Offset(x, box.top) to Offset(x, box.bottom)
+        }
+    }
+}
+
+/**
  * The transparent editor chrome layer above the rendered UI (ARCHITECTURE §4.4). It owns all pointer
  * input for editing — click to select the deepest node, hover to preview, scroll to zoom, space-drag
- * to pan (C5) — and draws selection and hover outlines. Because it sits *above* the render output and
+ * to pan (C5), drag a node to reparent/reorder (C7) — and draws selection, hover, and drop outlines.
+ * Because it sits *above* the render output and
  * never draws into it, editor chrome can never affect the user UI's layout.
  *
  * The overlay is deliberately left outside the content's zoom/pan `graphicsLayer`, so its pointer
@@ -93,6 +204,7 @@ private class CanvasTransform(private val overlay: LayoutCoordinates) {
 internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds, modifier: Modifier = Modifier) {
     var transform by remember { mutableStateOf<CanvasTransform?>(null) }
     var hovered by remember { mutableStateOf<NodeId?>(null) }
+    val drag = remember(root) { CanvasDragState(state, bounds) }
 
     Canvas(
         modifier
@@ -104,6 +216,26 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                     val point = transform?.localToWindow(local) ?: local
                     state.select(hitTest(bounds.snapshot(), root, point))
                 }
+            }
+            // Drag a node to reparent/reorder (C7). Inactive while space-panning, so the two drags are
+            // mutually exclusive; a press with no movement falls through to the tap-to-select above.
+            .pointerInput(root, state.isSpaceHeld) {
+                if (state.isSpaceHeld) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { local ->
+                        val point = transform?.localToWindow(local) ?: local
+                        val hit = hitTest(bounds.snapshot(), root, point) ?: return@detectDragGestures
+                        // The root has nowhere to move to, and locked nodes don't drag.
+                        if (hit != root.id && root.findById(hit)?.locked != true) drag.begin(hit)
+                    },
+                    onDrag = { change, _ ->
+                        if (drag.draggingId == null) return@detectDragGestures
+                        change.consume()
+                        drag.update(transform?.localToWindow(change.position) ?: change.position)
+                    },
+                    onDragEnd = { drag.commit() },
+                    onDragCancel = { drag.reset() },
+                )
             }
             // Space-drag to pan (C5). Keyed on the flag so the gesture re-arms when pan mode toggles;
             // deltas are window-space (the overlay is unscaled), so panBy tracks the cursor exactly.
@@ -136,6 +268,18 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             },
     ) {
         val t = transform ?: return@Canvas
+        if (drag.draggingId != null) {
+            // Mid-drag: show only drop feedback (green = legal, red = rejected) so it isn't lost among
+            // the hover/selection outlines. The caret marks the exact insertion gap in window space.
+            val color = if (drag.dropValid) DROP_OK else DROP_BAD
+            drag.outlineId?.let { id ->
+                bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), color, DROP_STROKE) }
+            }
+            drag.caret?.let { (a, b) ->
+                drawLine(color, t.windowToLocal(a), t.windowToLocal(b), strokeWidth = DROP_STROKE)
+            }
+            return@Canvas
+        }
         // Hover first, selection on top: when a node is both, the selection outline wins visually.
         hovered?.takeIf { it != state.selectedId }?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), HOVER_COLOR, HOVER_STROKE) }
@@ -159,6 +303,11 @@ private val SELECTION_COLOR = Color(0xFF1E88E5)
 private val HOVER_COLOR = Color(0x881E88E5)
 private const val SELECTION_STROKE = 2f // px; a thin editor outline, deliberately not layout-affecting
 private const val HOVER_STROKE = 1f
+
+// Drop feedback (C7), matching the tree panel's palette: green = legal drop, red = rejected.
+private val DROP_OK = Color(0xFF43A047)
+private val DROP_BAD = Color(0xFFB00020)
+private const val DROP_STROKE = 2f
 
 /** Per-scroll-notch zoom multiplier; finer than the menu/keyboard step so the wheel feels continuous. */
 private const val ZOOM_IN_FACTOR = 1.1f
