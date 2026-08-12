@@ -58,8 +58,9 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
         modifier = modifier.fillMaxSize().background(CANVAS_BACKDROP).clipToBounds().padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
-        val screen = state.activeScreen
-        if (screen == null) {
+        // The edit surface is the active screen's root, or an opened component's root (#61).
+        val editRoot = state.activeEditRoot
+        if (editRoot == null) {
             EmptyCanvasHint()
         } else {
             val bounds = remember { NodeBounds() }
@@ -79,11 +80,11 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                     }
                     .background(Color.White),
             ) {
-                renderer.Render(screen.root) { id ->
+                renderer.Render(editRoot) { id ->
                     Modifier.onGloballyPositioned { bounds.record(id, it.boundsInWindow()) }
                 }
             }
-            SelectionOverlay(state, screen.root, bounds, Modifier.fillMaxSize())
+            SelectionOverlay(state, editRoot, bounds, Modifier.fillMaxSize())
         }
     }
 }

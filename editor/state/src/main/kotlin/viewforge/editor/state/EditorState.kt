@@ -75,6 +75,43 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         get() = document.screens.firstOrNull { it.id == activeScreenId } ?: document.screens.firstOrNull()
 
     /**
+     * The reusable component currently opened for in-place editing (D7 follow-up, #61), or null when the
+     * active **screen** is the edit surface. Transient view state, never part of the document.
+     */
+    var editingComponentId: String? by mutableStateOf(null)
+        private set
+
+    /** The opened component, or null when editing the screen or the id no longer resolves (e.g. after an undo). */
+    private val editingComponent: ComponentDef?
+        get() = editingComponentId?.let { id -> document.components.firstOrNull { it.id == id } }
+
+    /**
+     * The root node the editor is currently editing: the opened component's root, or the active screen's
+     * (ADR-027). The canvas draws it, the tree lists it, and selection plus every node command operate
+     * within it — so opening a component makes "instances update on edit" a live gesture. Falls back to
+     * the screen when no component is open or the open id has vanished.
+     */
+    val activeEditRoot: Node?
+        get() = editingComponent?.root ?: activeScreen?.root
+
+    /** The id of the current edit surface — a component id when one is open, else the active screen's. */
+    val activeEditRootId: String?
+        get() = editingComponent?.id ?: activeScreen?.id
+
+    /** Open reusable component [id] for in-place editing; selection resets into the component's own tree. */
+    fun openComponent(id: String) {
+        if (document.components.none { it.id == id }) return
+        editingComponentId = id
+        selectedId = null
+    }
+
+    /** Return to editing the active screen, closing any open component (selection clears). */
+    fun closeComponent() {
+        editingComponentId = null
+        selectedId = null
+    }
+
+    /**
      * Whether the canvas previews the project theme's **dark** values (H2). Transient view state, not
      * part of the document — the theme stores both light and dark; this only picks which half the
      * canvas shows. The editor chrome's own theme is separate (FEATURES S3).
@@ -197,9 +234,9 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     var selectedId: NodeId? by mutableStateOf(null)
         private set
 
-    /** The selected [Node] resolved against the active screen, or null. */
+    /** The selected [Node] resolved against the active edit surface (screen or open component), or null. */
     val selectedNode: Node?
-        get() = selectedId?.let { activeScreen?.root?.findById(it) }
+        get() = selectedId?.let { activeEditRoot?.findById(it) }
 
     val canUndo: Boolean get() = history.canUndo
     val canRedo: Boolean get() = history.canRedo
@@ -216,7 +253,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
             selectedId = null
             return
         }
-        if (activeScreen?.root?.findById(id)?.locked == true) return
+        if (activeEditRoot?.findById(id)?.locked == true) return
         selectedId = id
     }
 
@@ -248,7 +285,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     private fun reconcileSelection(desired: NodeId?) {
-        selectedId = desired?.takeIf { activeScreen?.root?.findById(it) != null }
+        selectedId = desired?.takeIf { activeEditRoot?.findById(it) != null }
     }
 
     // --- document session (D1) --------------------------------------------------------------------
@@ -268,6 +305,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         viewport = CanvasViewport()
         isSpaceHeld = false
         activeScreenId = project.screens.firstOrNull()?.id
+        editingComponentId = null
         currentPath = path
         isDirty = false
     }
@@ -448,10 +486,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun dropPaletteDrag() {
         val type = paletteDragType
         val address = paletteDropAddress
-        val screen = activeScreen
-        if (type != null && address != null && screen != null) {
+        val rootId = activeEditRootId
+        if (type != null && address != null && rootId != null) {
             val node = paletteNode(type, paletteDragComponentId)
-            execute(AddNode(screen.id, address, node), selectAfter = node.id)
+            execute(AddNode(rootId, address, node), selectAfter = node.id)
         }
         cancelPaletteDrag()
     }
@@ -467,20 +505,22 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Delete the selected node (never the root), leaving its parent selected. */
     fun deleteSelected() {
-        val screen = activeScreen ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
         val id = selectedId ?: return
-        if (id == screen.root.id) return
-        val parentId = screen.root.locate(id)?.parentId
-        execute(RemoveNode(screen.id, id), selectAfter = parentId)
+        if (id == root.id) return
+        val parentId = root.locate(id)?.parentId
+        execute(RemoveNode(rootId, id), selectAfter = parentId)
     }
 
     /** Duplicate the selected subtree (fresh ids) as its next sibling, and select the clone. */
     fun duplicateSelected() {
-        val screen = activeScreen ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
         val node = selectedNode ?: return
-        val addr = screen.root.locate(node.id) ?: return // root has no sibling slot
+        val addr = root.locate(node.id) ?: return // root has no sibling slot
         val clone = node.withFreshIds()
-        execute(AddNode(screen.id, addr.copy(index = addr.index + 1), clone), selectAfter = clone.id)
+        execute(AddNode(rootId, addr.copy(index = addr.index + 1), clone), selectAfter = clone.id)
     }
 
     // --- reusable components (D7) ------------------------------------------------------------------
@@ -491,9 +531,9 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      */
     val canExtractSelection: Boolean
         get() {
-            val screen = activeScreen ?: return false
+            val root = activeEditRoot ?: return false
             val id = selectedId ?: return false
-            return id != screen.root.id
+            return id != root.id
         }
 
     /**
@@ -518,14 +558,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * reference resolved at render/codegen time (ADR-024) — is selected.
      */
     fun extractSelectionToComponent(name: String) {
-        val screen = activeScreen ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
         val node = selectedNode ?: return
-        if (node.id == screen.root.id) return
+        if (node.id == root.id) return
         if (componentNameError(name) != null) return
         val id = "cmp_${Ulid.next()}"
         val component = ComponentDef(id = id, name = name.trim(), root = node)
         val instance = UserComponent.instance(id)
-        execute(extractComponent(screen.id, node.id, component, instance), selectAfter = instance.id)
+        execute(extractComponent(rootId, node.id, component, instance), selectAfter = instance.id)
     }
 
     /** The first `Component<n>` name not already taken — a legal identifier default for a fresh extraction. */
@@ -538,8 +579,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Set (or clear) a node's name (T3). */
     fun renameNode(id: NodeId, name: String?) {
-        val screen = activeScreen ?: return
-        execute(RenameNode(screen.id, id, name), selectAfter = selectedId)
+        val rootId = activeEditRootId ?: return
+        execute(RenameNode(rootId, id, name), selectAfter = selectedId)
     }
 
     /** Request an inline rename of the current selection (F2); the tree panel picks this up. No-op if nothing is selected. */
@@ -554,18 +595,20 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Toggle a node's hidden flag (removes it from render and codegen, DATA_MODEL §5). */
     fun toggleHidden(id: NodeId) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(id) ?: return
-        execute(SetNodeFlags(screen.id, id, hidden = !node.hidden), selectAfter = selectedId)
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(id) ?: return
+        execute(SetNodeFlags(rootId, id, hidden = !node.hidden), selectAfter = selectedId)
     }
 
     /** Toggle a node's locked flag; locking the current selection also clears it (locked ⇒ unselectable). */
     fun toggleLocked(id: NodeId) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(id) ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(id) ?: return
         val nowLocked = !node.locked
         val keep = if (nowLocked && selectedId == id) null else selectedId
-        execute(SetNodeFlags(screen.id, id, locked = nowLocked), selectAfter = keep)
+        execute(SetNodeFlags(rootId, id, locked = nowLocked), selectAfter = keep)
     }
 
     /** Copy the selection to the clipboard (D5). */
@@ -582,26 +625,26 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Paste a fresh-id clone of the clipboard at the current insertion point (D5: targets selection). */
     fun paste() {
-        val screen = activeScreen ?: return
+        val rootId = activeEditRootId ?: return
         val template = clipboard ?: return
         val address = insertionAddress() ?: return
         val clone = template.withFreshIds()
-        execute(AddNode(screen.id, address, clone), selectAfter = clone.id)
+        execute(AddNode(rootId, address, clone), selectAfter = clone.id)
     }
 
     /** Move [id] to [target] (reorder or reparent), if the drop is legal; keeps the node selected. */
     fun moveNode(id: NodeId, target: ChildAddress) {
-        val screen = activeScreen ?: return
+        val rootId = activeEditRootId ?: return
         if (!canDrop(id, target)) return
-        execute(MoveNode(screen.id, id, target), selectAfter = id)
+        execute(MoveNode(rootId, id, target), selectAfter = id)
     }
 
     // --- property & modifier editing (M5) ---------------------------------------------------------
 
     /** Set (or clear, when [value] is null) a node prop; live-updates the canvas. Coalesces per prop (D3). */
     fun setProp(nodeId: NodeId, key: String, value: PropValue?) {
-        val screen = activeScreen ?: return
-        execute(SetProp(screen.id, nodeId, key, value), selectAfter = selectedId)
+        val rootId = activeEditRootId ?: return
+        execute(SetProp(rootId, nodeId, key, value), selectAfter = selectedId)
     }
 
     /** Reset a prop to its schema default (I7) — removes it when the default is absent. */
@@ -614,21 +657,23 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * generated; order is preserved, new entry last (the user reorders via drag).
      */
     fun addModifier(nodeId: NodeId, type: String) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(nodeId) ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(nodeId) ?: return
         val def = catalog.modifierDef(type) ?: return
         val args = def.args.mapNotNull { arg -> arg.default?.let { arg.name to it } }.toMap()
         val entry = ModifierEntry(id = Ulid.next(), type = type, args = args)
-        execute(SetModifiers(screen.id, nodeId, node.modifiers + entry), selectAfter = selectedId)
+        execute(SetModifiers(rootId, nodeId, node.modifiers + entry), selectAfter = selectedId)
     }
 
     /** Remove the modifier [modifierId] from a node's chain. */
     fun removeModifier(nodeId: NodeId, modifierId: String) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(nodeId) ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(nodeId) ?: return
         execute(
             SetModifiers(
-                screen.id,
+                rootId,
                 nodeId,
                 node.modifiers.filterNot {
                     it.id == modifierId
@@ -640,10 +685,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Enable/disable a modifier without deleting it (DATA_MODEL §7). */
     fun toggleModifier(nodeId: NodeId, modifierId: String) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(nodeId) ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(nodeId) ?: return
         val updated = node.modifiers.map { if (it.id == modifierId) it.copy(enabled = !it.enabled) else it }
-        execute(SetModifiers(screen.id, nodeId, updated), selectAfter = selectedId)
+        execute(SetModifiers(rootId, nodeId, updated), selectAfter = selectedId)
     }
 
     /**
@@ -651,18 +697,19 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * (ADR-005), so this is a real edit, not cosmetic. Out-of-range indices are ignored.
      */
     fun moveModifier(nodeId: NodeId, from: Int, to: Int) {
-        val screen = activeScreen ?: return
-        val node = screen.root.findById(nodeId) ?: return
+        val root = activeEditRoot ?: return
+        val rootId = activeEditRootId ?: return
+        val node = root.findById(nodeId) ?: return
         val list = node.modifiers
         if (from !in list.indices || to !in list.indices || from == to) return
         val reordered = list.toMutableList().apply { add(to, removeAt(from)) }
-        execute(SetModifiers(screen.id, nodeId, reordered), selectAfter = selectedId)
+        execute(SetModifiers(rootId, nodeId, reordered), selectAfter = selectedId)
     }
 
     /** Set (or clear) one arg of a modifier; live-updates and coalesces per arg (D3). */
     fun setModifierArg(nodeId: NodeId, modifierId: String, key: String, value: PropValue?) {
-        val screen = activeScreen ?: return
-        execute(SetModifierArg(screen.id, nodeId, modifierId, key, value), selectAfter = selectedId)
+        val rootId = activeEditRootId ?: return
+        execute(SetModifierArg(rootId, nodeId, modifierId, key, value), selectAfter = selectedId)
     }
 
     // --- theme editing (M8) -----------------------------------------------------------------------
@@ -859,7 +906,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * descendant.
      */
     fun canDrop(dragId: NodeId, target: ChildAddress): Boolean {
-        val root = activeScreen?.root ?: return false
+        val root = activeEditRoot ?: return false
         val dragged = root.findById(dragId) ?: return false
         val parent = root.findById(target.parentId) ?: return false
         if (dragged.subtreeContains(target.parentId)) return false
@@ -875,10 +922,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /**
      * Where a new node should land relative to the current selection: appended inside the selection if
      * it is a container, otherwise as the selection's next sibling; with no selection, appended to the
-     * root. Null only if there is no active screen.
+     * root. Null only if there is no active edit surface.
      */
     private fun insertionAddress(): ChildAddress? {
-        val root = activeScreen?.root ?: return null
+        val root = activeEditRoot ?: return null
         val selected = selectedNode ?: return appendAddress(root)
         appendAddress(selected)?.let { return it }
         // A leaf selection: insert right after it, in the same region.
