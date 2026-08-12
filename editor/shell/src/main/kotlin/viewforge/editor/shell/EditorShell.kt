@@ -101,6 +101,10 @@ fun FrameWindowScope.EditorShell(state: EditorState, renderer: CanvasRenderer, e
             ) {
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
+                // The screen switcher (D6): switch, rename, add and remove screens. Full-width chrome
+                // above the working surfaces since a screen is document-wide, not canvas-specific.
+                ScreenSwitcher(state)
+                HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
                     // weight(1f) and is always shown, so hiding everything still leaves an edit surface.
@@ -194,6 +198,10 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
     return when {
         !cmd && (event.key == Key.Delete || event.key == Key.Backspace) -> {
             state.deleteSelected()
+            true
+        }
+        !cmd && event.key == Key.F2 -> {
+            state.requestRenameSelected()
             true
         }
         cmd && (event.key == Key.Equals || event.key == Key.Plus) -> {

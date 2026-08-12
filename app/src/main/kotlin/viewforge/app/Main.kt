@@ -18,6 +18,7 @@ import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
+import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.prefs.PreferencesStore
@@ -108,4 +109,8 @@ private object ComposeCatalog : ComponentCatalog {
     override val modifierCatalog: List<ModifierDefinition> = ComposeModifiers.definitions
 
     override fun modifierDef(type: String): ModifierDefinition? = ComposeModifiers.definitionFor(type)
+
+    // A screen name must be a legal Kotlin identifier to become a composable/file name (GC-3);
+    // delegate to the package's validator so the hard-keyword list stays single-sourced.
+    override fun isValidScreenName(name: String): Boolean = KotlinIdentifiers.isValidFunctionName(name)
 }

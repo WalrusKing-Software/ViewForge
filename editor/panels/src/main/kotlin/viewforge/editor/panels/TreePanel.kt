@@ -77,6 +77,15 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
     val drag = remember(state) { TreeDragState(state) }
     var renamingId by remember { mutableStateOf<NodeId?>(null) }
 
+    // F2 (or any shell-level rename request) drops the selected node's row into inline edit (T3). The
+    // request is set from the shell's key handler so it works whatever surface has focus; consume it here.
+    LaunchedEffect(state.renameRequest) {
+        state.renameRequest?.let { id ->
+            renamingId = id
+            state.clearRenameRequest()
+        }
+    }
+
     Column(modifier) {
         PanelHeader("Layers")
         val root = state.activeScreen?.root
