@@ -24,14 +24,17 @@ object KotlinIdentifiers {
 
     fun isValidFunctionName(name: String): Boolean = IDENTIFIER.matches(name) && name !in HARD_KEYWORDS
 
-    /** Returns [name] if it is a legal function identifier, else throws with a specific reason (GC-3). */
+    /**
+     * Returns [name] if it is a legal function identifier, else throws with a specific reason (GC-3).
+     * Used for both screen and user-component names — both become `@Composable fun` names.
+     */
     fun requireFunctionName(name: String): String {
-        if (name.isBlank()) throw CodegenException("Screen name is blank; cannot be a composable function name")
+        if (name.isBlank()) throw CodegenException("Name is blank; cannot be a composable function name")
         if (!IDENTIFIER.matches(name)) {
-            throw CodegenException("Screen name '$name' is not a legal Kotlin identifier (GC-3)")
+            throw CodegenException("Name '$name' is not a legal Kotlin identifier (GC-3)")
         }
         if (name in HARD_KEYWORDS) {
-            throw CodegenException("Screen name '$name' is a reserved Kotlin keyword (GC-3)")
+            throw CodegenException("Name '$name' is a reserved Kotlin keyword (GC-3)")
         }
         return name
     }

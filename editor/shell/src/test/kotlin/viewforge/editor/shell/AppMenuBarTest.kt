@@ -76,6 +76,16 @@ class AppMenuBarTest {
     }
 
     @Test
+    fun `extract is enabled only for a non-root selection`() {
+        val s = state()
+        assertFalse(s.editMenuModel().canExtract) // nothing selected
+        s.select(NodeId("root"))
+        assertFalse(s.editMenuModel().canExtract) // the root can't be extracted
+        s.select(NodeId("a"))
+        assertTrue(s.editMenuModel().canExtract)
+    }
+
+    @Test
     fun `paste is gated on the clipboard, not the selection`() {
         val s = state()
         s.select(NodeId("a"))

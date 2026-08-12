@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Theme
@@ -29,11 +30,18 @@ object ComposeRenderer {
         dark: Boolean,
         instrument: (NodeId) -> Modifier = { Modifier },
         imageLoader: (assetId: String) -> ImageBitmap? = { null },
+        components: List<ComponentDef> = emptyList(),
     ) {
         ProjectTheme(theme, dark) {
             RenderNode(
                 root,
-                RenderContext(theme = theme, dark = dark, instrument = instrument, imageLoader = imageLoader),
+                RenderContext(
+                    theme = theme,
+                    dark = dark,
+                    instrument = instrument,
+                    imageLoader = imageLoader,
+                    components = components.associateBy { it.id },
+                ),
             )
         }
     }

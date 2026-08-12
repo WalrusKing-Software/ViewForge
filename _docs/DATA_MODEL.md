@@ -92,9 +92,20 @@ A user-defined composable, reusable across screens.
 
 Instances reference these via a node whose `type` is `"vforge.userComponent"` and whose props carry
 the referenced component ID under the `componentId` key (a `literal` string) plus argument values.
+These two conventions are pinned as constants on `model.UserComponent` (`TYPE` / `COMPONENT_ID_PROP`)
+and shared by the validator, renderer, and generator so there is one source of the contract.
+
+An instance is a **reference, resolved at render and codegen time — never inlined into the IR**
+(ADR-024). This is what makes instances "update on edit": codegen emits each component as its own
+`@Composable fun` and an instance as a *call* to it; the canvas renders the definition's tree in the
+instance's place. Editing a definition therefore updates every instance without touching the instances.
+*Parameters are carried in the schema but unused in Phase 1* — components are zero-argument reusable
+blocks; adding argument passing later is an additive change (an optional field already present), not a
+version bump.
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
-itself. Validate on every mutation, not just on save — a cycle will hang the renderer.
+itself. It is validated on load (`ProjectValidator`) and guarded again at render time
+(`RenderContext.expanding`), because the canvas renders mid-edit before load validation runs.
 
 ---
 

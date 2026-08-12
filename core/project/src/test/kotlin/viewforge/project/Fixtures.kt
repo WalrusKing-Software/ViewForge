@@ -11,6 +11,7 @@ import viewforge.model.Project
 import viewforge.model.PropValue
 import viewforge.model.Screen
 import viewforge.model.Theme
+import viewforge.model.UserComponent
 
 /** Shared test fixtures. [demoProject] is the DATA_MODEL §11 worked example, built in code. */
 object Fixtures {
@@ -113,8 +114,8 @@ object Fixtures {
     /** A user-component instance node referencing [componentId] (for cycle tests). */
     fun userComponentInstance(componentId: String): Node = Node(
         id = NodeId.random(),
-        type = ProjectValidator.USER_COMPONENT_TYPE,
-        props = mapOf(ProjectValidator.COMPONENT_ID_PROP to PropValue.Literal(JsonPrimitive(componentId))),
+        type = UserComponent.TYPE,
+        props = mapOf(UserComponent.COMPONENT_ID_PROP to PropValue.Literal(JsonPrimitive(componentId))),
     )
 
     fun component(id: String, references: String? = null): ComponentDef = ComponentDef(

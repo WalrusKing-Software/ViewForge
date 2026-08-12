@@ -3,8 +3,11 @@ package viewforge.packages.compose.codegen
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.MemberName
 import viewforge.model.Asset
+import viewforge.model.ComponentDef
 import viewforge.model.Node
+import viewforge.model.PropValue
 import viewforge.model.Theme
+import viewforge.model.UserComponent
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
@@ -16,9 +19,17 @@ import viewforge.model.Theme
  * wrong render/emit); `hidden` nodes are dropped from output (DATA_MODEL §5).
  *
  * [assets] resolves an `Image`'s `ResourceRef` to its project-relative path for `painterResource`.
+ * [components] resolves a `vforge.userComponent` instance to the definition it references, so the
+ * instance emits a call to that component's generated composable (ADR-024) — one definition, many call
+ * sites, which is how an edit to the definition reaches every instance.
  */
-internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = emptyList()) {
+internal class ComponentEmitter(
+    private val theme: Theme,
+    assets: List<Asset> = emptyList(),
+    components: List<ComponentDef> = emptyList(),
+) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
+    private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
 
     /**
      * Set true while emitting a tree that used an experimental Material3 API (e.g. `TopAppBar`), so the
@@ -68,7 +79,27 @@ internal class ComponentEmitter(private val theme: Theme, assets: List<Asset> = 
             "compose.material3.TopAppBar" -> topAppBar(node, mod)
             "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList())
             "compose.material3.Scaffold" -> scaffold(node, mod)
+            UserComponent.TYPE -> userComponentCall(node, mod)
             else -> throw CodegenException("Unsupported component '${node.type}'")
+        }
+    }
+
+    /**
+     * A `vforge.userComponent` instance emits a call to the referenced component's generated composable,
+     * `PrimaryButton(modifier = …)` — the reference, not an inlined copy (ADR-024). The instance's own
+     * modifier chain (if any) is passed as the `modifier` argument the component composable exposes. An
+     * unresolved reference fails loudly rather than emitting a call to a function that won't exist
+     * (CLAUDE.md: a visible error beats a silent wrong emit).
+     */
+    private fun userComponentCall(node: Node, mod: CodeBlock?): CodeBlock {
+        val id = (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)?.value?.content
+        val def = id?.let { componentsById[it] }
+            ?: throw CodegenException("Unresolved user-component instance: no component with id '${id ?: "?"}'")
+        val fnName = KotlinIdentifiers.requireFunctionName(def.name)
+        return if (mod == null) {
+            CodeBlock.of("%L()", fnName)
+        } else {
+            CodeBlock.of("%L(modifier = %L)", fnName, mod)
         }
     }
 

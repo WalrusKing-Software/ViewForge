@@ -3,6 +3,7 @@ package viewforge.project
 import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.PropValue
+import viewforge.model.UserComponent
 
 /** Raised when a loaded project violates a structural or safety invariant (SECURITY §3). */
 class ProjectValidationException(message: String) : RuntimeException(message)
@@ -28,16 +29,6 @@ data class VforgeLimits(
  * violation.
  */
 object ProjectValidator {
-    /**
-     * Node type of a user-component instance, and the prop carrying the referenced component id.
-     *
-     * NOTE: DATA_MODEL §4 says an instance node "carries the component ID plus argument values" but
-     * does not pin the prop key. This fixes that convention so cycle detection has something
-     * concrete to read; worth promoting into DATA_MODEL as the schema formalizes.
-     */
-    const val USER_COMPONENT_TYPE = "vforge.userComponent"
-    const val COMPONENT_ID_PROP = "componentId"
-
     fun validate(project: Project, limits: VforgeLimits = VforgeLimits.DEFAULT) {
         var nodeCount = 0
         val roots = project.screens.map { it.root } + project.components.map { it.root }
@@ -106,8 +97,8 @@ object ProjectValidator {
 
     private fun referencedComponentIds(node: Node): List<String> {
         val here =
-            if (node.type == USER_COMPONENT_TYPE) {
-                (node.props[COMPONENT_ID_PROP] as? PropValue.Literal)
+            if (node.type == UserComponent.TYPE) {
+                (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)
                     ?.value?.content
                     ?.let { listOf(it) }
                     .orEmpty()

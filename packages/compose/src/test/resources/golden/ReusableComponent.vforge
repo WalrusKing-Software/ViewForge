@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8REUSABLE",
+  "name": "ReusableComponent",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_rc",
+      "name": "HomeScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          { "id": "m_01", "type": "compose.fillMaxSize", "args": {} }
+        ],
+        "children": [
+          { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Welcome" } } },
+          {
+            "id": "inst_01",
+            "type": "vforge.userComponent",
+            "props": { "componentId": { "kind": "literal", "value": "cmp_primary" } },
+            "modifiers": [
+              { "id": "m_02", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 16 } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_primary",
+      "name": "PrimaryButton",
+      "root": {
+        "id": "btn_01",
+        "type": "compose.material3.Button",
+        "props": { "onClick": { "kind": "expression", "code": "{ /* TODO */ }" } },
+        "modifiers": [
+          { "id": "m_03", "type": "compose.fillMaxWidth", "args": {} }
+        ],
+        "slots": {
+          "content": [
+            { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Click me" } } }
+          ]
+        }
+      }
+    }
+  ],
+  "assets": []
+}

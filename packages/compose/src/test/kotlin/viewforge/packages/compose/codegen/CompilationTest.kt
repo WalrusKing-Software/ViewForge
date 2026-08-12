@@ -44,6 +44,18 @@ class CompilationTest {
     }
 
     @Test
+    fun `generated user component compiles with the screen that instances it`() {
+        // A screen calls PrimaryButton(...) and the component is emitted as its own composable; compiled
+        // together (same package), the instance call must resolve — the reference model (ADR-024, D7).
+        val text = requireNotNull(
+            javaClass.getResourceAsStream("/golden/ReusableComponent.vforge"),
+        ).bufferedReader().readText()
+        val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
+        val sources = files.map { SourceFile.kotlin(it.path, it.content) }
+        assertCompiles(sources, "generated user component did not compile with its screen")
+    }
+
+    @Test
     fun `generated theme wrapper compiles with its screen`() {
         // The AppTheme wrapper (H4) and a screen that emits an inline TextStyle for a custom typography
         // token must compile against real Compose/Material3 — the H4 half of the compile gate (M8).

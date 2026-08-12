@@ -5,11 +5,16 @@ import viewforge.model.Node
 import viewforge.model.PropDefinition
 
 /**
- * One selectable entry in the component palette (FEATURES P1a). Pure data — the palette UI is
+ * One selectable entry in the component palette (FEATURES P1a/P6a). Pure data — the palette UI is
  * generated from this list, so adding a component never requires palette code (CLAUDE.md
  * anti-patterns).
+ *
+ * [componentId] is null for a framework built-in (inserted via `catalog.newNode(type)`) and set for a
+ * user-defined component (P6a): the entry's [type] is then `vforge.userComponent` and inserting it
+ * builds an instance node referencing this id. It lets both kinds of entry live in one palette list and
+ * one drag path.
  */
-data class PaletteEntry(val type: String, val label: String, val category: String)
+data class PaletteEntry(val type: String, val label: String, val category: String, val componentId: String? = null)
 
 /**
  * The editor's Compose-free seam onto a framework package's component set — the schema half of the
