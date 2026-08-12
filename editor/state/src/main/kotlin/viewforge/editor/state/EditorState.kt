@@ -118,6 +118,24 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     var isSpaceHeld: Boolean by mutableStateOf(false)
 
     /**
+     * An in-flight palette→canvas drag (P2a). Transient view state spanning two panels: the palette is
+     * the drag *source* (it sets [paletteDragType] and streams the pointer in window space via
+     * [updatePaletteDrag]); the canvas overlay is the drop *surface* (it resolves the geometry against
+     * its node bounds and publishes the result via [resolvePaletteDrop]). Kept here, on the object both
+     * panels already share, so neither module has to name the other. Pointer coordinates are plain
+     * [Float]s (this module has no Compose-ui geometry types), mirroring the panel widths.
+     */
+    var paletteDragType: String? by mutableStateOf(null)
+        private set
+    var paletteDragX: Float? by mutableStateOf(null)
+        private set
+    var paletteDragY: Float? by mutableStateOf(null)
+        private set
+
+    /** The canvas-resolved drop for the live palette drag; a plain field — only [dropPaletteDrag] reads it. */
+    private var paletteDropAddress: ChildAddress? = null
+
+    /**
      * The file this document is saved to, or null when it has never been saved (a fresh [newDocument]).
      * Drives Save vs Save As and is set on open/save (D1). Transient session state, not part of the
      * document.
@@ -249,6 +267,52 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val address = insertionAddress() ?: return
         val node = catalog.newNode(type)
         execute(AddNode(screen.id, address, node), selectAfter = node.id)
+    }
+
+    // --- palette drag-to-canvas (P2a) -------------------------------------------------------------
+    // The palette drives the source half; the canvas overlay resolves the geometry and publishes the
+    // target back here, so a drop is an AddNode at a *position* rather than at the selection.
+
+    /** Begin a palette drag of [type]; the pointer starts unknown until the first [updatePaletteDrag]. */
+    fun beginPaletteDrag(type: String) {
+        paletteDragType = type
+        paletteDragX = null
+        paletteDragY = null
+        paletteDropAddress = null
+    }
+
+    /** Stream the drag pointer, in window space, from the palette so the canvas can resolve a drop. */
+    fun updatePaletteDrag(x: Float, y: Float) {
+        paletteDragX = x
+        paletteDragY = y
+    }
+
+    /** The canvas publishes the drop it resolved for the live pointer ([address] null = no legal target). */
+    fun resolvePaletteDrop(address: ChildAddress?) {
+        paletteDropAddress = address
+    }
+
+    /**
+     * Commit the in-flight palette drag: insert a fresh node of the dragged type at the canvas-resolved
+     * address and select it. A no-op when the pointer isn't over a legal target. Always clears the drag.
+     */
+    fun dropPaletteDrag() {
+        val type = paletteDragType
+        val address = paletteDropAddress
+        val screen = activeScreen
+        if (type != null && address != null && screen != null) {
+            val node = catalog.newNode(type)
+            execute(AddNode(screen.id, address, node), selectAfter = node.id)
+        }
+        cancelPaletteDrag()
+    }
+
+    /** Abandon the in-flight palette drag with no change (drag cancelled or released off-target). */
+    fun cancelPaletteDrag() {
+        paletteDragType = null
+        paletteDragX = null
+        paletteDragY = null
+        paletteDropAddress = null
     }
 
     /** Delete the selected node (never the root), leaving its parent selected. */

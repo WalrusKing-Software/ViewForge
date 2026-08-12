@@ -121,6 +121,46 @@ class EditorStateTest {
     }
 
     @Test
+    fun `dropPaletteDrag inserts the dragged type at the canvas-resolved address and selects it`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.updatePaletteDrag(10f, 20f)
+        assertEquals("compose.material3.Text", s.paletteDragType)
+        // The canvas resolves a drop between the two existing children (index 1) and publishes it.
+        s.resolvePaletteDrop(ChildAddress(NodeId("root"), null, 1))
+        s.dropPaletteDrag()
+
+        val children = s.activeScreen!!.root.children
+        assertEquals(3, children.size)
+        assertEquals("compose.material3.Text", children[1].type) // landed at the resolved index
+        assertEquals(children[1].id, s.selectedId)
+        assertNull(s.paletteDragType) // the drag is cleared after commit
+    }
+
+    @Test
+    fun `dropPaletteDrag off a legal target is a no-op but still clears the drag`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.updatePaletteDrag(10f, 20f)
+        s.resolvePaletteDrop(null) // pointer wasn't over an accepting container
+        s.dropPaletteDrag()
+
+        assertEquals(2, s.activeScreen!!.root.children.size) // document unchanged
+        assertNull(s.paletteDragType)
+    }
+
+    @Test
+    fun `cancelPaletteDrag abandons the drag with no change`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.resolvePaletteDrop(ChildAddress(NodeId("root"), null, 0))
+        s.cancelPaletteDrag()
+
+        assertEquals(2, s.activeScreen!!.root.children.size)
+        assertNull(s.paletteDragType)
+    }
+
+    @Test
     fun `deleteSelected removes the node and selects its parent`() {
         val s = state()
         s.select(NodeId("a"))

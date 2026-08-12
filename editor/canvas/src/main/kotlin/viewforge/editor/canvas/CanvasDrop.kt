@@ -28,11 +28,14 @@ import viewforge.model.findById
  * node and everything in its subtree (the cycle guard — you cannot drop a node into itself or a
  * descendant). Children are tested before the node itself so the *innermost* accepting container wins,
  * matching [hitTest]'s deepest-first rule: hovering inside a nested container drops **into** it.
+ *
+ * [draggedId] is null for a palette drag (P2a) — a brand-new node with no existing position — in which
+ * case nothing is excluded.
  */
 fun canvasDropTarget(
     rects: Map<String, Rect>,
     root: Node,
-    draggedId: NodeId,
+    draggedId: NodeId?,
     point: Offset,
     acceptsChildren: (String) -> Boolean,
 ): NodeId? {
@@ -68,12 +71,13 @@ fun insertionIndex(childRects: List<Rect>, point: Offset): Int {
  * insertion index within that container's default region. Null when no accepting container is under
  * the pointer (an empty-canvas or into-a-leaf drop). Legality is still confirmed by
  * [EditorState.canDrop][viewforge.editor.state.EditorState.canDrop]; by construction the returned
- * address already satisfies it (accepting parent, dragged subtree excluded).
+ * address already satisfies it (accepting parent, dragged subtree excluded). [draggedId] is null for a
+ * palette drag (nothing to exclude from the index).
  */
 fun canvasDropAddress(
     rects: Map<String, Rect>,
     root: Node,
-    draggedId: NodeId,
+    draggedId: NodeId?,
     point: Offset,
     acceptsChildren: (String) -> Boolean,
 ): ChildAddress? {
