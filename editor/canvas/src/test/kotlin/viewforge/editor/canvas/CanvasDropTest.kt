@@ -122,4 +122,14 @@ class CanvasDropTest {
     fun `resolves to null when no accepting container is under the point`() {
         assertNull(canvasDropAddress(colRects, col, NodeId("none"), Offset(500f, 500f), accepts))
     }
+
+    @Test
+    fun `a null dragged id (palette drag) excludes nothing from the index`() {
+        // A brand-new palette node has no existing position, so all three children count toward the
+        // index: a point below the first child's centre (y=120) inserts at index 1.
+        assertEquals(
+            ChildAddress(NodeId("col"), null, 1),
+            canvasDropAddress(colRects, col, null, Offset(50f, 120f), accepts),
+        )
+    }
 }

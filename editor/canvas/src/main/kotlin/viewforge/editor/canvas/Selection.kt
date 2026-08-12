@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -124,7 +125,7 @@ internal class CanvasDragState(private val state: EditorState, private val bound
             dropAddress = address
             dropValid = true
             outlineId = address.parentId
-            caret = caretFor(rects, root, dragged, address)
+            caret = insertionCaret(rects, root, dragged, address)
         } else {
             // No legal target: show a red outline of whatever is under the pointer (the rejection).
             dropAddress = null
@@ -153,38 +154,39 @@ internal class CanvasDragState(private val state: EditorState, private val bound
         caret = null
         dropAddress = null
     }
+}
 
-    /**
-     * The insertion caret for [address] in window space: a line across the target at the gap the index
-     * names, along the container's inferred axis. Null when the target's default region is empty (the
-     * feedback falls back to the target outline alone).
-     */
-    private fun caretFor(
-        rects: Map<String, Rect>,
-        root: Node,
-        draggedId: NodeId,
-        address: ChildAddress,
-    ): Pair<Offset, Offset>? {
-        val target = root.findById(address.parentId) ?: return null
-        val box = rects[address.parentId.value] ?: return null
-        val childRects = target.children.filter { it.id != draggedId }.mapNotNull { rects[it.id.value] }
-        if (childRects.isEmpty()) return null
-        val i = address.index.coerceIn(0, childRects.size)
-        return if (isVerticalArrangement(childRects)) {
-            val y = when (i) {
-                0 -> childRects.first().top
-                childRects.size -> childRects.last().bottom
-                else -> (childRects[i - 1].bottom + childRects[i].top) / 2f
-            }
-            Offset(box.left, y) to Offset(box.right, y)
-        } else {
-            val x = when (i) {
-                0 -> childRects.first().left
-                childRects.size -> childRects.last().right
-                else -> (childRects[i - 1].right + childRects[i].left) / 2f
-            }
-            Offset(x, box.top) to Offset(x, box.bottom)
+/**
+ * The insertion caret for [address] in window space: a line across the target at the gap the index
+ * names, along the container's inferred axis. Null when the target's default region is empty (the
+ * feedback falls back to the target outline alone). Shared by node-drag ([CanvasDragState]) and the
+ * palette drag (P2a); [draggedId] is null for the latter (nothing to exclude).
+ */
+internal fun insertionCaret(
+    rects: Map<String, Rect>,
+    root: Node,
+    draggedId: NodeId?,
+    address: ChildAddress,
+): Pair<Offset, Offset>? {
+    val target = root.findById(address.parentId) ?: return null
+    val box = rects[address.parentId.value] ?: return null
+    val childRects = target.children.filter { it.id != draggedId }.mapNotNull { rects[it.id.value] }
+    if (childRects.isEmpty()) return null
+    val i = address.index.coerceIn(0, childRects.size)
+    return if (isVerticalArrangement(childRects)) {
+        val y = when (i) {
+            0 -> childRects.first().top
+            childRects.size -> childRects.last().bottom
+            else -> (childRects[i - 1].bottom + childRects[i].top) / 2f
         }
+        Offset(box.left, y) to Offset(box.right, y)
+    } else {
+        val x = when (i) {
+            0 -> childRects.first().left
+            childRects.size -> childRects.last().right
+            else -> (childRects[i - 1].right + childRects[i].left) / 2f
+        }
+        Offset(x, box.top) to Offset(x, box.bottom)
     }
 }
 
@@ -205,6 +207,29 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     var transform by remember { mutableStateOf<CanvasTransform?>(null) }
     var hovered by remember { mutableStateOf<NodeId?>(null) }
     val drag = remember(root) { CanvasDragState(state, bounds) }
+
+    // Palette drag-to-canvas (P2a): while a palette drag is live, resolve its drop against the same
+    // canvas geometry as a node drag, using the pointer position the palette publishes in window space.
+    // There is no dragged node to exclude (it doesn't exist yet), hence the null id. The resolved
+    // address is published back to state so the palette can commit it as an AddNode on release.
+    val dragType = state.paletteDragType
+    val dragX = state.paletteDragX
+    val dragY = state.paletteDragY
+    var paletteAddress: ChildAddress? = null
+    var paletteFeedback: PaletteDropFeedback? = null
+    if (dragType != null && dragX != null && dragY != null) {
+        val rects = bounds.snapshot()
+        val point = Offset(dragX, dragY)
+        paletteAddress = canvasDropAddress(rects, root, null, point, state.catalog::acceptsChildren)
+        paletteFeedback = PaletteDropFeedback(
+            outlineId = paletteAddress?.parentId ?: hitTest(rects, root, point),
+            caret = paletteAddress?.let { insertionCaret(rects, root, null, it) },
+            valid = paletteAddress != null,
+        )
+    }
+    if (dragType != null) {
+        SideEffect { state.resolvePaletteDrop(paletteAddress) }
+    }
 
     Canvas(
         modifier
@@ -268,6 +293,17 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             },
     ) {
         val t = transform ?: return@Canvas
+        // Palette drag wins the overlay while it's live: show its drop feedback and nothing else.
+        paletteFeedback?.let { fb ->
+            val color = if (fb.valid) DROP_OK else DROP_BAD
+            fb.outlineId?.let { id ->
+                bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), color, DROP_STROKE) }
+            }
+            fb.caret?.let { (a, b) ->
+                drawLine(color, t.windowToLocal(a), t.windowToLocal(b), strokeWidth = DROP_STROKE)
+            }
+            return@Canvas
+        }
         if (drag.draggingId != null) {
             // Mid-drag: show only drop feedback (green = legal, red = rejected) so it isn't lost among
             // the hover/selection outlines. The caret marks the exact insertion gap in window space.
@@ -308,6 +344,9 @@ private const val HOVER_STROKE = 1f
 private val DROP_OK = Color(0xFF43A047)
 private val DROP_BAD = Color(0xFFB00020)
 private const val DROP_STROKE = 2f
+
+/** The overlay's drop feedback for a live palette drag (P2a): a caret at the gap plus a target outline. */
+private data class PaletteDropFeedback(val outlineId: NodeId?, val caret: Pair<Offset, Offset>?, val valid: Boolean)
 
 /** Per-scroll-notch zoom multiplier; finer than the menu/keyboard step so the wheel feels continuous. */
 private const val ZOOM_IN_FACTOR = 1.1f
