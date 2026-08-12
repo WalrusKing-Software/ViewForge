@@ -786,6 +786,61 @@ than cascade.
 
 ---
 
+## ADR-025 — Crash recovery: an atomic config-dir autosave sidecar, cleared only on a clean state
+
+**Status:** Accepted
+
+**Context.** D4 (P0) requires that a crash — or a quit without saving — never loses work: a timer-based
+sidecar that, on next launch, offers to restore. The pieces already exist: `ProjectStore`/`ProjectCodec`
+serialize a `Project`, `GuardedWriter` writes atomically (temp + rename), and `core/prefs`' `ConfigDir`
+resolves the per-user application directory (ADR-023). What was undecided is *where* the recovery lives,
+*what* it stores, *when* it is written and cleared, and how it stays from ever blocking startup.
+
+**Decision.** Autosave writes a single **recovery sidecar** to the per-user config directory, separate
+from the user's `.vforge` file:
+
+- **Location & format.** One file, `recovery.json`, in `ConfigDir`. It is a `RecoverySnapshot`
+  (`recoveryVersion`, `originalPath: String?`, `savedAt`, `document`) — its own versioned format, *not*
+  the `.vforge` schema — living in `core/project` beside `ProjectStore` (recovery is user work, not
+  chrome). The store takes the directory as a **parameter** (the caller passes `ConfigDir.resolve()`), so
+  `core/project` keeps no dependency on `core/prefs`. The config dir — not a path beside the project —
+  is the home because a never-saved document has no project directory.
+- **When written / cleared.** A shell-owned `RecoveryController` ticks on a timer (a fixed interval in
+  Phase 1; a configurable one is S5): while `isDirty` it snapshots the document; once clean (after a real
+  Save) it clears the file. It is therefore cleared **only** on a clean state or an explicit discard — so
+  a crash *and* a quit-without-saving both leave the snapshot to be offered next launch. No
+  `onCloseRequest` hook is needed for safety (a save-prompt-on-close is a separate UX follow-up).
+- **Restore.** At launch the controller loads any snapshot; if present, a modal prompt offers Restore
+  (swap it in via `EditorState.restoreRecovered`, marked **dirty** — it is ahead of disk) or Discard
+  (delete the sidecar). While a recovery is unresolved the timer does nothing, so the freshly loaded
+  clean document cannot clear the pending snapshot before the user answers.
+- **Loading is total.** A missing, unreadable, or corrupt sidecar loads as `null`, never an exception —
+  the same non-fatal contract as `PreferencesStore`, and the deliberate opposite of `ProjectStore`
+  (which reports *why* a real document failed). A broken safety net must not stop the app from starting.
+
+**Rationale.** Clearing only on a clean state is what makes the guarantee hold for both a hard crash and
+an intentional quit-with-unsaved-edits without needing a reliable shutdown hook (there isn't one for a
+crash). Atomic writes mean a crash mid-snapshot cannot corrupt the file. Keeping the sidecar in the
+config dir handles never-saved documents uniformly and never risks writing into or beside the user's
+project. Reusing `GuardedWriter`/`ProjectCodec` means no new I/O or format machinery, and a
+snapshot-format version independent of `schemaVersion` needs **no `.vforge` schema change**.
+
+**Rejected.** **A sidecar beside the project file** (`foo.vforge.autosave`) — leaves never-saved
+documents unprotected, clutters the user's directory, and complicates the guarded-writer root. **Clearing
+the recovery on window close** — would drop the safety net exactly when a user quits with unsaved work,
+and conflates recovery with the (separate) save-prompt-on-close. **Storing recovery in `core/prefs`
+`EditorPreferences`** — recovery is the user's work, not chrome, and its load semantics (offer, don't
+silently apply) differ; only the *directory* is shared with prefs, not the store. **A configurable
+interval now** — S5 scope; a fixed interval ships the P0 without the preferences surface.
+
+**Consequences.** Autosave and restore are proven by pure `RecoveryStore` tests (round-trip,
+non-fatal load, clear); the guarantee holds for crash and quit-without-save alike. Honest gaps: the
+**timer loop, the restore dialog, and an actual crash are not headless-testable** (verified by running
+the app); the **autosave interval is fixed** until S5 (#55); and a **save-prompt on window close**
+(#56) remains a separate UX guard layered on top of — not a replacement for — this safety net.
+
+---
+
 ## Template
 
 ```markdown
