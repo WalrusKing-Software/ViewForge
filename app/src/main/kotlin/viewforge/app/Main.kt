@@ -24,6 +24,7 @@ import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
+import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
 import viewforge.project.ExportFile
 import viewforge.project.ProjectExporter
@@ -67,7 +68,7 @@ fun main() = application {
         state = windowState,
         title = "ViewForge",
     ) {
-        EditorShell(state, renderer, DesktopExportService, DesktopCodePreviewService)
+        EditorShell(state, renderer, DesktopExportService, DesktopCodePreviewService, ConfigDir.resolve())
     }
 }
 

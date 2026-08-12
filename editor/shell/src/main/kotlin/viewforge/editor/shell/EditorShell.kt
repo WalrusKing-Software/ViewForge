@@ -36,6 +36,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
+import kotlinx.coroutines.delay
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.CodePreview
@@ -46,6 +47,7 @@ import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
+import java.nio.file.Path
 
 /**
  * The top of the editor UI (ARCHITECTURE §2): the application menu bar plus a toolbar and the four
@@ -65,6 +67,7 @@ fun FrameWindowScope.EditorShell(
     renderer: CanvasRenderer,
     exportService: ProjectExportService,
     previewService: CodePreviewService,
+    recoveryDir: Path,
 ) {
     // The theme editor is a modal dialog (M8), opened from the toolbar or the View menu; its state lives
     // here so it survives recomposition and can be dismissed from either the dialog or a re-click.
@@ -75,6 +78,15 @@ fun FrameWindowScope.EditorShell(
     val document = rememberDocumentController(state)
     // Panel layout persistence (#43): saves visibility + widths across sessions (startup load is in :app).
     val prefs = rememberPreferencesController(state)
+    // Autosave + crash recovery (D4): a timer snapshots unsaved work; a snapshot found at launch prompts
+    // to restore. The config dir comes from :app (the wiring site), like the panel-layout load.
+    val recovery = rememberRecoveryController(state, recoveryDir)
+    LaunchedEffect(recovery) {
+        while (true) {
+            delay(AUTOSAVE_INTERVAL_MS)
+            recovery.tick()
+        }
+    }
 
     AppMenuBar(
         state,
@@ -94,6 +106,7 @@ fun FrameWindowScope.EditorShell(
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
         ExportDialogs(export)
         DocumentDialogs(document)
+        RecoveryDialog(recovery)
 
         Surface(Modifier.fillMaxSize()) {
             Column(

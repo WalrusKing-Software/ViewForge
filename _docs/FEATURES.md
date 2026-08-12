@@ -119,7 +119,7 @@ into issues directly.
 | D1 | New / open / save / save-as | P0 | `.vforge` round-trips losslessly. |
 | D2 | Undo / redo | P0 | Correct across ≥50 mixed operations; verified by property-based test. |
 | D3 | Gesture coalescing | P0 | A drag or slider scrub is one history entry, not hundreds. |
-| D4 | Autosave + crash recovery | P0 | Timer-based sidecar; on next launch, offer to restore. |
+| D4 | Autosave + crash recovery | P0 | Timer-based sidecar; on next launch, offer to restore. (#54: `RecoveryStore`/`RecoverySnapshot` in `core/project` write an atomic `recovery.json` to `ConfigDir` while the document is dirty; a shell `RecoveryController` ticks on a fixed interval and clears it only on a clean state, so a crash **or** quit-without-save leaves it to be restored. Load is total (corrupt/missing → no recovery, never blocks launch). ADR-025. Interval config is S5 (#55); save-prompt-on-close is #56.) |
 | D5 | Copy / paste / duplicate | P0 | Fresh IDs generated; paste targets current selection. |
 | D6 | Multiple screens per project | P0 | Screen switcher; each exports its own composable. |
 | D7 | Reusable user components | P1 | Extract selection → component; instance references update on edit. Cycle detection enforced. (#18: `extractComponent` command + Edit → Extract to Component; instances are references resolved at render/codegen, so a definition edit reaches every instance; cycles guarded on load and at render. Parameters deferred. ADR-024.) |

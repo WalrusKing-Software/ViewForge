@@ -294,6 +294,17 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         isDirty = false
     }
 
+    /**
+     * Restore autosaved work recovered at launch (D4): swap in [project] under its original [path] (null
+     * if it was never saved), then mark it **dirty** — recovered work is by definition ahead of what is on
+     * disk, so it must offer to be saved and must not be silently dropped. Otherwise a whole-document swap
+     * like [replaceDocument].
+     */
+    fun restoreRecovered(project: Project, path: Path?) {
+        replaceDocument(project, path)
+        isDirty = true
+    }
+
     // --- screen session (D6) ----------------------------------------------------------------------
     // Screens are document data, so add/remove/rename all go through commands (rule 3) and thus
     // undo/redo. The active screen is transient view state, managed here alongside the edit.
