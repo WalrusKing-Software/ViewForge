@@ -24,6 +24,7 @@ internal fun formatPropValue(value: PropValue): String = when (value) {
     is PropValue.ResourceRef -> "→ resource: ${value.assetId}"
     is PropValue.RawExpression -> "${value.code}  (unverified)"
     is PropValue.StateBinding -> "→ binding: ${value.path}"
+    is PropValue.ParamRef -> "→ param: ${value.param}"
 }
 
 /** A one-line summary of a modifier entry, preserving its args and disabled state (order is shown by position). */

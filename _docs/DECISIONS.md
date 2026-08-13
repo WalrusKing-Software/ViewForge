@@ -941,6 +941,54 @@ proven by command/model unit tests (each command round-trips against a component
 
 ---
 
+## ADR-028 — Component parameters: a `ParamRef` prop value, and the schema 1->2 bump it forces
+
+**Status:** Accepted
+
+**Context.** User components are reusable but zero-argument (ADR-024): every instance renders the
+definition identically, so a `PrimaryButton` cannot show a different label per instance. Making them
+genuinely reusable needs a component to declare typed `parameters` (the field already exists on
+`ComponentDef`, additive since schema 1) and each instance to supply argument values. Two of the three
+moving parts need no schema change: an instance carries its argument values as ordinary `PropValue`s in
+its existing `props` map (keyed by parameter name), and codegen/render consume those. The third does:
+a node *inside* the component's `root` has no way to say "this prop's value is my `label` parameter."
+
+**Decision.** Add `PropValue.ParamRef(param: String)` (`@SerialName("param")`) — a reference, by name,
+to a parameter of the enclosing component; resolved against the instance's argument props at render and
+codegen time, falling back to `Parameter.default`, and never evaluated (PF-4). Because `PropValue` is a
+**closed** sealed hierarchy (PF-1), a v1-only build cannot deserialize a `{"kind":"param"}` value, so
+this is forward-incompatible and takes the schema to **version 2** (DATA_MODEL §10). The 1->2 migration
+(`M1to2`) is data-additive — a v1 document contains no `param` values and is already a structurally
+valid v2 document — so it only stamps the version; its real purpose is to mark v2 files so older builds
+refuse them cleanly (the `NEWER_SCHEMA` load gate) instead of failing mid-parse. `samples/Demo.vforge`
+is pinned at schema 1 as the committed migration fixture; `samples/Gallery.vforge` moves to 2.
+
+**Rationale.** `ParamRef` is a typed, first-class node — the inspector can present it, the canvas can
+render it, and codegen emits a bare identifier — matching the "typed values, never bare strings" rule
+(ADR-006). Modeling the reference explicitly (rather than reusing an existing variant) keeps render,
+codegen, and validation honest about what the value *is*. Scoping this slice to the schema primitive
+alone (no codegen/render/inspector) keeps the schema-version change small and reviewable, and lets the
+1->2 path land and be proven before behavior is built on it.
+
+**Rejected.** **Reuse `RawExpression(code = paramName)`** — emits the right identifier but marks the
+node "unverified" and renders a placeholder (breaks live preview of parameterized components) and is a
+semantic lie: a parameter reference is not an arbitrary expression. **Overload `StateBinding(path =
+paramName)`** — collides with the reserved Phase-2 data-binding meaning and conflates two concepts.
+**Avoid the bump by keeping schema 1** — dishonest: a v1-only build would choke on `{"kind":"param"}`;
+the closed hierarchy makes a new member a real forward-incompatibility, exactly what a version bump is
+for. **Carry argument values in a bespoke structure rather than the instance's `props`** — unnecessary;
+`props` is already a typed `Map<String, PropValue>` and needs no schema change.
+
+**Consequences.** The schema primitive for parameters exists and round-trips (a `ParamRef` survives
+encode/decode with its `param` kind); the migration harness gains its first real step. Later slices of
+the epic add codegen (typed fn params + call args, a new golden triple), render-time resolution, and
+inspector arg editing + extract-lifts-params. Every future `.vforge` this build writes is schema 2.
+Honest gap: this slice ships no user-visible parameter behavior — it is proven by model/migration unit
+tests (ParamRef round-trip, `M1to2` stamps the version, the committed v1 fixture migrates and loads at
+the current version), not by a gesture.
+
+---
+
 ## Template
 
 ```markdown

@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
 **Version:** 0.1 (planning)
-**Schema version:** 1
+**Schema version:** 2
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -99,9 +99,14 @@ An instance is a **reference, resolved at render and codegen time — never inli
 (ADR-024). This is what makes instances "update on edit": codegen emits each component as its own
 `@Composable fun` and an instance as a *call* to it; the canvas renders the definition's tree in the
 instance's place. Editing a definition therefore updates every instance without touching the instances.
-*Parameters are carried in the schema but unused in Phase 1* — components are zero-argument reusable
-blocks; adding argument passing later is an additive change (an optional field already present), not a
-version bump.
+**Parameters (schema 2, ADR-028).** A node inside the component's `root` references a parameter with
+`PropValue.ParamRef(param)` (see §6). An *instance* supplies argument values as ordinary `PropValue`s
+in its own `props` map, keyed by parameter name (alongside the reserved `componentId` key) — the
+instance-`props` side needs no schema change, only `ParamRef` does. Codegen emits each component as a
+`@Composable fun` with typed parameters and each instance as a call passing the argument values;
+render resolves each `ParamRef` against the instance's args, falling back to `Parameter.default`.
+*(Codegen, render, and inspector wiring land in later slices of the parameters epic; schema 2 ships
+the `ParamRef` primitive first.)*
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
 itself. It is validated on load (`ProjectValidator`) and guarded again at render time
@@ -165,8 +170,20 @@ sealed interface PropValue {
 
     @Serializable @SerialName("binding")
     data class StateBinding(val path: String) : PropValue     // RESERVED, Phase 2+
+
+    @Serializable @SerialName("param")
+    data class ParamRef(val param: String) : PropValue        // component parameter, §4 / ADR-028
 }
 ```
+
+### `ParamRef` — component parameters (schema 2)
+
+Only meaningful inside a `ComponentDef.root`: it names one of the component's `parameters`. At render
+and codegen time it resolves against the argument value the *instance* supplies (falling back to the
+parameter's `default`); it is never evaluated. Adding it is what took the schema to **version 2** — a
+new member of the *closed* `PropValue` hierarchy cannot be deserialized by a v1-only build, so unlike
+an additive optional field it is forward-incompatible and needs a version bump (§10, ADR-028). The
+1→2 migration only stamps the version (`M1to2`).
 
 ### `RawExpression` — the escape hatch
 

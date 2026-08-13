@@ -39,4 +39,14 @@ sealed interface PropValue {
     @Serializable
     @SerialName("binding")
     data class StateBinding(val path: String) : PropValue
+
+    /**
+     * References a parameter of the enclosing user component by name (DATA_MODEL §4, ADR-028). Only
+     * meaningful inside a [ComponentDef.root]; resolved against an instance's argument props at render
+     * and codegen time, never evaluated. Its presence is what forced schema v2 — a new closed-hierarchy
+     * member cannot be deserialized by a v1-only build.
+     */
+    @Serializable
+    @SerialName("param")
+    data class ParamRef(val param: String) : PropValue
 }
