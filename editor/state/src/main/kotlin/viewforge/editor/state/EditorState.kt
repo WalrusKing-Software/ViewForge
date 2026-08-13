@@ -371,6 +371,19 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         selectedIds = selectable
     }
 
+    /**
+     * Replace the entire selection with [ids] at once (C10 marquee, #93): a rubber-band drag resolves to
+     * a set of nodes rather than one. Ids absent from the active edit surface or naming a **locked** node
+     * (T4) are dropped; the last surviving id becomes the primary and the range pivot. An empty result
+     * clears the selection, like a click on empty canvas.
+     */
+    fun setSelection(ids: List<NodeId>) {
+        val root = activeEditRoot
+        val kept = ids.filter { id -> root?.findById(id)?.locked == false }
+        selectedIds = kept
+        selectionAnchor = kept.lastOrNull()
+    }
+
     // --- history ----------------------------------------------------------------------------------
 
     /**

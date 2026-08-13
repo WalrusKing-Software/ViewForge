@@ -137,6 +137,32 @@ class SelectionModelTest {
         assertEquals(listOf(a, b), s.selectedNodes)
     }
 
+    @Test
+    fun `setSelection replaces the whole selection and makes the last id primary (marquee)`() {
+        val s = state()
+        s.select(NodeId("a"))
+        s.setSelection(listOf(NodeId("a"), NodeId("b")))
+        assertEquals(listOf(NodeId("a"), NodeId("b")), s.selectedIds)
+        assertEquals(NodeId("b"), s.selectedId) // last = primary
+    }
+
+    @Test
+    fun `setSelection drops locked and unknown ids`() {
+        val s = state()
+        s.setSelection(listOf(NodeId("a"), NodeId("locked"), NodeId("ghost"), NodeId("b")))
+        assertEquals(listOf(NodeId("a"), NodeId("b")), s.selectedIds)
+        assertEquals(NodeId("b"), s.selectedId)
+    }
+
+    @Test
+    fun `setSelection with an empty list clears the selection`() {
+        val s = state()
+        s.select(NodeId("a"))
+        s.setSelection(emptyList())
+        assertTrue(s.selectedIds.isEmpty())
+        assertNull(s.selectedId)
+    }
+
     private val order = listOf(NodeId("root"), NodeId("a"), NodeId("b"), NodeId("locked"))
 
     @Test
