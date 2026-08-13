@@ -41,9 +41,36 @@ class PreferencesStoreTest {
                 inspectorWidth = 300f,
                 codePreviewWidth = 400f,
             ),
+            autosaveIntervalSeconds = 30,
         )
         PreferencesStore.save(prefs, dir)
         assertEquals(prefs, PreferencesStore.load(dir))
+    }
+
+    @Test
+    fun `autosave interval defaults when absent and clamps out-of-range values on load`() {
+        val dir = tempDir()
+        // No prefs file -> the default cadence (matching #54's original constant).
+        assertEquals(
+            EditorPreferences.DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
+            PreferencesStore.load(dir).autosaveIntervalSeconds,
+        )
+
+        // A too-small value (would hammer the disk) is clamped up to the minimum on load.
+        dir.resolve(PreferencesStore.FILE_NAME).writeText("""{ "prefsVersion": 1, "autosaveIntervalSeconds": 0 }""")
+        assertEquals(
+            EditorPreferences.MIN_AUTOSAVE_INTERVAL_SECONDS,
+            PreferencesStore.load(dir).autosaveIntervalSeconds,
+        )
+
+        // A too-large value (would effectively disable recovery) is clamped down to the maximum.
+        dir.resolve(
+            PreferencesStore.FILE_NAME,
+        ).writeText("""{ "prefsVersion": 1, "autosaveIntervalSeconds": 100000 }""")
+        assertEquals(
+            EditorPreferences.MAX_AUTOSAVE_INTERVAL_SECONDS,
+            PreferencesStore.load(dir).autosaveIntervalSeconds,
+        )
     }
 
     @Test

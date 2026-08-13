@@ -160,7 +160,7 @@ into issues directly.
 | S2 | Keyboard shortcuts | P0 | Standard set; discoverable in menus. |
 | S3 | Editor light/dark theme | P1 | Independent of the *project's* theme — don't conflate them. |
 | S4 | Command palette | P2 | — |
-| S5 | Preferences | P1 | Autosave interval, history depth, default export path. |
+| S5 | Preferences | P1 | Autosave interval, history depth, default export path. (#55: **autosave interval** is now a persisted `core/prefs` preference — `EditorPreferences.autosaveIntervalSeconds`, clamped on load, defaulting to #54's original 10s; the shell's `RecoveryController` drives its timer from it. A Preferences UI to edit it in-app is a further slice; the value is hand-editable in `preferences.json` today.) |
 | S6 | Crash reporter (local only) | P1 | Writes a local log; **no network transmission**. |
 
 ## 9. Framework package system

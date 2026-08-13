@@ -72,6 +72,7 @@ fun FrameWindowScope.EditorShell(
     exportService: ProjectExportService,
     previewService: CodePreviewService,
     recoveryDir: Path,
+    autosaveIntervalMs: Long = AUTOSAVE_INTERVAL_MS,
 ) {
     // The theme editor is a modal dialog (M8), opened from the toolbar or the View menu; its state lives
     // here so it survives recomposition and can be dismissed from either the dialog or a re-click.
@@ -84,10 +85,10 @@ fun FrameWindowScope.EditorShell(
     val prefs = rememberPreferencesController(state)
     // Autosave + crash recovery (D4): a timer snapshots unsaved work; a snapshot found at launch prompts
     // to restore. The config dir comes from :app (the wiring site), like the panel-layout load.
-    val recovery = rememberRecoveryController(state, recoveryDir)
+    val recovery = rememberRecoveryController(state, recoveryDir, autosaveIntervalMs)
     LaunchedEffect(recovery) {
         while (true) {
-            delay(AUTOSAVE_INTERVAL_MS)
+            delay(recovery.intervalMs)
             recovery.tick()
         }
     }
