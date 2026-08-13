@@ -119,6 +119,18 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * If [node] is a `vforge.userComponent` instance whose definition resolves, open that component for
+     * in-place editing and return true; otherwise a no-op returning false. The double-click-to-enter
+     * gesture on the canvas and tree calls this, so a non-instance falls back to its usual double-click
+     * action (#68).
+     */
+    fun openInstanceComponent(node: Node): Boolean {
+        val id = componentOfInstance(node)?.id ?: return false
+        openComponent(id)
+        return true
+    }
+
+    /**
      * Whether the canvas previews the project theme's **dark** values (H2). Transient view state, not
      * part of the document — the theme stores both light and dark; this only picks which half the
      * canvas shows. The editor chrome's own theme is separate (FEATURES S3).

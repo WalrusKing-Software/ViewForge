@@ -296,7 +296,8 @@ private fun NodeRow(
             }
             .combinedClickable(
                 onClick = { state.select(node.id) },
-                onDoubleClick = onStartRename,
+                // Double-clicking an instance enters its component (#68); any other node starts a rename.
+                onDoubleClick = { if (!state.openInstanceComponent(node)) onStartRename() },
             )
             .padding(start = (8 + item.depth * INDENT).dp, top = 3.dp, bottom = 3.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
