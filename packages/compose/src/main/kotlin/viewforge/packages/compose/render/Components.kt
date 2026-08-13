@@ -58,6 +58,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -166,10 +167,14 @@ private fun RenderUserComponent(node: Node, modifier: Modifier, ctx: RenderConte
         is InstanceResolution.Missing -> ErrorPlaceholder("Unresolved component:\n${resolution.id ?: "?"}", modifier)
         is InstanceResolution.Cycle -> ErrorPlaceholder("Component cycle:\n${resolution.def.name}", modifier)
         is InstanceResolution.Resolved -> Box(modifier) {
+            // Resolve the definition's parameters against this instance's arguments (ADR-028) before
+            // rendering, so a ParamRef in the body draws the instance's value (or the parameter default).
+            // Keyed on the instance and definition so the substitution recomputes only when either changes.
+            val bound = remember(node, resolution.def) { bindParameters(resolution.def, node) }
             // The internals are not the active tree's nodes: suppress per-node instrumentation so a click
             // selects the instance (the Box above), and mark this id as expanding to break any cycle.
             RenderNode(
-                resolution.def.root,
+                bound,
                 ctx.copy(expanding = ctx.expanding + resolution.def.id, instrument = { Modifier }),
             )
         }
