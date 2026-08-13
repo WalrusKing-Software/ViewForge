@@ -21,8 +21,9 @@ import viewforge.prefs.PreferencesStore
 import java.awt.Cursor
 
 /**
- * Persists the editor's **panel layout** — the three #39 visibility flags plus the #43 panel widths —
- * across sessions (S1, ADR-023). Remembered once in the shell, like [DocumentController].
+ * Persists the editor's **panel layout** — the #39 visibility flags (including the #52 code-preview
+ * panel) plus the #43 panel widths — across sessions (S1, ADR-023). Remembered once in the shell, like
+ * [DocumentController].
  *
  * It names no framework: it saves through [PreferencesStore] in `core/prefs`, exactly as the document
  * controller saves through `ProjectStore` (the #37 no-seam precedent). Startup *load* happens in `:app`
@@ -46,6 +47,11 @@ internal class PreferencesController(private val state: EditorState) {
 
     fun toggleInspector() {
         state.toggleInspector()
+        persist()
+    }
+
+    fun toggleCodePreview() {
+        state.toggleCodePreview()
         persist()
     }
 

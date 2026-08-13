@@ -175,14 +175,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
-     * The live code-preview panel (G3, #50). Transient editor chrome like the other panels, but — unlike
-     * them — **not yet persisted** (#52 folds it into [PanelLayout] later), so it is hidden by default and
-     * the View menu toggles it directly. The width is clamped through the same [PanelLayout] bound; it is
-     * wider than the side panels by default since it shows source. The panel itself is read-only.
+     * The live code-preview panel (G3, #50). Editor chrome like the side panels: hidden by default,
+     * wider since it shows source, and — as of #52 — **persisted** across sessions via [PanelLayout]
+     * ([applyLayout] restores it, [panelLayout] snapshots it). The width clamps through the same
+     * [PanelLayout] bound. The panel itself is read-only.
      */
     var codePreviewVisible: Boolean by mutableStateOf(false)
         private set
-    var codePreviewWidth: Float by mutableStateOf(PanelLayout.clampWidth(340f))
+    var codePreviewWidth: Float by mutableStateOf(PanelLayout.DEFAULT_CODE_PREVIEW_WIDTH)
         private set
 
     /**
@@ -869,9 +869,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteVisible = layout.paletteVisible
         treeVisible = layout.treeVisible
         inspectorVisible = layout.inspectorVisible
+        codePreviewVisible = layout.codePreviewVisible
         paletteWidth = PanelLayout.clampWidth(layout.paletteWidth)
         treeWidth = PanelLayout.clampWidth(layout.treeWidth)
         inspectorWidth = PanelLayout.clampWidth(layout.inspectorWidth)
+        codePreviewWidth = PanelLayout.clampWidth(layout.codePreviewWidth)
     }
 
     /** Snapshot the current panel layout for persistence. */
@@ -879,9 +881,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteVisible = paletteVisible,
         treeVisible = treeVisible,
         inspectorVisible = inspectorVisible,
+        codePreviewVisible = codePreviewVisible,
         paletteWidth = paletteWidth,
         treeWidth = treeWidth,
         inspectorWidth = inspectorWidth,
+        codePreviewWidth = codePreviewWidth,
     )
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------

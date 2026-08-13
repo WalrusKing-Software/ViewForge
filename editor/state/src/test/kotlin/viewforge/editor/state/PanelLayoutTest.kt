@@ -77,28 +77,36 @@ class PanelLayoutTest {
                 paletteVisible = false,
                 treeVisible = true,
                 inspectorVisible = false,
+                codePreviewVisible = true,
                 paletteWidth = 250f,
                 treeWidth = 99999f, // out of range: must clamp
                 inspectorWidth = 300f,
+                codePreviewWidth = 360f,
             ),
         )
         assertFalse(s.paletteVisible)
         assertTrue(s.treeVisible)
         assertFalse(s.inspectorVisible)
+        assertTrue(s.codePreviewVisible)
         assertEquals(250f, s.paletteWidth)
         assertEquals(PanelLayout.MAX_WIDTH, s.treeWidth)
         assertEquals(300f, s.inspectorWidth)
+        assertEquals(360f, s.codePreviewWidth)
     }
 
     @Test
     fun `panelLayout snapshots the current visibility and widths`() {
         val s = state()
         s.togglePalette()
+        s.toggleCodePreview()
         s.resizeInspector(15f)
+        s.resizeCodePreview(-20f)
         val snapshot = s.panelLayout()
         assertFalse(snapshot.paletteVisible)
         assertTrue(snapshot.treeVisible)
+        assertTrue(snapshot.codePreviewVisible)
         assertEquals(PanelLayout.DEFAULT_INSPECTOR_WIDTH + 15f, snapshot.inspectorWidth)
+        assertEquals(PanelLayout.DEFAULT_CODE_PREVIEW_WIDTH - 20f, snapshot.codePreviewWidth)
     }
 
     @Test
@@ -108,9 +116,11 @@ class PanelLayoutTest {
             paletteVisible = true,
             treeVisible = false,
             inspectorVisible = true,
+            codePreviewVisible = true,
             paletteWidth = 190f,
             treeWidth = 240f,
             inspectorWidth = 260f,
+            codePreviewWidth = 320f,
         )
         s.applyLayout(layout)
         assertEquals(layout, s.panelLayout())
