@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,15 +18,24 @@ import androidx.compose.ui.unit.dp
  * look consistent and neither grows its own one-off styling.
  */
 
-/** A panel's top label (e.g. "Layers", "Inspector"). */
+/**
+ * A panel's top label (e.g. "Layers", "Inspector"), with an optional right-aligned [trailing] slot for a
+ * header action such as the code panel's Copy button (G8).
+ */
 @Composable
-internal fun PanelHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-    )
+internal fun PanelHeader(title: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
+    }
 }
 
 /** A section divider label inside a panel (e.g. "Props", "Modifiers"). */
