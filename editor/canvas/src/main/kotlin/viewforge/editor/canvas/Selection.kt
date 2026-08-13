@@ -69,6 +69,38 @@ fun hitTest(rects: Map<String, Rect>, root: Node, point: Offset): NodeId? {
 }
 
 /**
+ * Every node under [root] whose recorded bounds are *fully enclosed* by [marquee] (window space), for
+ * rubber-band selection (C10, #93). The result is *top-level*: once an enclosed node is taken its
+ * subtree is skipped, so a swept container is selected without also selecting each of its children
+ * (matching the `selectionTopLevel` dedup the batch ops use). [root] itself is never returned — a
+ * marquee selects content on the frame, not the frame.
+ *
+ * Full-enclosure (not mere intersection) is the design-tool default: it avoids grabbing a large
+ * container from a partial sweep. Hidden subtrees are skipped entirely (not rendered); a locked node
+ * (T4) is skipped but its unlocked descendants remain eligible, mirroring click-selection. Pure and
+ * Compose-free, so it is unit-tested without a UI harness.
+ */
+fun marqueeSelection(rects: Map<String, Rect>, root: Node, marquee: Rect): List<NodeId> {
+    val out = mutableListOf<NodeId>()
+    root.allChildren().forEach { collectMarquee(rects, it, marquee, out) }
+    return out
+}
+
+private fun collectMarquee(rects: Map<String, Rect>, node: Node, marquee: Rect, out: MutableList<NodeId>) {
+    if (node.hidden) return
+    val rect = rects[node.id.value]
+    if (rect != null && !node.locked && marquee.enclosesRect(rect)) {
+        out += node.id // enclosed and selectable: take it and stop — its children would be redundant
+        return
+    }
+    node.allChildren().forEach { collectMarquee(rects, it, marquee, out) }
+}
+
+/** True if this rectangle fully contains [inner] (edges may touch). */
+private fun Rect.enclosesRect(inner: Rect): Boolean =
+    left <= inner.left && top <= inner.top && right >= inner.right && bottom >= inner.bottom
+
+/**
  * The one canonical canvas↔screen transform (TECHNICAL_NOTES §5): all coordinate math goes through
  * here so it survives future zoom/pan instead of being scattered inline at call sites. Bounds are
  * captured in window space; the overlay works in its own local space; this bridges the two using the
@@ -162,6 +194,52 @@ internal class CanvasDragState(private val state: EditorState, private val bound
 }
 
 /**
+ * Transient state for a canvas marquee / rubber-band selection (C10, #93): a press-drag on empty canvas
+ * (or the frame background) sweeps a rectangle and selects every node fully enclosed by it on release.
+ * It coexists with the other canvas drags by *what the press lands on* — space-pan (C5) and node
+ * drag-to-reparent (C7) claim a held space or a press over a node, leaving the empty-canvas press to the
+ * marquee. Both endpoints are window space (the overlay is unscaled), so the [rect] and the enclosed-node
+ * resolution stay correct at every zoom/pan level.
+ */
+internal class MarqueeState(private val state: EditorState, private val bounds: NodeBounds) {
+    private var start by mutableStateOf<Offset?>(null)
+    private var current by mutableStateOf<Offset?>(null)
+
+    /** Whether a marquee drag is in progress. */
+    val active: Boolean get() = start != null
+
+    /** The normalized marquee rectangle in window space, or null when not dragging. */
+    val rect: Rect?
+        get() {
+            val a = start ?: return null
+            val b = current ?: return null
+            return Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
+        }
+
+    fun begin(point: Offset) {
+        start = point
+        current = point
+    }
+
+    fun update(point: Offset) {
+        if (start != null) current = point
+    }
+
+    /** Replace the selection with the enclosed nodes, then reset. An empty sweep clears the selection. */
+    fun commit() {
+        val root = state.activeEditRoot
+        val box = rect
+        if (root != null && box != null) state.setSelection(marqueeSelection(bounds.snapshot(), root, box))
+        reset()
+    }
+
+    fun reset() {
+        start = null
+        current = null
+    }
+}
+
+/**
  * The insertion caret for [address] in window space: a line across the target at the gap the index
  * names, along the container's inferred axis. Null when the target's default region is empty (the
  * feedback falls back to the target outline alone). Shared by node-drag ([CanvasDragState]) and the
@@ -219,6 +297,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     // instant (unlike detectTapGestures' onDoubleTap, which delays every tap). Reset per edit surface.
     var lastTap by remember(root) { mutableStateOf<Pair<NodeId, Long>?>(null) }
     val drag = remember(root) { CanvasDragState(state, bounds) }
+    val marquee = remember(root) { MarqueeState(state, bounds) }
 
     // Palette drag-to-canvas (P2a): while a palette drag is live, resolve its drop against the same
     // canvas geometry as a node drag, using the pointer position the palette publishes in window space.
@@ -275,24 +354,37 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                     }
                 }
             }
-            // Drag a node to reparent/reorder (C7). Inactive while space-panning, so the two drags are
-            // mutually exclusive; a press with no movement falls through to the tap-to-select above.
+            // Drag on the canvas (C7 reparent / C10 marquee). Inactive while space-panning, so pan stays
+            // mutually exclusive; a press with no movement falls through to the tap-to-select above. The
+            // press location arbitrates: over a movable node it reparents, on the frame/empty canvas it
+            // rubber-band selects (#93). The root fills the frame, so an "empty" press hits root.id, not null.
             .pointerInput(root, state.isSpaceHeld) {
                 if (state.isSpaceHeld) return@pointerInput
                 detectDragGestures(
                     onDragStart = { local ->
                         val point = transform?.localToWindow(local) ?: local
-                        val hit = hitTest(bounds.snapshot(), root, point) ?: return@detectDragGestures
-                        // The root has nowhere to move to, and locked nodes don't drag.
-                        if (hit != root.id && root.findById(hit)?.locked != true) drag.begin(hit)
+                        val hit = hitTest(bounds.snapshot(), root, point)
+                        if (hit == null || hit == root.id) {
+                            marquee.begin(point) // frame/empty canvas → marquee-select
+                        } else if (root.findById(hit)?.locked != true) {
+                            drag.begin(hit) // over a movable node → reparent; locked nodes don't drag
+                        }
                     },
                     onDrag = { change, _ ->
-                        if (drag.draggingId == null) return@detectDragGestures
-                        change.consume()
-                        drag.update(transform?.localToWindow(change.position) ?: change.position)
+                        val point = transform?.localToWindow(change.position) ?: change.position
+                        when {
+                            marquee.active -> {
+                                change.consume()
+                                marquee.update(point)
+                            }
+                            drag.draggingId != null -> {
+                                change.consume()
+                                drag.update(point)
+                            }
+                        }
                     },
-                    onDragEnd = { drag.commit() },
-                    onDragCancel = { drag.reset() },
+                    onDragEnd = { if (marquee.active) marquee.commit() else drag.commit() },
+                    onDragCancel = { if (marquee.active) marquee.reset() else drag.reset() },
                 )
             }
             // Space-drag to pan (C5). Keyed on the flag so the gesture re-arms when pan mode toggles;
@@ -349,6 +441,14 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             }
             return@Canvas
         }
+        // Mid-marquee: draw only the rubber-band rectangle (a translucent fill + thin outline) so it isn't
+        // lost among hover/selection outlines; the enclosed nodes are resolved and selected on release.
+        marquee.rect?.let { box ->
+            val local = t.rectToLocal(box)
+            drawRect(MARQUEE_FILL, topLeft = local.topLeft, size = local.size)
+            drawOutline(local, MARQUEE_STROKE_COLOR, MARQUEE_STROKE)
+            return@Canvas
+        }
         // Hover first, selection on top: when a node is both, the selection outline wins visually.
         hovered?.takeIf { !state.isSelected(it) }?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), HOVER_COLOR, HOVER_STROKE) }
@@ -382,6 +482,11 @@ private val MULTI_SELECTION_COLOR = Color(0x991E88E5)
 private val HOVER_COLOR = Color(0x881E88E5)
 private const val SELECTION_STROKE = 2f // px; a thin editor outline, deliberately not layout-affecting
 private const val HOVER_STROKE = 1f
+
+// Marquee / rubber-band feedback (C10, #93): a faint blue wash with a thin solid outline.
+private val MARQUEE_FILL = Color(0x221E88E5)
+private val MARQUEE_STROKE_COLOR = Color(0xFF1E88E5)
+private const val MARQUEE_STROKE = 1f
 
 // Drop feedback (C7), matching the tree panel's palette: green = legal drop, red = rejected.
 private val DROP_OK = Color(0xFF43A047)
