@@ -7,17 +7,37 @@ import kotlinx.serialization.Serializable
  * [prefsVersion], independent of the `.vforge` `schemaVersion`: editor layout is not project data, so
  * it must never travel in a project file and does not share the document's migration chain.
  *
- * Phase 1 holds only the [panelLayout]; window size, recent files, and the S5 preferences (autosave
- * interval, default export path) are the natural next tenants of this same file.
+ * Holds the [panelLayout] (S1) and the [autosaveIntervalSeconds] (S5, #55); window size, recent files,
+ * and the default export path are the natural next tenants of this same file.
+ *
+ * @property autosaveIntervalSeconds how often crash-recovery autosave writes its sidecar while there
+ *   are unsaved edits (D4, #54). Clamped on load to a sane range so a hand-edited value can neither
+ *   hammer the disk nor effectively disable recovery.
  */
 @Serializable
-data class EditorPreferences(val prefsVersion: Int = CURRENT_VERSION, val panelLayout: PanelLayout = PanelLayout()) {
+data class EditorPreferences(
+    val prefsVersion: Int = CURRENT_VERSION,
+    val panelLayout: PanelLayout = PanelLayout(),
+    val autosaveIntervalSeconds: Int = DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
+) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
-    fun sanitized(): EditorPreferences = copy(panelLayout = panelLayout.sanitized())
+    fun sanitized(): EditorPreferences = copy(
+        panelLayout = panelLayout.sanitized(),
+        autosaveIntervalSeconds = clampAutosaveInterval(autosaveIntervalSeconds),
+    )
 
     companion object {
         /** Bump only for a change this build cannot read forward-tolerantly (unknown keys are already ignored). */
         const val CURRENT_VERSION = 1
+
+        /** Matches the interval #54 shipped hardcoded, so an upgrading user sees no behaviour change. */
+        const val DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 10
+        const val MIN_AUTOSAVE_INTERVAL_SECONDS = 2
+        const val MAX_AUTOSAVE_INTERVAL_SECONDS = 600
+
+        /** The one place the autosave interval is bounded — used on load and by any future editor UI. */
+        fun clampAutosaveInterval(seconds: Int): Int =
+            seconds.coerceIn(MIN_AUTOSAVE_INTERVAL_SECONDS, MAX_AUTOSAVE_INTERVAL_SECONDS)
     }
 }
 

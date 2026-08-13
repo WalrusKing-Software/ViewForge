@@ -41,9 +41,11 @@ import java.nio.file.Path
  */
 fun main() = application {
     val state = EditorState(sampleProject(), ComposeCatalog)
-    // Restore the persisted panel layout (#43) before the first frame — a missing/corrupt prefs file
-    // yields defaults, so this never fails startup. The shell persists changes back on toggle/resize.
-    state.applyLayout(PreferencesStore.load().panelLayout)
+    // Load persisted preferences once, before the first frame — a missing/corrupt file yields defaults,
+    // so this never fails startup. Restore the panel layout (#43) now; the shell persists changes back on
+    // toggle/resize. The autosave interval (#55) is handed to the shell's recovery timer below.
+    val prefs = PreferencesStore.load()
+    state.applyLayout(prefs.panelLayout)
     val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
@@ -69,7 +71,14 @@ fun main() = application {
         state = windowState,
         title = "ViewForge",
     ) {
-        EditorShell(state, renderer, DesktopExportService, DesktopCodePreviewService, ConfigDir.resolve())
+        EditorShell(
+            state,
+            renderer,
+            DesktopExportService,
+            DesktopCodePreviewService,
+            ConfigDir.resolve(),
+            autosaveIntervalMs = prefs.autosaveIntervalSeconds * 1000L,
+        )
     }
 }
 

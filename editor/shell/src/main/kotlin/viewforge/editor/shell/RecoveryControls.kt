@@ -17,7 +17,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-/** How often autosave writes the recovery sidecar while there are unsaved edits (D4). */
+/** Fallback autosave cadence when no configured interval is supplied (D4); matches #54's original constant. */
 internal const val AUTOSAVE_INTERVAL_MS: Long = 10_000L
 
 /**
@@ -35,6 +35,8 @@ internal const val AUTOSAVE_INTERVAL_MS: Long = 10_000L
 internal class RecoveryController(
     private val state: EditorState,
     private val dir: Path,
+    /** How often [tick] should be driven, from the persisted S5 preference (#55); the shell's timer reads it. */
+    val intervalMs: Long = AUTOSAVE_INTERVAL_MS,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     /**
@@ -84,8 +86,11 @@ internal class RecoveryController(
 }
 
 @Composable
-internal fun rememberRecoveryController(state: EditorState, dir: Path): RecoveryController =
-    remember(state, dir) { RecoveryController(state, dir) }
+internal fun rememberRecoveryController(
+    state: EditorState,
+    dir: Path,
+    intervalMs: Long = AUTOSAVE_INTERVAL_MS,
+): RecoveryController = remember(state, dir, intervalMs) { RecoveryController(state, dir, intervalMs) }
 
 private val RECOVERED_AT_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
