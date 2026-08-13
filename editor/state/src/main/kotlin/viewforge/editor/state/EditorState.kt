@@ -195,6 +195,13 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * The canvas's last-measured available area and density (C6 auto-fit, #59), recorded by the canvas
+     * each layout so the on-demand [fitToFrame] and the View → Fit menu item have a size to fit to.
+     * Transient view state like [viewport]; null until the canvas has been measured once.
+     */
+    var canvasFitBounds: CanvasFitBounds? by mutableStateOf(null)
+
+    /**
      * Whether the space bar is held, i.e. the canvas is in pan mode (C5, space-drag to pan). The
      * shell's focus-aware key handler owns this — it's the one place that knows the space bar isn't
      * being typed into a field — and the canvas reads it to switch a drag from select to pan.
@@ -946,6 +953,27 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun panBy(dx: Float, dy: Float) {
         viewport = viewport.pannedBy(dx, dy)
     }
+
+    /**
+     * Fit the active screen's device frame within an [availW]×[availH] canvas area (px) at [density]
+     * (C6, #59): resolves the frame's dp size against [activeDeviceProfile] and sets the [viewport] to
+     * the clamped fit zoom, centred. Preview-only and not undoable, like the other viewport moves. The
+     * canvas calls this on a profile change; the no-arg overload backs the View → Fit menu item.
+     */
+    fun fitToFrame(availW: Float, availH: Float, density: Float) {
+        val profile = activeDeviceProfile
+        viewport = viewport.fittedTo(availW, availH, profile.width * density, profile.height * density)
+    }
+
+    /** Fit to the frame using the canvas's [last-measured area][canvasFitBounds]; a no-op until measured. */
+    fun fitToFrame() {
+        val bounds = canvasFitBounds ?: return
+        fitToFrame(bounds.availW, bounds.availH, bounds.density)
+    }
+
+    /** Whether a Fit action can run (View menu / Ctrl+9): there is something to frame and a measured area. */
+    val canFitToFrame: Boolean
+        get() = activeEditRoot != null && canvasFitBounds != null
 
     /**
      * Apply a whole-theme edit through history (undoable, live). [coalesceKey] collapses a run of edits

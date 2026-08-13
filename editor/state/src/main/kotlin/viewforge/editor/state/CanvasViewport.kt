@@ -30,6 +30,20 @@ data class CanvasViewport(val zoom: Float = 1f, val panX: Float = 0f, val panY: 
     /** Translate by a window-space delta (the 1:1 cursor-follow pan). */
     fun pannedBy(dx: Float, dy: Float): CanvasViewport = copy(panX = panX + dx, panY = panY + dy)
 
+    /**
+     * The view that fits content of [contentW]×[contentH] within an [availW]×[availH] window (all in
+     * pixels), used by auto-fit (C6, #59). The zoom is the larger axis-scale that still shows the whole
+     * frame — `min(availW/contentW, availH/contentH)` — clamped to [[MIN_ZOOM], [MAX_ZOOM]], with pan
+     * reset to the origin: the frame is centre-anchored on the canvas and the `graphicsLayer` scales
+     * about its own centre, so zoom alone keeps a fitted frame centred. A non-positive size (before the
+     * canvas is measured) leaves the view unchanged.
+     */
+    fun fittedTo(availW: Float, availH: Float, contentW: Float, contentH: Float): CanvasViewport {
+        if (availW <= 0f || availH <= 0f || contentW <= 0f || contentH <= 0f) return this
+        val fit = minOf(availW / contentW, availH / contentH).coerceIn(MIN_ZOOM, MAX_ZOOM)
+        return CanvasViewport(zoom = fit)
+    }
+
     /** Back to 100% at the origin (View → Reset Zoom). */
     fun reset(): CanvasViewport = CanvasViewport()
 
@@ -41,3 +55,11 @@ data class CanvasViewport(val zoom: Float = 1f, val panX: Float = 0f, val panY: 
         const val ZOOM_STEP = 1.2f
     }
 }
+
+/**
+ * The canvas's available content area, as the fit trigger sees it (C6, #59): [availW]/[availH] are the
+ * viewport size in pixels *after* the canvas padding, and [density] converts a device profile's dp
+ * magnitudes to those same pixels. Recorded by the canvas each layout and consumed by
+ * [EditorState.fitToFrame]; like [CanvasViewport] it is transient view state, never serialized.
+ */
+data class CanvasFitBounds(val availW: Float, val availH: Float, val density: Float)
