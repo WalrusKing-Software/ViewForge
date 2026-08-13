@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 2,
+  "id": "01J8PARAMCMP",
+  "name": "ParameterizedComponent",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_pc",
+      "name": "HomeScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          { "id": "m_01", "type": "compose.fillMaxSize", "args": {} }
+        ],
+        "children": [
+          {
+            "id": "inst_01",
+            "type": "vforge.userComponent",
+            "props": {
+              "componentId": { "kind": "literal", "value": "cmp_primary" },
+              "label": { "kind": "literal", "value": "Sign in" },
+              "enabled": { "kind": "literal", "value": false }
+            }
+          },
+          {
+            "id": "inst_02",
+            "type": "vforge.userComponent",
+            "props": {
+              "componentId": { "kind": "literal", "value": "cmp_primary" },
+              "label": { "kind": "literal", "value": "Cancel" }
+            },
+            "modifiers": [
+              { "id": "m_02", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 8 } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_primary",
+      "name": "PrimaryButton",
+      "parameters": [
+        { "name": "label", "type": "String", "default": null },
+        { "name": "enabled", "type": "Boolean", "default": { "kind": "literal", "value": true } }
+      ],
+      "root": {
+        "id": "btn_01",
+        "type": "compose.material3.Button",
+        "props": {
+          "onClick": { "kind": "expression", "code": "{ /* TODO */ }" },
+          "enabled": { "kind": "param", "param": "enabled" }
+        },
+        "modifiers": [
+          { "id": "m_03", "type": "compose.fillMaxWidth", "args": {} }
+        ],
+        "slots": {
+          "content": [
+            { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "param", "param": "label" } } }
+          ]
+        }
+      }
+    }
+  ],
+  "assets": []
+}

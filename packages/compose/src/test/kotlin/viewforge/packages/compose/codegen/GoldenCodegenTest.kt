@@ -104,4 +104,15 @@ class GoldenCodegenTest {
         assertGeneratedFile(files, "HomeScreen.kt", "ReusableComponent")
         assertGeneratedFile(files, "PrimaryButton.kt", "ReusableComponent.PrimaryButton")
     }
+
+    // A component with parameters (parameters slice 2, ADR-028): the component emits typed fn params
+    // (String + a defaulted Boolean) with ParamRef bodies (`text = label`, `enabled = enabled`), and the
+    // screen emits calls passing argument values — including one instance that omits the defaulted arg.
+    @Test
+    fun parameterizedComponent() {
+        val project = ProjectCodec.decode(resource("/golden/ParameterizedComponent.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "HomeScreen.kt", "ParameterizedComponent")
+        assertGeneratedFile(files, "PrimaryButton.kt", "ParameterizedComponent.PrimaryButton")
+    }
 }
