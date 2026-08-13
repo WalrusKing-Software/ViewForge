@@ -70,4 +70,39 @@ class MarqueeTest {
     fun `an empty sweep selects nothing`() {
         assertEquals(emptyList(), marqueeSelection(rects, root, Rect(5f, 5f, 5f, 5f)))
     }
+
+    // --- combineMarquee: how a sweep merges with the standing selection (#99) --------------------
+
+    @Test
+    fun `a plain sweep replaces the selection`() {
+        assertEquals(
+            listOf(NodeId("b")),
+            combineMarquee(base = listOf(NodeId("a")), hits = listOf(NodeId("b")), additive = false),
+        )
+    }
+
+    @Test
+    fun `an additive sweep unions into the standing selection, hit stays primary`() {
+        assertEquals(
+            listOf(NodeId("a"), NodeId("b")),
+            combineMarquee(base = listOf(NodeId("a")), hits = listOf(NodeId("b")), additive = true),
+        )
+    }
+
+    @Test
+    fun `an additive sweep drops a re-enclosed node so it is not listed twice and stays primary`() {
+        // a is already selected and re-enclosed; it moves to the end (primary), not duplicated.
+        assertEquals(
+            listOf(NodeId("b"), NodeId("a")),
+            combineMarquee(base = listOf(NodeId("b"), NodeId("a")), hits = listOf(NodeId("a")), additive = true),
+        )
+    }
+
+    @Test
+    fun `an additive empty sweep leaves the selection untouched`() {
+        assertEquals(
+            listOf(NodeId("a"), NodeId("b")),
+            combineMarquee(base = listOf(NodeId("a"), NodeId("b")), hits = emptyList(), additive = true),
+        )
+    }
 }

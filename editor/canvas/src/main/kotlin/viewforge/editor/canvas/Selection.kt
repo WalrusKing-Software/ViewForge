@@ -204,6 +204,7 @@ internal class CanvasDragState(private val state: EditorState, private val bound
 internal class MarqueeState(private val state: EditorState, private val bounds: NodeBounds) {
     private var start by mutableStateOf<Offset?>(null)
     private var current by mutableStateOf<Offset?>(null)
+    private var additive = false
 
     /** Whether a marquee drag is in progress. */
     val active: Boolean get() = start != null
@@ -216,28 +217,49 @@ internal class MarqueeState(private val state: EditorState, private val bounds: 
             return Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
         }
 
-    fun begin(point: Offset) {
+    /**
+     * Begin a sweep at [point]. [additive] (a modifier held at press, #99) adds the enclosed nodes to the
+     * current selection rather than replacing it, matching the canvas click convention where Shift/Ctrl/Cmd
+     * extend a multi-selection.
+     */
+    fun begin(point: Offset, additive: Boolean) {
         start = point
         current = point
+        this.additive = additive
     }
 
     fun update(point: Offset) {
         if (start != null) current = point
     }
 
-    /** Replace the selection with the enclosed nodes, then reset. An empty sweep clears the selection. */
+    /**
+     * Resolve the enclosed nodes and apply them via [combineMarquee], then reset. A plain sweep replaces
+     * (an empty one clears); an additive sweep unions into the standing selection (an empty one leaves it).
+     */
     fun commit() {
         val root = state.activeEditRoot
         val box = rect
-        if (root != null && box != null) state.setSelection(marqueeSelection(bounds.snapshot(), root, box))
+        if (root != null && box != null) {
+            val hits = marqueeSelection(bounds.snapshot(), root, box)
+            state.setSelection(combineMarquee(state.selectedIds, hits, additive))
+        }
         reset()
     }
 
     fun reset() {
         start = null
         current = null
+        additive = false
     }
 }
+
+/**
+ * Merge a marquee's enclosed [hits] with the [base] selection (C10, #99). A non-[additive] sweep replaces
+ * outright; an additive sweep unions the two, dropping any base entry that reappears in [hits] so the last
+ * hit stays the primary (last) and no node is listed twice.
+ */
+internal fun combineMarquee(base: List<NodeId>, hits: List<NodeId>, additive: Boolean): List<NodeId> =
+    if (additive) base.filter { it !in hits } + hits else hits
 
 /**
  * The insertion caret for [address] in window space: a line across the target at the gap the index
@@ -365,7 +387,10 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                         val point = transform?.localToWindow(local) ?: local
                         val hit = hitTest(bounds.snapshot(), root, point)
                         if (hit == null || hit == root.id) {
-                            marquee.begin(point) // frame/empty canvas → marquee-select
+                            // Frame/empty canvas → marquee-select. A modifier held at press adds to the
+                            // selection instead of replacing (#99), matching the canvas click convention.
+                            val mods = windowInfo.keyboardModifiers
+                            marquee.begin(point, mods.isCtrlPressed || mods.isMetaPressed || mods.isShiftPressed)
                         } else if (root.findById(hit)?.locked != true) {
                             drag.begin(hit) // over a movable node → reparent; locked nodes don't drag
                         }
