@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import viewforge.command.AddNode
 import viewforge.command.AddScreen
 import viewforge.command.Command
+import viewforge.command.CompositeCommand
 import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
@@ -67,10 +68,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private val history = History()
 
     /**
-     * The clipboard for copy/cut/paste (D5). Transient view state, never part of the document; holds
-     * an immutable node snapshot that paste clones with fresh ids.
+     * The clipboard for copy/cut/paste (D5, C10). Transient view state, never part of the document; holds
+     * immutable node snapshots (one per copied top-level selection, in document order) that paste clones
+     * with fresh ids. Empty when nothing has been copied.
      */
-    var clipboard: Node? by mutableStateOf(null)
+    var clipboard: List<Node> by mutableStateOf(emptyList())
         private set
 
     /** Which screen the canvas shows. */
@@ -316,7 +318,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val canRedo: Boolean get() = history.canRedo
     val undoLabel: String? get() = history.undoLabel
     val redoLabel: String? get() = history.redoLabel
-    val canPaste: Boolean get() = clipboard?.let { !wouldInsertingCycle(it) } ?: false
+    val canPaste: Boolean get() = clipboard.any { !wouldInsertingCycle(it) }
 
     /**
      * Select a single node by id, replacing any existing selection, or null to clear (C10: plain click).
@@ -382,6 +384,28 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         reconcileSelection(selectAfter)
     }
 
+    /**
+     * Like [execute] but leaves a whole set of nodes selected afterward (C10 batch ops) — each id is
+     * honored only if it still exists. Used by batch delete/duplicate/paste so a multi-selection survives
+     * the command instead of collapsing to a single node.
+     */
+    private fun executeSelectingAll(command: Command, selectAfter: List<NodeId>) {
+        document = history.execute(command, document)
+        isDirty = true
+        val root = activeEditRoot
+        selectedIds = selectAfter.filter { root?.findById(it) != null }
+        selectionAnchor = selectedIds.lastOrNull()
+    }
+
+    /**
+     * The selected nodes with no selected ancestor, in selection order — the set batch delete/duplicate/
+     * copy act on, so a node is never handled twice (once on its own and once inside a selected ancestor).
+     */
+    private fun selectionTopLevel(): List<Node> {
+        val nodes = selectedNodes
+        return nodes.filter { node -> nodes.none { it.id != node.id && it.findById(node.id) != null } }
+    }
+
     fun undo() {
         if (!history.canUndo) return
         document = history.undo(document)
@@ -415,7 +439,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         history.clear()
         selectedIds = emptyList()
         selectionAnchor = null
-        clipboard = null
+        clipboard = emptyList()
         viewport = CanvasViewport()
         isSpaceHeld = false
         activeScreenId = project.screens.firstOrNull()?.id
@@ -636,24 +660,43 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteDropAddress = null
     }
 
-    /** Delete the selected node (never the root), leaving its parent selected. */
+    /** Delete every selected node (never the root) as one undoable step, leaving the primary's parent selected. */
     fun deleteSelected() {
         val root = activeEditRoot ?: return
         val rootId = activeEditRootId ?: return
-        val id = selectedId ?: return
-        if (id == root.id) return
-        val parentId = root.locate(id)?.parentId
-        execute(RemoveNode(rootId, id), selectAfter = parentId)
+        val targets = selectionTopLevel().filter { it.id != root.id }
+        if (targets.isEmpty()) return
+        val parentId = selectedNode?.let { root.locate(it.id)?.parentId }
+        val command = if (targets.size == 1) {
+            RemoveNode(rootId, targets[0].id)
+        } else {
+            CompositeCommand(targets.map { RemoveNode(rootId, it.id) }, label = "Delete ${targets.size} nodes")
+        }
+        executeSelectingAll(command, listOfNotNull(parentId))
     }
 
-    /** Duplicate the selected subtree (fresh ids) as its next sibling, and select the clone. */
+    /** Duplicate every selected subtree (fresh ids) as its next sibling in one step, and select the clones. */
     fun duplicateSelected() {
         val root = activeEditRoot ?: return
         val rootId = activeEditRootId ?: return
-        val node = selectedNode ?: return
-        val addr = root.locate(node.id) ?: return // root has no sibling slot
-        val clone = node.withFreshIds()
-        execute(AddNode(rootId, addr.copy(index = addr.index + 1), clone), selectAfter = clone.id)
+        val targets = selectionTopLevel().filter { it.id != root.id } // the root has no sibling slot
+        // Insert higher-index siblings first so each precomputed address stays valid as siblings shift.
+        val inserts = targets.mapNotNull { node ->
+            val addr = root.locate(node.id) ?: return@mapNotNull null
+            addr.copy(index = addr.index + 1) to node.withFreshIds()
+        }.sortedByDescending { it.first.index }
+        if (inserts.isEmpty()) return
+        val command = if (inserts.size == 1) {
+            AddNode(rootId, inserts[0].first, inserts[0].second)
+        } else {
+            CompositeCommand(
+                inserts.map {
+                    AddNode(rootId, it.first, it.second)
+                },
+                label = "Duplicate ${inserts.size} nodes",
+            )
+        }
+        executeSelectingAll(command, inserts.map { it.second.id })
     }
 
     // --- reusable components (D7) ------------------------------------------------------------------
@@ -794,26 +837,40 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         execute(SetNodeFlags(rootId, id, locked = nowLocked), selectAfter = keep)
     }
 
-    /** Copy the selection to the clipboard (D5). */
+    /** Copy the whole selection to the clipboard (D5, C10). */
     fun copySelected() {
-        clipboard = selectedNode
+        clipboard = selectionTopLevel()
     }
 
-    /** Cut the selection: copy it, then delete it. */
+    /** Cut the whole selection: copy it, then delete it in one undoable step. */
     fun cut() {
-        val node = selectedNode ?: return
-        clipboard = node
+        val targets = selectionTopLevel()
+        if (targets.isEmpty()) return
+        clipboard = targets
         deleteSelected()
     }
 
-    /** Paste a fresh-id clone of the clipboard at the current insertion point (D5: targets selection). */
+    /**
+     * Paste fresh-id clones of the clipboard at the current insertion point (D5: targets selection) in one
+     * step, selecting the clones. Clipboard entries that would form a cycle are skipped (#70); the rest
+     * paste in clipboard order.
+     */
     fun paste() {
         val rootId = activeEditRootId ?: return
-        val template = clipboard ?: return
-        if (wouldInsertingCycle(template)) return // refuse pasting an instance that would cycle (#70)
-        val address = insertionAddress() ?: return
-        val clone = template.withFreshIds()
-        execute(AddNode(rootId, address, clone), selectAfter = clone.id)
+        val pasteable = clipboard.filter { !wouldInsertingCycle(it) }
+        if (pasteable.isEmpty()) return
+        val base = insertionAddress() ?: return
+        val clones = pasteable.map { it.withFreshIds() }
+        val command = if (clones.size == 1) {
+            AddNode(rootId, base, clones[0])
+        } else {
+            // base.index + k keeps the clones in order: each later insert lands right after the previous.
+            CompositeCommand(
+                clones.mapIndexed { k, clone -> AddNode(rootId, base.copy(index = base.index + k), clone) },
+                label = "Paste ${clones.size} nodes",
+            )
+        }
+        executeSelectingAll(command, clones.map { it.id })
     }
 
     /** Move [id] to [target] (reorder or reparent), if the drop is legal; keeps the node selected. */
