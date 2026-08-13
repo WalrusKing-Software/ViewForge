@@ -1,7 +1,8 @@
 package viewforge.editor.panels
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,7 +72,12 @@ private fun PaletteEntry.matches(query: String): Boolean {
  * it at a position (P2a). The drag streams the pointer in window space (via the row's own
  * [LayoutCoordinates]) into [EditorState]; the canvas overlay resolves the target and the release
  * commits it. A press with no movement stays a click, so add-by-click is unchanged.
+ *
+ * A user-component entry additionally **double-clicks to open it for in-place editing** (#61) — the
+ * canvas/tree switch to the component's own tree; the shell's breadcrumb returns to the screen. A
+ * built-in has no definition, so double-click does nothing there.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaletteRow(state: EditorState, entry: PaletteEntry) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -99,7 +105,10 @@ private fun PaletteRow(state: EditorState, entry: PaletteEntry) {
                     onDragCancel = { state.cancelPaletteDrag() },
                 )
             }
-            .clickable(onClick = { state.addFromPalette(entry) })
+            .combinedClickable(
+                onClick = { state.addFromPalette(entry) },
+                onDoubleClick = entry.componentId?.let { id -> { state.openComponent(id) } },
+            )
             .padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
     )
 }

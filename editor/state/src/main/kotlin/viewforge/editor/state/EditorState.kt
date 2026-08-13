@@ -98,6 +98,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val activeEditRootId: String?
         get() = editingComponent?.id ?: activeScreen?.id
 
+    /** The name of the component open for in-place editing (for the breadcrumb), or null when editing a screen. */
+    val editingComponentName: String?
+        get() = editingComponent?.name
+
     /** Open reusable component [id] for in-place editing; selection resets into the component's own tree. */
     fun openComponent(id: String) {
         if (document.components.none { it.id == id }) return
@@ -441,12 +445,12 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private fun paletteNode(type: String, componentId: String?): Node =
         if (componentId != null) UserComponent.instance(componentId) else catalog.newNode(type)
 
-    /** Add a fresh node for [entry] at the current insertion point, and select it (P1a/P6a). */
+    /** Add a fresh node for [entry] at the current insertion point on the active edit surface, and select it (P1a/P6a). */
     fun addFromPalette(entry: PaletteEntry) {
-        val screen = activeScreen ?: return
+        val rootId = activeEditRootId ?: return
         val address = insertionAddress() ?: return
         val node = paletteNode(entry.type, entry.componentId)
-        execute(AddNode(screen.id, address, node), selectAfter = node.id)
+        execute(AddNode(rootId, address, node), selectAfter = node.id)
     }
 
     /** Convenience for a framework built-in identified by [type] alone (no user-component id). */

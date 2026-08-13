@@ -125,9 +125,9 @@ fun FrameWindowScope.EditorShell(
             ) {
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
-                // The screen switcher (D6): switch, rename, add and remove screens. Full-width chrome
-                // above the working surfaces since a screen is document-wide, not canvas-specific.
-                ScreenSwitcher(state)
+                // The screen switcher (D6) — or, while a component is open for in-place editing (#61), a
+                // breadcrumb back to the screen in its place (you don't switch screens inside a component).
+                if (state.editingComponentId != null) ComponentEditBar(state) else ScreenSwitcher(state)
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
