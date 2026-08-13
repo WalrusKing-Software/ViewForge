@@ -84,6 +84,16 @@ private fun InspectorBody(state: EditorState, node: Node) {
             InstanceParameters(state, node, theme)
         } else {
             SectionLabel("Props")
+            // With several same-type nodes selected, a prop edit applies to all of them (C10).
+            val shared = state.sameTypeSelection().size
+            if (shared > 1) {
+                Text(
+                    "Editing $shared ${shortTypeName(node.type)} — changes apply to all",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
             val defs = state.catalog.propsFor(node.type)
             val known = defs.map { it.name }.toSet()
             if (defs.isEmpty() && node.props.isEmpty()) MutedText("none")
@@ -114,10 +124,12 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             )
             if (!isParam) {
                 // Reset to default (I7) only when the prop is set to something other than its default.
+                // Like the value edit, this fans out to every same-type selected node (C10).
                 if (value != null && value != def.default) {
-                    ActionText("reset") { state.resetProp(node.id, def) }
+                    ActionText("reset") { state.setPropShared(def.name, def.default) }
                 }
-                // Escape hatch (I6): retype this prop as a raw Kotlin expression.
+                // Escape hatch (I6): retype this prop as a raw Kotlin expression. Primary-only — an
+                // expression is derived from this node's current value, so it isn't a shared edit.
                 if (value !is PropValue.RawExpression) {
                     ActionText("ƒx") { state.setProp(node.id, def.name, expressionValue(value.literalText() ?: "")) }
                 }
@@ -131,7 +143,9 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             type = def.type,
             value = value ?: def.default,
             theme = theme,
-            onChange = { state.setProp(node.id, def.name, it) },
+            // Editing a prop applies to every same-type selected node (C10 shared edit); with a lone
+            // selection this is just the primary.
+            onChange = { state.setPropShared(def.name, it) },
             enumValues = def.enumValues,
             range = def.range,
             themeable = def.themeable,

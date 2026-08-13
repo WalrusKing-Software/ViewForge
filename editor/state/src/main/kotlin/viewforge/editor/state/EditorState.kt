@@ -894,6 +894,38 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * The selected nodes that share the primary's type — the set a **shared** inspector edit applies to
+     * (C10). Same-type only, so the primary's data-driven [PropDefinition]s are valid for every target.
+     * Empty with no selection; a single-element list for a lone selection.
+     */
+    fun sameTypeSelection(): List<Node> {
+        val primary = selectedNode ?: return emptyList()
+        return selectedNodes.filter { it.type == primary.type }
+    }
+
+    /**
+     * Set a prop on every same-type selected node as one undoable step (C10 shared edit). With a single
+     * selection this is exactly [setProp] on the primary. A continuous edit (slider/stepper) coalesces
+     * into one history entry per (prop, target set), like single-node editing does. Keeps the selection.
+     */
+    fun setPropShared(key: String, value: PropValue?) {
+        val rootId = activeEditRootId ?: return
+        val targets = sameTypeSelection()
+        when {
+            targets.isEmpty() -> return
+            targets.size == 1 -> execute(SetProp(rootId, targets[0].id, key, value), selectAfter = selectedId)
+            else -> {
+                val command = CompositeCommand(
+                    targets.map { SetProp(rootId, it.id, key, value) },
+                    label = "Set $key on ${targets.size} nodes",
+                    coalesceKey = Triple("sharedProp", key, targets.map { it.id.value }.sorted()),
+                )
+                executeSelectingAll(command, selectedIds)
+            }
+        }
+    }
+
+    /**
      * Append a modifier of [type] (with its schema defaults) to a node's chain. Ids are freshly
      * generated; order is preserved, new entry last (the user reorders via drag).
      */
