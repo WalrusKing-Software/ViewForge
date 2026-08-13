@@ -38,4 +38,19 @@ object KotlinIdentifiers {
         }
         return name
     }
+
+    /**
+     * Returns [name] if it is a legal parameter identifier, else throws (GC-3). A component parameter
+     * becomes a `@Composable fun` parameter name, so it is held to the same identifier rule.
+     */
+    fun requireParameterName(name: String): String {
+        if (name.isBlank()) throw CodegenException("Parameter name is blank; cannot be a Kotlin identifier")
+        if (!IDENTIFIER.matches(name)) {
+            throw CodegenException("Parameter name '$name' is not a legal Kotlin identifier (GC-3)")
+        }
+        if (name in HARD_KEYWORDS) {
+            throw CodegenException("Parameter name '$name' is a reserved Kotlin keyword (GC-3)")
+        }
+        return name
+    }
 }

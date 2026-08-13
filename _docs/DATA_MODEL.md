@@ -105,8 +105,8 @@ in its own `props` map, keyed by parameter name (alongside the reserved `compone
 instance-`props` side needs no schema change, only `ParamRef` does. Codegen emits each component as a
 `@Composable fun` with typed parameters and each instance as a call passing the argument values;
 render resolves each `ParamRef` against the instance's args, falling back to `Parameter.default`.
-*(Codegen, render, and inspector wiring land in later slices of the parameters epic; schema 2 ships
-the `ParamRef` primitive first.)*
+*(Codegen — typed fn params + call args — ships in slice 2; render-time resolution and inspector arg
+editing land in later slices of the parameters epic.)*
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
 itself. It is validated on load (`ProjectValidator`) and guarded again at render time

@@ -7,6 +7,7 @@ import com.squareup.kotlinpoet.ParameterSpec
 import viewforge.model.Asset
 import viewforge.model.ComponentDef
 import viewforge.model.Node
+import viewforge.model.Parameter
 import viewforge.model.Project
 import viewforge.model.Screen
 import viewforge.model.Theme
@@ -105,13 +106,16 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion,
         assets,
         components,
+        component.parameters,
     )
 
     /**
      * The shared lowering for a top-level composable (a screen or a user component): emit [root] under a
-     * `@Composable fun [fnName](modifier: Modifier = Modifier)`, chaining the root's own modifier chain
-     * onto the caller's `modifier` (DATA_MODEL §12.1). [components] lets a `vforge.userComponent` instance
-     * in the tree resolve to a call.
+     * `@Composable fun [fnName](<params>, modifier: Modifier = Modifier)`, chaining the root's own
+     * modifier chain onto the caller's `modifier` (DATA_MODEL §12.1). [components] lets a
+     * `vforge.userComponent` instance in the tree resolve to a call. [parameters] are a user component's
+     * declared parameters (empty for a screen); each becomes a typed function parameter, referenced in
+     * the body via `PropValue.ParamRef` and supplied by each instance's arguments (ADR-028).
      */
     private fun generateComposable(
         fnName: String,
@@ -121,6 +125,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset>,
         components: List<ComponentDef>,
+        parameters: List<Parameter> = emptyList(),
     ): String {
         val emitter = ComponentEmitter(theme, assets, components)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
@@ -137,6 +142,18 @@ class ComposeCodeGenerator : CodeGenerator {
                 }
             }
             .addAnnotation(ComposeNames.Composable)
+            .apply {
+                // Component parameters precede the conventional `modifier`. Calls always use named
+                // arguments, so a defaulted parameter before `modifier` is well-formed Kotlin.
+                parameters.forEach { p ->
+                    val spec = ParameterSpec.builder(
+                        KotlinIdentifiers.requireParameterName(p.name),
+                        ParameterTypes.signatureType(p.type),
+                    )
+                    p.default?.let { spec.defaultValue(ParameterTypes.argValue(p.type, it, theme)) }
+                    addParameter(spec.build())
+                }
+            }
             .addParameter(
                 ParameterSpec.builder("modifier", ComposeNames.Modifier)
                     .defaultValue("%T", ComposeNames.Modifier)

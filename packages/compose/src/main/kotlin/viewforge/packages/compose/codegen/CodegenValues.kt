@@ -56,6 +56,7 @@ internal object CodegenValues {
                     ?: throw CodegenException("dp prop expects an integer, got '${value.value.content}'"),
             )
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("dp prop has no value")
         else -> throw CodegenException("dp prop must be a literal or expression, got $value")
     }
@@ -69,6 +70,7 @@ internal object CodegenValues {
                     ?: throw CodegenException("float prop expects a number, got '${value.value.content}'"),
             )
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("float prop has no value")
         else -> throw CodegenException("float prop must be a literal or expression, got $value")
     }
@@ -83,6 +85,7 @@ internal object CodegenValues {
                 ComposeNames.sp,
             )
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("sp prop has no value")
         else -> throw CodegenException("sp prop must be a literal or expression, got $value")
     }
@@ -96,6 +99,7 @@ internal object CodegenValues {
                     ?: throw CodegenException("int prop expects an integer, got '${value.value.content}'"),
             )
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("int prop has no value")
         else -> throw CodegenException("int prop must be a literal or expression, got $value")
     }
@@ -109,6 +113,7 @@ internal object CodegenValues {
                     ?: throw CodegenException("bool prop expects true/false, got '${value.value.content}'"),
             )
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("bool prop has no value")
         else -> throw CodegenException("bool prop must be a literal or expression, got $value")
     }
@@ -118,6 +123,7 @@ internal object CodegenValues {
         null -> CodeBlock.of("%S", "")
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         else -> throw CodegenException("Text 'text' must be a string literal or expression, got $value")
     }
 
@@ -129,6 +135,7 @@ internal object CodegenValues {
         null -> CodeBlock.of("null")
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         else -> throw CodegenException("Expected a string literal, null, or expression, got $value")
     }
 
@@ -204,6 +211,7 @@ internal object CodegenValues {
         is PropValue.Literal -> colorLiteral(value.value.content)
         is PropValue.ThemeRef -> colorTheme(value.token, theme)
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         else -> throw CodegenException("Color prop must be a literal, theme ref, or expression, got $value")
     }
 
@@ -256,6 +264,7 @@ internal object CodegenValues {
     fun enum(propName: String, value: PropValue?): CodeBlock = when (value) {
         is PropValue.Literal -> enumMember(propName, value.value.content)
         is PropValue.RawExpression -> raw(value)
+        is PropValue.ParamRef -> param(value)
         null -> throw CodegenException("Enum prop '$propName' has no value")
         else -> throw CodegenException("Enum prop '$propName' must be a literal or expression, got $value")
     }
@@ -299,4 +308,11 @@ internal object CodegenValues {
 
     /** Verbatim escape hatch (GC-4): the user is the author; emitted as-is, never validated. */
     private fun raw(value: PropValue.RawExpression): CodeBlock = CodeBlock.of("%L", value.code)
+
+    /**
+     * A component parameter reference emits the bare parameter identifier (parameters slice 2): inside
+     * a component body the value *is* the enclosing function's parameter, so `text = label`, whatever
+     * the parameter's declared type. Resolution to a concrete value happens at the instance call site.
+     */
+    private fun param(value: PropValue.ParamRef): CodeBlock = CodeBlock.of("%N", value.param)
 }

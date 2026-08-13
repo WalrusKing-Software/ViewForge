@@ -37,6 +37,7 @@ internal object ComposeNames {
     // Unit extension properties: `16.dp`, `22.sp`
     val dp = MemberName("androidx.compose.ui.unit", "dp")
     val sp = MemberName("androidx.compose.ui.unit", "sp")
+    val Dp = ClassName("androidx.compose.ui.unit", "Dp")
 
     // Composables
     val Column = MemberName("androidx.compose.foundation.layout", "Column")

@@ -86,21 +86,48 @@ internal class ComponentEmitter(
 
     /**
      * A `vforge.userComponent` instance emits a call to the referenced component's generated composable,
-     * `PrimaryButton(modifier = …)` — the reference, not an inlined copy (ADR-024). The instance's own
-     * modifier chain (if any) is passed as the `modifier` argument the component composable exposes. An
-     * unresolved reference fails loudly rather than emitting a call to a function that won't exist
-     * (CLAUDE.md: a visible error beats a silent wrong emit).
+     * `PrimaryButton(label = "Hi", modifier = …)` — the reference, not an inlined copy (ADR-024). For
+     * each of the definition's parameters the instance supplies an argument value from its own props
+     * (keyed by parameter name); a parameter the instance omits falls back to the definition's default,
+     * or fails loudly if it has none. The instance's own modifier chain (if any) is passed last as the
+     * `modifier` argument. An unresolved reference or a missing required argument fails loudly rather
+     * than emitting a call that won't compile (CLAUDE.md: a visible error beats a silent wrong emit).
      */
     private fun userComponentCall(node: Node, mod: CodeBlock?): CodeBlock {
         val id = (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)?.value?.content
         val def = id?.let { componentsById[it] }
             ?: throw CodegenException("Unresolved user-component instance: no component with id '${id ?: "?"}'")
         val fnName = KotlinIdentifiers.requireFunctionName(def.name)
-        return if (mod == null) {
-            CodeBlock.of("%L()", fnName)
-        } else {
-            CodeBlock.of("%L(modifier = %L)", fnName, mod)
+        val args = buildList {
+            def.parameters.forEach { p ->
+                val arg = node.props[p.name]
+                when {
+                    arg != null -> add(named(p.name, ParameterTypes.argValue(p.type, arg, theme)))
+                    // No argument and no default: the generated call would omit a required parameter.
+                    p.default == null -> throw CodegenException(
+                        "Instance of '${def.name}' is missing required argument '${p.name}'",
+                    )
+                    // else: parameter has a default — omit the argument so the default applies.
+                }
+            }
+            if (mod != null) add(named("modifier", mod))
         }
+        return componentCall(fnName, args)
+    }
+
+    /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */
+    private fun componentCall(fnName: String, args: List<CodeBlock>): CodeBlock {
+        val b = CodeBlock.builder()
+        when {
+            args.isEmpty() -> b.add("%L()", fnName)
+            args.size == 1 -> b.add("%L(%L)", fnName, args[0])
+            else -> {
+                b.add("%L(\n", fnName).indent()
+                args.forEach { b.add("%L,\n", it) }
+                b.unindent().add(")")
+            }
+        }
+        return b.build()
     }
 
     // --- per-component argument lists (order mirrors the renderer's Composable call) --------------

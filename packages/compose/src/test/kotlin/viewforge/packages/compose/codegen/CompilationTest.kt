@@ -56,6 +56,19 @@ class CompilationTest {
     }
 
     @Test
+    fun `generated parameterized component compiles with the screen that instances it`() {
+        // A component with typed parameters (parameters slice 2) and a screen that calls it with
+        // argument values must compile together: the ParamRef bodies resolve to the fn parameters and
+        // each call's named args match the generated signature (ADR-028).
+        val text = requireNotNull(
+            javaClass.getResourceAsStream("/golden/ParameterizedComponent.vforge"),
+        ).bufferedReader().readText()
+        val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
+        val sources = files.map { SourceFile.kotlin(it.path, it.content) }
+        assertCompiles(sources, "generated parameterized component did not compile with its screen")
+    }
+
+    @Test
     fun `generated theme wrapper compiles with its screen`() {
         // The AppTheme wrapper (H4) and a screen that emits an inline TextStyle for a custom typography
         // token must compile against real Compose/Material3 — the H4 half of the compile gate (M8).
