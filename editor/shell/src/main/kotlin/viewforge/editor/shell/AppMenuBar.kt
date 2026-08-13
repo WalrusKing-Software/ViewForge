@@ -6,6 +6,7 @@ import androidx.compose.ui.window.MenuBar
 import viewforge.editor.state.CanvasViewport
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ExportMode
+import java.nio.file.Path
 
 /**
  * The application menu bar (FEATURES S1/S2, issue #19): a thin native menu over the editor's existing
@@ -33,6 +34,8 @@ internal fun FrameWindowScope.AppMenuBar(
     onOpenThemeEditor: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
+    onOpenRecent: (String) -> Unit,
+    onClearRecent: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit,
 ) {
@@ -44,6 +47,19 @@ internal fun FrameWindowScope.AppMenuBar(
             // .vforge persistence (#37). Accelerators display-only — handleShortcut binds the real keys.
             Item(withAccel("New", "Ctrl+N"), onClick = onNew)
             Item(withAccel("Open…", "Ctrl+O"), onClick = onOpen)
+            // Recently opened/saved projects (D8, #88). Empty -> a single disabled placeholder so the
+            // submenu is discoverable; each entry shows its file name and reopens it (guarding unsaved
+            // edits in the controller). Clear Recent empties the list.
+            Menu("Open Recent") {
+                val recents = state.recentProjects
+                if (recents.isEmpty()) {
+                    Item("(No recent projects)", enabled = false, onClick = {})
+                } else {
+                    recents.forEach { path -> Item(recentLabel(path), onClick = { onOpenRecent(path) }) }
+                    Separator()
+                    Item("Clear Recent", onClick = onClearRecent)
+                }
+            }
             Separator()
             // Save greys out with no unsaved edits; Save As is always available (write a copy anywhere).
             Item(withAccel("Save", "Ctrl+S"), enabled = file.canSave, onClick = onSave)
@@ -149,3 +165,9 @@ internal fun EditorState.viewMenuModel(): ViewMenuModel = ViewMenuModel(
  * focus-aware key handler.
  */
 internal fun withAccel(text: String, accelerator: String): String = "$text   ($accelerator)"
+
+/**
+ * The label for a recent-project entry (D8): its file name, which is what distinguishes entries in a menu
+ * — the full path is long and mostly shared. Falls back to the whole string if it has no file-name part.
+ */
+internal fun recentLabel(path: String): String = Path.of(path).fileName?.toString() ?: path
