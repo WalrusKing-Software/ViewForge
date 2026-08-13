@@ -73,6 +73,12 @@ fun FrameWindowScope.EditorShell(
     previewService: CodePreviewService,
     recoveryDir: Path,
     autosaveIntervalMs: Long = AUTOSAVE_INTERVAL_MS,
+    // Save-on-close (#56): the window's onCloseRequest raises [closeRequested] when the document is dirty;
+    // the shell shows a Save/Discard/Cancel prompt and calls [onExit] to actually quit or [onCloseHandled]
+    // to abort. Defaulted so the shell stays usable (and the signature stable) without the close wiring.
+    closeRequested: Boolean = false,
+    onCloseHandled: () -> Unit = {},
+    onExit: () -> Unit = {},
 ) {
     // The theme editor is a modal dialog (M8), opened from the toolbar or the View menu; its state lives
     // here so it survives recomposition and can be dismissed from either the dialog or a re-click.
@@ -112,6 +118,7 @@ fun FrameWindowScope.EditorShell(
         ExportDialogs(export)
         DocumentDialogs(document)
         RecoveryDialog(recovery)
+        ExitConfirmation(closeRequested, state, document, onExit = onExit, onCancel = onCloseHandled)
 
         Surface(Modifier.fillMaxSize()) {
             Column(
