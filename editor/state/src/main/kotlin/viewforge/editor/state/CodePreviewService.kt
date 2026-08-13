@@ -37,6 +37,18 @@ interface CodePreviewService {
 data class PreviewSource(val code: String, val spans: Map<String, IntRange>)
 
 /**
+ * The id of the innermost node whose source span encloses [offset] in the generated code, or null when the
+ * offset falls outside every node's range (a file header, import, or blank line). The reverse of #51's
+ * node→code highlight: the code-preview panel maps a click position to a caret offset and calls this to
+ * pick the node to select. "Innermost" is the narrowest enclosing span, so clicking inside a child selects
+ * the child rather than its parent. Pure, so it is unit-tested without a composition.
+ */
+fun Map<String, IntRange>.nodeAt(offset: Int): String? = entries
+    .filter { offset in it.value }
+    .minByOrNull { it.value.last - it.value.first }
+    ?.key
+
+/**
  * What the code preview shows: the active [OfScreen] or, while a component is open for in-place editing,
  * the [OfComponent] whose source is generated instead (#69).
  */
