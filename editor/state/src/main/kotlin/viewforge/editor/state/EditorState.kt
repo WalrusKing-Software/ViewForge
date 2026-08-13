@@ -39,6 +39,7 @@ import viewforge.model.TypographyToken
 import viewforge.model.Ulid
 import viewforge.model.UserComponent
 import viewforge.model.findById
+import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
@@ -269,7 +270,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val canRedo: Boolean get() = history.canRedo
     val undoLabel: String? get() = history.undoLabel
     val redoLabel: String? get() = history.redoLabel
-    val canPaste: Boolean get() = clipboard != null
+    val canPaste: Boolean get() = clipboard?.let { !wouldInsertingCycle(it) } ?: false
 
     /**
      * Select a node by id, or null to clear. A **locked** node cannot be selected (T4); the request is
@@ -468,11 +469,29 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private fun paletteNode(type: String, componentId: String?): Node =
         if (componentId != null) UserComponent.instance(componentId) else catalog.newNode(type)
 
+    /**
+     * Whether inserting [node] into the current edit surface would close a reference cycle (PF-3, #70):
+     * true only while a component is open for in-place editing and [node] references — directly or
+     * transitively — that component (including inserting an instance of it into itself). A cycle is
+     * caught at render (loud placeholder) and load (validation), but the editor refuses to *create* one:
+     * the palette greys such entries out and paste is disabled. Screen editing never cycles.
+     */
+    fun wouldInsertingCycle(node: Node): Boolean = document.insertionWouldCycle(editingComponentId, node)
+
+    /**
+     * Whether adding palette [entry] here would form a cycle (#70) — always false for a framework
+     * built-in and while editing a screen; true only for a user-component entry that would reference the
+     * open component. The palette disables and explains such entries so the insert is refused up front.
+     */
+    fun paletteEntryWouldCycle(entry: PaletteEntry): Boolean =
+        entry.componentId != null && wouldInsertingCycle(paletteNode(entry.type, entry.componentId))
+
     /** Add a fresh node for [entry] at the current insertion point on the active edit surface, and select it (P1a/P6a). */
     fun addFromPalette(entry: PaletteEntry) {
         val rootId = activeEditRootId ?: return
         val address = insertionAddress() ?: return
         val node = paletteNode(entry.type, entry.componentId)
+        if (wouldInsertingCycle(node)) return // refuse a cycle-forming insert up front (#70)
         execute(AddNode(rootId, address, node), selectAfter = node.id)
     }
 
@@ -516,7 +535,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val rootId = activeEditRootId
         if (type != null && address != null && rootId != null) {
             val node = paletteNode(type, paletteDragComponentId)
-            execute(AddNode(rootId, address, node), selectAfter = node.id)
+            // A cycle-forming drop is refused (#70); the palette disables the drag source, so this is defence.
+            if (!wouldInsertingCycle(node)) execute(AddNode(rootId, address, node), selectAfter = node.id)
         }
         cancelPaletteDrag()
     }
@@ -704,6 +724,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun paste() {
         val rootId = activeEditRootId ?: return
         val template = clipboard ?: return
+        if (wouldInsertingCycle(template)) return // refuse pasting an instance that would cycle (#70)
         val address = insertionAddress() ?: return
         val clone = template.withFreshIds()
         execute(AddNode(rootId, address, clone), selectAfter = clone.id)
