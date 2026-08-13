@@ -49,7 +49,23 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 1")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 2")
+    }
+
+    @Test
+    fun `a ParamRef survives a round-trip and carries the param kind discriminator`() {
+        val node = viewforge.model.Node(
+            id = viewforge.model.NodeId("n_param"),
+            type = "compose.material3.Text",
+            props = mapOf("text" to viewforge.model.PropValue.ParamRef("label")),
+        )
+        val project = Fixtures.minimalProject().let {
+            it.copy(components = listOf(viewforge.model.ComponentDef(id = "cmp_1", name = "Labeled", root = node)))
+        }
+        val json = ProjectCodec.encode(project)
+        assertContains(json, "\"kind\": \"param\"")
+        assertContains(json, "\"param\": \"label\"")
+        assertEquals(project, ProjectCodec.decode(json))
     }
 
     @Test

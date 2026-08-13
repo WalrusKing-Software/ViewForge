@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.SCHEMA_VERSION
 import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -70,6 +71,25 @@ class MigrationTest {
         Files.writeString(tmp, """{"schemaVersion": 999, "id": "x", "name": "x"}""")
         val result = ProjectStore.load(tmp)
         assertTrue(result is LoadResult.Failure && result.kind == LoadFailure.NEWER_SCHEMA, "got $result")
+    }
+
+    @Test
+    fun `M1to2 stamps the version and leaves the rest of the document untouched`() {
+        val v1 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(1), "id" to JsonPrimitive("x")))
+        val v2 = viewforge.project.migrations.M1to2.migrate(v1)
+        assertEquals(2, SchemaMigrations.readVersion(v2))
+        assertEquals(JsonPrimitive("x"), v2["id"])
+    }
+
+    @Test
+    fun `the committed schema-1 Demo_vforge fixture migrates and loads at the current version`() {
+        // Demo.vforge is intentionally pinned at schema 1 (samples/README) so the 1->2 chain is
+        // exercised end to end against a real committed file (DATA_MODEL rule 3).
+        val samplesDir = System.getProperty("viewforge.samplesDir")
+            ?: error("viewforge.samplesDir system property not set by the build")
+        val result = ProjectStore.load(Paths.get(samplesDir, "Demo.vforge"))
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
     }
 
     @Test
