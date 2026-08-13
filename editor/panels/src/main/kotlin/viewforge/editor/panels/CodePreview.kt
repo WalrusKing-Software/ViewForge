@@ -1,5 +1,6 @@
 package viewforge.editor.panels
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -26,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.PreviewContent
+import viewforge.editor.state.nodeAt
 import viewforge.editor.state.previewContent
+import viewforge.model.NodeId
 
 /**
  * The live code-preview panel (FEATURES G3, #50): a **read-only** view of the generated Kotlin/Compose
@@ -35,9 +39,10 @@ import viewforge.editor.state.previewContent
  * [CodePreviewService] seam (ADR-013), so this module never names `packages/compose`.
  *
  * Selecting a node scrolls the panel to, and highlights, the code emitted for it (#51): the seam returns
- * a node→source-range map alongside the source, so this reads `state.selectedId` against it. Text stays
- * selectable so a user can still copy by hand; click-code-to-select (the reverse direction) and
- * copy-to-clipboard remain follow-ups (G8).
+ * a node→source-range map alongside the source, so this reads `state.selectedId` against it. The reverse
+ * also holds (#103): tapping in the source selects the innermost node whose span encloses the caret, via
+ * the same map ([nodeAt]). Text stays selectable so a user can still copy by hand; copy-to-clipboard
+ * remains a follow-up (G8, #102).
  */
 @Composable
 fun CodePreview(state: EditorState, service: CodePreviewService, modifier: Modifier = Modifier) {
@@ -98,7 +103,17 @@ private fun SourceView(state: EditorState, content: PreviewContent.Source) {
                 .fillMaxSize()
                 .verticalScroll(vScroll)
                 .horizontalScroll(hScroll)
-                .padding(12.dp),
+                .padding(12.dp)
+                // Tap the source to select the innermost node whose span covers the caret (#103, reverse of
+                // #51). Keyed on the shown source so it always resolves against the current spans; a tap
+                // outside every span (headers, imports, blank lines) selects nothing. Text remains
+                // drag-selectable via the enclosing SelectionContainer.
+                .pointerInput(content) {
+                    detectTapGestures { pos ->
+                        val laid = layout ?: return@detectTapGestures
+                        content.spans.nodeAt(laid.getOffsetForPosition(pos))?.let { state.select(NodeId(it)) }
+                    }
+                },
         )
     }
 }
