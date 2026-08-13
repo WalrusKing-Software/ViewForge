@@ -60,6 +60,12 @@ internal fun ValueControl(
         ExpressionField(value.code, onChange)
         return
     }
+    // A prop bound to a component parameter shows its binding read-only (ADR-028); the value comes from
+    // the instance's argument, edited on the instance, not here. Undo unbinds it (a promote is one step).
+    if (value is PropValue.ParamRef) {
+        ParamRefChip(value.param)
+        return
+    }
     when (type) {
         PropType.Bool -> BoolControl(value.literalBool() ?: false, onChange)
         PropType.Enum -> EnumDropdown(enumValues.orEmpty(), value.literalText(), onChange)
@@ -424,6 +430,19 @@ private fun ExpressionField(code: String, onChange: (PropValue?) -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+/** Read-only display of a prop bound to a component parameter (ADR-028): `→ param: name`. */
+@Composable
+private fun ParamRefChip(name: String) {
+    FieldBox {
+        Text(
+            "→ param: $name",
+            style = fieldStyle(),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

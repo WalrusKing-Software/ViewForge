@@ -20,12 +20,15 @@ import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
+import viewforge.command.promoteToParameter
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
 import viewforge.model.ComponentDef
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Parameter
+import viewforge.model.ParameterType
 import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
@@ -579,6 +582,45 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         var n = 1
         while ("Component$n" in taken) n++
         return "Component$n"
+    }
+
+    /**
+     * Whether the prop [def] of [node] can be promoted to a component parameter (ADR-028): only while a
+     * component is open for in-place editing (its definition is the edit surface), only for a value-like
+     * [PropType] (`ParameterType.isPromotable`), and only when the prop is not already bound to a parameter.
+     */
+    fun canPromoteToParameter(node: Node, def: PropDefinition): Boolean = editingComponentId != null &&
+        ParameterType.isPromotable(def.type) &&
+        node.props[def.name] !is PropValue.ParamRef
+
+    /**
+     * Promote node [nodeId]'s prop [propName] to a parameter of the open component (ADR-028): derive a
+     * parameter named after the prop (disambiguated if taken), typed from the prop's [PropType], defaulting
+     * to the prop's current value (or its schema default), then add it and rebind the prop to a `ParamRef`
+     * in one undoable step. A no-op unless a component is open and the prop is promotable.
+     */
+    fun promotePropToParameter(nodeId: NodeId, propName: String) {
+        val componentId = editingComponentId ?: return
+        val node = activeEditRoot?.findById(nodeId) ?: return
+        val def = catalog.propsFor(node.type).firstOrNull { it.name == propName } ?: return
+        if (!canPromoteToParameter(node, def)) return
+        val typeName = ParameterType.nameFor(def.type) ?: return
+        val parameter = Parameter(
+            name = uniqueParameterName(componentId, propName),
+            type = typeName,
+            default = node.props[propName] ?: def.default,
+        )
+        execute(promoteToParameter(componentId, nodeId, propName, parameter), selectAfter = selectedId)
+    }
+
+    /** [base] if free within component [componentId], else `base2`, `base3`, … — parameter names are unique per component. */
+    private fun uniqueParameterName(componentId: String, base: String): String {
+        val taken = document.components.firstOrNull { it.id == componentId }
+            ?.parameters?.mapTo(HashSet()) { it.name } ?: emptySet()
+        if (base !in taken) return base
+        var n = 2
+        while ("$base$n" in taken) n++
+        return "$base$n"
     }
 
     /** Set (or clear) a node's name (T3). */

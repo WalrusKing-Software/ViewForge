@@ -93,6 +93,8 @@ private fun InspectorBody(state: EditorState, node: Node) {
 @Composable
 private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: Theme) {
     val value = node.props[def.name]
+    // A prop bound to a component parameter (ADR-028) shows a read-only chip, not the literal controls.
+    val isParam = value is PropValue.ParamRef
     Column(Modifier.padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -101,13 +103,19 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            // Reset to default (I7) only when the prop is set to something other than its default.
-            if (value != null && value != def.default) {
-                ActionText("reset") { state.resetProp(node.id, def) }
-            }
-            // Escape hatch (I6): retype this prop as a raw Kotlin expression.
-            if (value !is PropValue.RawExpression) {
-                ActionText("ƒx") { state.setProp(node.id, def.name, expressionValue(value.literalText() ?: "")) }
+            if (!isParam) {
+                // Reset to default (I7) only when the prop is set to something other than its default.
+                if (value != null && value != def.default) {
+                    ActionText("reset") { state.resetProp(node.id, def) }
+                }
+                // Escape hatch (I6): retype this prop as a raw Kotlin expression.
+                if (value !is PropValue.RawExpression) {
+                    ActionText("ƒx") { state.setProp(node.id, def.name, expressionValue(value.literalText() ?: "")) }
+                }
+                // Promote to a component parameter (ADR-028) while editing the component in place.
+                if (state.canPromoteToParameter(node, def)) {
+                    ActionText("⇧ param") { state.promotePropToParameter(node.id, def.name) }
+                }
             }
         }
         ValueControl(
