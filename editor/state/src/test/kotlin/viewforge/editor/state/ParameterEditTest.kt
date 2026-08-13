@@ -12,10 +12,12 @@ import viewforge.model.PropDefinition
 import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Screen
+import viewforge.model.UserComponent
 import viewforge.model.findById
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -128,5 +130,44 @@ class ParameterEditTest {
 
         assertEquals(listOf("text", "text2"), component(s).parameters.map { it.name })
         assertEquals(PropValue.ParamRef("text2"), component(s).root.findById(NodeId("t2"))?.props?.get("text"))
+    }
+
+    // --- slice 4b: instance argument editing ---------------------------------------------------
+
+    @Test
+    fun `componentOfInstance resolves an instance to its definition`() {
+        val s = state(boxWith(textNode("t1")))
+        assertEquals("c1", s.componentOfInstance(UserComponent.instance("c1", NodeId("i1")))?.id)
+    }
+
+    @Test
+    fun `componentOfInstance is null for a non-instance node or an unknown id`() {
+        val s = state(boxWith(textNode("t1")))
+        assertNull(s.componentOfInstance(textNode("t1")))
+        assertNull(s.componentOfInstance(UserComponent.instance("nope", NodeId("i1"))))
+    }
+
+    @Test
+    fun `editing an instance argument sets the prop and undoes`() {
+        // An instance of c1 sits on the screen; setting its 'label' argument is the inspector's edit path.
+        val instance = UserComponent.instance("c1", NodeId("i1"))
+        val screenRoot = Node(NodeId("s-root"), "compose.foundation.layout.Column", children = listOf(instance))
+        val s = EditorState(
+            Project(
+                id = "p",
+                name = "P",
+                framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+                screens = listOf(Screen("s1", "Home", screenRoot)),
+                components = listOf(ComponentDef(id = "c1", name = "PrimaryButton", root = boxWith(textNode("t1")))),
+            ),
+            FakeCatalog(),
+        )
+        s.select(NodeId("i1"))
+        s.setProp(NodeId("i1"), "label", PropValue.Literal(JsonPrimitive("Hi")))
+
+        fun arg() = s.document.screens.first().root.findById(NodeId("i1"))?.props?.get("label")
+        assertEquals(PropValue.Literal(JsonPrimitive("Hi")), arg())
+        s.undo()
+        assertNull(arg())
     }
 }

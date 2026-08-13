@@ -613,6 +613,17 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         execute(promoteToParameter(componentId, nodeId, propName, parameter), selectAfter = selectedId)
     }
 
+    /**
+     * The [ComponentDef] a `vforge.userComponent` instance [node] references, or null when [node] is not
+     * an instance or its id no longer resolves. Drives the inspector's per-instance argument editors:
+     * the parameters to edit come from the referenced definition (ADR-028).
+     */
+    fun componentOfInstance(node: Node): ComponentDef? {
+        if (node.type != UserComponent.TYPE) return null
+        val id = UserComponent.componentIdOf(node) ?: return null
+        return document.components.firstOrNull { it.id == id }
+    }
+
     /** [base] if free within component [componentId], else `base2`, `base3`, … — parameter names are unique per component. */
     private fun uniqueParameterName(componentId: String, base: String): String {
         val taken = document.components.firstOrNull { it.id == componentId }
