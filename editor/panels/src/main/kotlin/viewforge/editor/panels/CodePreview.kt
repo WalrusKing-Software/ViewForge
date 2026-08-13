@@ -33,10 +33,11 @@ fun CodePreview(state: EditorState, service: CodePreviewService, modifier: Modif
     Column(modifier) {
         PanelHeader("Code")
         // The document is an immutable value replaced per command, so a change to its reference (or the
-        // active screen) means an edit landed — regenerate then, not every frame (G3 "updates with the
-        // document"). Generation is cheap (KotlinPoet), so keying on the whole document is fine.
-        val content = remember(state.document, state.activeScreen?.id) {
-            previewContent(service, state.document, state.activeScreen)
+        // preview target) means an edit landed — regenerate then, not every frame (G3 "updates with the
+        // document"). The target follows the open component when one is being edited, else the active
+        // screen (#69). Generation is cheap (KotlinPoet), so keying on the whole document is fine.
+        val content = remember(state.document, state.editingComponentId, state.activeScreen?.id) {
+            previewContent(service, state.document, state.previewTarget)
         }
         when (content) {
             // A generation failure is shown loudly in the error colour, never a blank panel (CLAUDE.md).

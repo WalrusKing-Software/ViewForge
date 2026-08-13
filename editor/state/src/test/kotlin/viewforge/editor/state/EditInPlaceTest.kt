@@ -151,6 +151,17 @@ class EditInPlaceTest {
     }
 
     @Test
+    fun `previewTarget follows the open component and returns to the screen on close (#69)`() {
+        val s = state()
+        assertTrue(s.previewTarget is PreviewTarget.OfScreen)
+        s.openComponent("c1")
+        val open = s.previewTarget
+        assertTrue(open is PreviewTarget.OfComponent && open.component.id == "c1")
+        s.closeComponent()
+        assertTrue(s.previewTarget is PreviewTarget.OfScreen)
+    }
+
+    @Test
     fun `openInstanceComponent enters an instance's component (double-click to enter, #68)`() {
         val s = state()
         val entered = s.openInstanceComponent(UserComponent.instance("c1", NodeId("i1")))
