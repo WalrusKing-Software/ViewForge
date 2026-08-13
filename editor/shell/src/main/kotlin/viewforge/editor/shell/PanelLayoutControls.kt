@@ -16,9 +16,9 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
-import viewforge.prefs.EditorPreferences
 import viewforge.prefs.PreferencesStore
 import java.awt.Cursor
+import java.nio.file.Path
 
 /**
  * Persists the editor's **panel layout** — the #39 visibility flags (including the #52 code-preview
@@ -55,9 +55,40 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
-    /** Called when a splitter drag ends — the live width is already in [state]; write the final value. */
+    /** Record [path] as the most-recent project and persist the updated list (D8). */
+    fun recordRecent(path: Path) {
+        state.noteRecentProject(path.toString())
+        persist()
+    }
+
+    /** Drop [path] from the recent list (it no longer opens) and persist (D8). */
+    fun forgetRecent(path: String) {
+        state.removeRecentProject(path)
+        persist()
+    }
+
+    /** Clear the recent-projects list and persist (D8). */
+    fun clearRecent() {
+        state.clearRecentProjects()
+        persist()
+    }
+
+    /**
+     * Persist the current preferences. Triggered at the discrete points chrome changes — a visibility
+     * toggle, the end of a resize drag, or a recent-projects change.
+     *
+     * It **load-merge-saves**: it reads the file, overlays only the panel layout and recent-projects from
+     * [state], and writes that back — so persisting one facet never clobbers another. In particular the
+     * #55 autosave interval, which has no in-memory home in this controller, is preserved rather than reset
+     * to its default on every panel toggle (the bug this replaces).
+     */
     fun persist() {
-        runCatching { PreferencesStore.save(EditorPreferences(panelLayout = state.panelLayout())) }
+        runCatching {
+            val current = PreferencesStore.load()
+            PreferencesStore.save(
+                current.copy(panelLayout = state.panelLayout(), recentProjects = state.recentProjects),
+            )
+        }
     }
 }
 

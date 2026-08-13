@@ -44,6 +44,7 @@ import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
 import viewforge.prefs.PanelLayout
+import viewforge.prefs.RecentProjects
 import java.nio.file.Path
 
 /**
@@ -253,6 +254,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * direction. (A precise saved-marker is a possible refinement, not needed here.)
      */
     var isDirty: Boolean by mutableStateOf(false)
+        private set
+
+    /**
+     * Recently opened/saved project paths, most-recent first (D8, #88). Transient view state: applied from
+     * prefs at launch ([applyRecentProjects]) and updated on a successful open/save ([noteRecentProject]).
+     * The File menu's Open Recent reads it; the shell persists it. Not document data — it is per-user
+     * history, so it lives here beside the other session state, never in the `.vforge` file.
+     */
+    var recentProjects: List<String> by mutableStateOf(emptyList())
         private set
 
     /**
@@ -887,6 +897,28 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         inspectorWidth = inspectorWidth,
         codePreviewWidth = codePreviewWidth,
     )
+
+    // --- recent projects (D8) ---------------------------------------------------------------------
+
+    /** Restore the persisted recent-projects list at startup (D8); view state, re-sanitized defensively. */
+    fun applyRecentProjects(paths: List<String>) {
+        recentProjects = RecentProjects.sanitized(paths)
+    }
+
+    /** Record [path] as the most-recent project (D8): promoted to the front, de-duplicated, capped. */
+    fun noteRecentProject(path: String) {
+        recentProjects = RecentProjects.updated(recentProjects, path)
+    }
+
+    /** Drop [path] from the recent list — e.g. it failed to open because the file is gone. */
+    fun removeRecentProject(path: String) {
+        recentProjects = recentProjects.filterNot { it == path }
+    }
+
+    /** Clear the recent-projects list (File → Open Recent → Clear Recent). */
+    fun clearRecentProjects() {
+        recentProjects = emptyList()
+    }
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------
 

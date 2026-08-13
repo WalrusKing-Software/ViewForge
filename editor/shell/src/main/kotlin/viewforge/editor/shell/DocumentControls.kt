@@ -34,7 +34,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
  * Runs synchronously on the UI thread: a `.vforge` file is small, so the load/save block is
  * unnoticeable (the same trade-off [ExportController] documents).
  */
-internal class DocumentController(private val state: EditorState) {
+internal class DocumentController(private val state: EditorState, private val prefs: PreferencesController) {
     /** A pending New/Open held behind the discard-unsaved confirmation, or null when nothing is waiting. */
     var pendingDiscard: PendingDiscard? by mutableStateOf(null)
         private set
@@ -49,9 +49,30 @@ internal class DocumentController(private val state: EditorState) {
     /** File → Open: pick a `.vforge` file and load it, guarding any unsaved edits first. */
     fun open() = guardUnsaved("Opening another document") {
         val path = chooseOpenFile() ?: return@guardUnsaved
+        loadInto(path)
+    }
+
+    /**
+     * File → Open Recent: load [pathString] straight off (no chooser), guarding unsaved edits (D8). A file
+     * that no longer opens reports the error and is dropped from the recent list, so a stale entry cleans
+     * itself up.
+     */
+    fun openRecent(pathString: String) = guardUnsaved("Opening another document") {
+        loadInto(Path.of(pathString))
+    }
+
+    /** Load [path] into the editor: on success swap the document and record it recent; on failure surface
+     * the reason and forget the path (a no-op for a path that was not a recent). */
+    private fun loadInto(path: Path) {
         when (val result = ProjectStore.load(path)) {
-            is LoadResult.Success -> state.replaceDocument(result.project, path)
-            is LoadResult.Failure -> error = describe(result)
+            is LoadResult.Success -> {
+                state.replaceDocument(result.project, path)
+                prefs.recordRecent(path)
+            }
+            is LoadResult.Failure -> {
+                error = describe(result)
+                prefs.forgetRecent(path.toString())
+            }
         }
     }
 
@@ -88,7 +109,10 @@ internal class DocumentController(private val state: EditorState) {
 
     private fun writeTo(path: Path) {
         runCatching { ProjectStore.save(state.document, path) }.fold(
-            onSuccess = { state.markSaved(path) },
+            onSuccess = {
+                state.markSaved(path)
+                prefs.recordRecent(path)
+            },
             onFailure = { e -> error = "Could not save to $path: ${e.message}" },
         )
     }
@@ -112,8 +136,8 @@ internal class DocumentController(private val state: EditorState) {
 internal data class PendingDiscard(val what: String, val proceed: () -> Unit)
 
 @Composable
-internal fun rememberDocumentController(state: EditorState): DocumentController =
-    remember(state) { DocumentController(state) }
+internal fun rememberDocumentController(state: EditorState, prefs: PreferencesController): DocumentController =
+    remember(state, prefs) { DocumentController(state, prefs) }
 
 /** The discard-unsaved and load/save-error dialogs, rendered once at the shell root (like [ExportDialogs]). */
 @Composable

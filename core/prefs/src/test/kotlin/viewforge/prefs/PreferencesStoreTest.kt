@@ -48,6 +48,25 @@ class PreferencesStoreTest {
     }
 
     @Test
+    fun `recent projects round-trip and are sanitized (deduped, blanks dropped, capped) on load`() {
+        val dir = tempDir()
+        val prefs = EditorPreferences(recentProjects = listOf("/a.vforge", "/b.vforge"))
+        PreferencesStore.save(prefs, dir)
+        assertEquals(prefs, PreferencesStore.load(dir))
+
+        // A hand-edited file with blanks, duplicates, and too many entries is cleaned on load.
+        val many = (1..(RecentProjects.MAX + 5)).joinToString(",") { "\"/p$it.vforge\"" }
+        dir.resolve(PreferencesStore.FILE_NAME).writeText(
+            """{ "prefsVersion": 1, "recentProjects": ["/a.vforge", "", "/a.vforge", $many] }""",
+        )
+        val loaded = PreferencesStore.load(dir).recentProjects
+        assertEquals(RecentProjects.MAX, loaded.size)
+        assertEquals("/a.vforge", loaded.first())
+        assertEquals(loaded.distinct(), loaded)
+        assertFalse(loaded.any { it.isBlank() })
+    }
+
+    @Test
     fun `autosave interval defaults when absent and clamps out-of-range values on load`() {
         val dir = tempDir()
         // No prefs file -> the default cadence (matching #54's original constant).

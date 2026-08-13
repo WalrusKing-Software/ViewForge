@@ -7,23 +7,28 @@ import kotlinx.serialization.Serializable
  * [prefsVersion], independent of the `.vforge` `schemaVersion`: editor layout is not project data, so
  * it must never travel in a project file and does not share the document's migration chain.
  *
- * Holds the [panelLayout] (S1) and the [autosaveIntervalSeconds] (S5, #55); window size, recent files,
- * and the default export path are the natural next tenants of this same file.
+ * Holds the [panelLayout] (S1), the [autosaveIntervalSeconds] (S5, #55), and the [recentProjects] list
+ * (D8, #88); window size and the default export path are the natural next tenants of this same file.
  *
  * @property autosaveIntervalSeconds how often crash-recovery autosave writes its sidecar while there
  *   are unsaved edits (D4, #54). Clamped on load to a sane range so a hand-edited value can neither
  *   hammer the disk nor effectively disable recovery.
+ * @property recentProjects recently opened/saved `.vforge` paths, most-recent first (D8). Absolute paths
+ *   are fine here — `preferences.json` is per-user config that is never committed, unlike a `.vforge`
+ *   file (PR-4). De-duplicated and capped on load via [RecentProjects.sanitized].
  */
 @Serializable
 data class EditorPreferences(
     val prefsVersion: Int = CURRENT_VERSION,
     val panelLayout: PanelLayout = PanelLayout(),
     val autosaveIntervalSeconds: Int = DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
+    val recentProjects: List<String> = emptyList(),
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
         panelLayout = panelLayout.sanitized(),
         autosaveIntervalSeconds = clampAutosaveInterval(autosaveIntervalSeconds),
+        recentProjects = RecentProjects.sanitized(recentProjects),
     )
 
     companion object {
@@ -39,6 +44,23 @@ data class EditorPreferences(
         fun clampAutosaveInterval(seconds: Int): Int =
             seconds.coerceIn(MIN_AUTOSAVE_INTERVAL_SECONDS, MAX_AUTOSAVE_INTERVAL_SECONDS)
     }
+}
+
+/**
+ * Pure operations on the recent-projects list (D8, #88): keep it most-recent-first, de-duplicated, and
+ * capped. Shared by the persisted [EditorPreferences] and the editor's live in-memory copy so both agree
+ * on the ordering and the cap — the list the menu shows is exactly the list that is saved.
+ */
+object RecentProjects {
+    const val MAX = 10
+
+    /** [path] promoted to the front, any earlier occurrence removed, then capped to [max]. */
+    fun updated(current: List<String>, path: String, max: Int = MAX): List<String> =
+        (listOf(path) + current.filterNot { it == path }).take(max)
+
+    /** Drop blanks and duplicates and cap — applied on load so a hand-edited file can't wedge the list. */
+    fun sanitized(list: List<String>, max: Int = MAX): List<String> =
+        list.filter { it.isNotBlank() }.distinct().take(max)
 }
 
 /**

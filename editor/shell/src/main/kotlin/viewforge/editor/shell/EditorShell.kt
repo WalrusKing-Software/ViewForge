@@ -85,10 +85,12 @@ fun FrameWindowScope.EditorShell(
     var showThemeEditor by remember { mutableStateOf(false) }
     // Export is driven from both the toolbar and the File menu, so its flow is hoisted to a controller.
     val export = rememberExportController(state, exportService)
-    // .vforge New/Open/Save/Save As (#37): its own controller, shared by the File menu and shortcuts.
-    val document = rememberDocumentController(state)
-    // Panel layout persistence (#43): saves visibility + widths across sessions (startup load is in :app).
+    // Preferences persistence (#43/#55/#88): panel layout, autosave interval, recent projects. Created
+    // before the document controller, which records opened/saved paths as recents through it.
     val prefs = rememberPreferencesController(state)
+    // .vforge New/Open/Save/Save As (#37) + Open Recent (#88): its own controller, shared by the File
+    // menu and shortcuts.
+    val document = rememberDocumentController(state, prefs)
     // Autosave + crash recovery (D4): a timer snapshots unsaved work; a snapshot found at launch prompts
     // to restore. The config dir comes from :app (the wiring site), like the panel-layout load.
     val recovery = rememberRecoveryController(state, recoveryDir, autosaveIntervalMs)
@@ -106,6 +108,8 @@ fun FrameWindowScope.EditorShell(
         onOpenThemeEditor = { showThemeEditor = true },
         onNew = document::newDocument,
         onOpen = document::open,
+        onOpenRecent = document::openRecent,
+        onClearRecent = prefs::clearRecent,
         onSave = document::save,
         onSaveAs = document::saveAs,
     )

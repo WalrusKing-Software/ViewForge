@@ -50,6 +50,7 @@ fun main() = application {
     // toggle/resize. The autosave interval (#55) is handed to the shell's recovery timer below.
     val prefs = PreferencesStore.load()
     state.applyLayout(prefs.panelLayout)
+    state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
     val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
