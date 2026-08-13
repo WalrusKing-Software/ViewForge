@@ -119,13 +119,13 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun openComponent(id: String) {
         if (document.components.none { it.id == id }) return
         editingComponentId = id
-        selectedId = null
+        selectedIds = emptyList()
     }
 
     /** Return to editing the active screen, closing any open component (selection clears). */
     fun closeComponent() {
         editingComponentId = null
-        selectedId = null
+        selectedIds = emptyList()
     }
 
     /**
@@ -273,15 +273,33 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
-     * The selected node's id, or null. Shared, observable state so canvas and tree stay in sync (T1).
-     * Selection is transient view state — it lives here, never in the IR.
+     * The selection, as an **ordered** list of node ids (C10). The last entry is the *primary* (anchor):
+     * the node the inspector focuses and that a shift-click range extends from. Empty means nothing is
+     * selected. Shared, observable state so canvas and tree stay in sync (T1). Selection is transient
+     * view state — it lives here, never in the IR. Always a subset of the active edit surface; every
+     * entry resolves against [activeEditRoot] (see [reconcileSelection]).
      */
-    var selectedId: NodeId? by mutableStateOf(null)
+    var selectedIds: List<NodeId> by mutableStateOf(emptyList())
         private set
 
-    /** The selected [Node] resolved against the active edit surface (screen or open component), or null. */
+    /**
+     * The primary (anchor) selected id, or null. Derived from [selectedIds] — the last, most recently
+     * added entry. This is the single-selection view that most of the editor reads; multi-select is
+     * additive on top of it (C10).
+     */
+    val selectedId: NodeId?
+        get() = selectedIds.lastOrNull()
+
+    /** The primary selected [Node] resolved against the active edit surface (screen or open component), or null. */
     val selectedNode: Node?
         get() = selectedId?.let { activeEditRoot?.findById(it) }
+
+    /** Every selected [Node], in selection order, resolved against the active edit surface. */
+    val selectedNodes: List<Node>
+        get() = activeEditRoot?.let { root -> selectedIds.mapNotNull { root.findById(it) } } ?: emptyList()
+
+    /** Whether [id] is part of the current selection (C10). */
+    fun isSelected(id: NodeId): Boolean = id in selectedIds
 
     val canUndo: Boolean get() = history.canUndo
     val canRedo: Boolean get() = history.canRedo
@@ -290,16 +308,31 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val canPaste: Boolean get() = clipboard?.let { !wouldInsertingCycle(it) } ?: false
 
     /**
-     * Select a node by id, or null to clear. A **locked** node cannot be selected (T4); the request is
-     * simply ignored so the current selection stands.
+     * Select a single node by id, replacing any existing selection, or null to clear (C10: plain click).
+     * A **locked** node cannot be selected (T4); the request is simply ignored so the current selection
+     * stands.
      */
     fun select(id: NodeId?) {
         if (id == null) {
-            selectedId = null
+            selectedIds = emptyList()
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
-        selectedId = id
+        selectedIds = listOf(id)
+    }
+
+    /**
+     * Add [id] to the selection if absent, or remove it if already selected (C10: ctrl/cmd-click). Adding
+     * makes [id] the new primary. A **locked** node cannot be added (T4); an already-selected locked node
+     * can still be toggled off. A no-op that would empty a single-node selection just clears it.
+     */
+    fun toggleSelection(id: NodeId) {
+        if (id in selectedIds) {
+            selectedIds = selectedIds - id
+            return
+        }
+        if (activeEditRoot?.findById(id)?.locked == true) return
+        selectedIds = selectedIds + id
     }
 
     // --- history ----------------------------------------------------------------------------------
@@ -330,7 +363,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     private fun reconcileSelection(desired: NodeId?) {
-        selectedId = desired?.takeIf { activeEditRoot?.findById(it) != null }
+        selectedIds = listOfNotNull(desired?.takeIf { activeEditRoot?.findById(it) != null })
     }
 
     // --- document session (D1) --------------------------------------------------------------------
@@ -345,7 +378,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun replaceDocument(project: Project, path: Path?) {
         document = project
         history.clear()
-        selectedId = null
+        selectedIds = emptyList()
         clipboard = null
         viewport = CanvasViewport()
         isSpaceHeld = false
