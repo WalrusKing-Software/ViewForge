@@ -120,12 +120,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         if (document.components.none { it.id == id }) return
         editingComponentId = id
         selectedIds = emptyList()
+        selectionAnchor = null
     }
 
     /** Return to editing the active screen, closing any open component (selection clears). */
     fun closeComponent() {
         editingComponentId = null
         selectedIds = emptyList()
+        selectionAnchor = null
     }
 
     /**
@@ -273,13 +275,22 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
-     * The selection, as an **ordered** list of node ids (C10). The last entry is the *primary* (anchor):
-     * the node the inspector focuses and that a shift-click range extends from. Empty means nothing is
-     * selected. Shared, observable state so canvas and tree stay in sync (T1). Selection is transient
-     * view state — it lives here, never in the IR. Always a subset of the active edit surface; every
-     * entry resolves against [activeEditRoot] (see [reconcileSelection]).
+     * The selection, as an **ordered** list of node ids (C10). The last entry is the *primary*: the node
+     * the inspector focuses. Empty means nothing is selected. Shared, observable state so canvas and tree
+     * stay in sync (T1). Selection is transient view state — it lives here, never in the IR. Always a
+     * subset of the active edit surface; every entry resolves against [activeEditRoot] (see
+     * [reconcileSelection]).
      */
     var selectedIds: List<NodeId> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * The pivot a shift-click range extends from (C10). A plain click or a ctrl-click sets it; a
+     * shift-click extends the range anchor..target without moving it, so successive shift-clicks all
+     * measure from the same fixed pivot (the file-explorer model), rather than from wherever the last
+     * click landed. Null when nothing is selected.
+     */
+    var selectionAnchor: NodeId? by mutableStateOf(null)
         private set
 
     /**
@@ -315,24 +326,47 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun select(id: NodeId?) {
         if (id == null) {
             selectedIds = emptyList()
+            selectionAnchor = null
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
         selectedIds = listOf(id)
+        selectionAnchor = id
     }
 
     /**
      * Add [id] to the selection if absent, or remove it if already selected (C10: ctrl/cmd-click). Adding
-     * makes [id] the new primary. A **locked** node cannot be added (T4); an already-selected locked node
-     * can still be toggled off. A no-op that would empty a single-node selection just clears it.
+     * makes [id] the new primary and the new range pivot. A **locked** node cannot be added (T4); an
+     * already-selected locked node can still be toggled off. Toggling off the only selected node clears it.
      */
     fun toggleSelection(id: NodeId) {
         if (id in selectedIds) {
             selectedIds = selectedIds - id
+            selectionAnchor = selectedIds.lastOrNull()
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
         selectedIds = selectedIds + id
+        selectionAnchor = id
+    }
+
+    /**
+     * Shift-click range select (C10): select every node from the [selectionAnchor] pivot to [target]
+     * inclusive, along the panel's visible [order] (the tree's flattened rows — the canvas has no natural
+     * order, so it treats shift like a plain toggle instead). [target] becomes the primary so the inspector
+     * focuses the clicked end, while the pivot stays put for the next shift-click. Locked nodes in the span
+     * are skipped (T4). Falls back to a plain [select] when there is no pivot, or either end is off-list.
+     */
+    fun extendSelectionTo(target: NodeId, order: List<NodeId>) {
+        val pivot = selectionAnchor ?: return select(target)
+        val from = order.indexOf(pivot)
+        val to = order.indexOf(target)
+        if (from < 0 || to < 0) return select(target)
+        val span = if (from <= to) order.subList(from, to + 1) else order.subList(to, from + 1).asReversed()
+        val root = activeEditRoot
+        val selectable = span.filter { root?.findById(it)?.locked != true }
+        // Keep [target] last (primary); the pivot is unchanged so successive shift-clicks measure from it.
+        selectedIds = selectable
     }
 
     // --- history ----------------------------------------------------------------------------------
@@ -364,6 +398,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     private fun reconcileSelection(desired: NodeId?) {
         selectedIds = listOfNotNull(desired?.takeIf { activeEditRoot?.findById(it) != null })
+        selectionAnchor = selectedIds.lastOrNull()
     }
 
     // --- document session (D1) --------------------------------------------------------------------
@@ -379,6 +414,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         document = project
         history.clear()
         selectedIds = emptyList()
+        selectionAnchor = null
         clipboard = null
         viewport = CanvasViewport()
         isSpaceHeld = false

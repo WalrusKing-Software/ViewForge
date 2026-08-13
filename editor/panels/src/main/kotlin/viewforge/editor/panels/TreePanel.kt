@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 
 package viewforge.editor.panels
 
@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
@@ -44,10 +45,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
@@ -95,9 +100,11 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
             val rows = remember(root, expanded.toMap()) {
                 flatten(root, depth = 0, ownAddress = null, expanded = expanded)
             }
+            val nodeItems = rows.filterIsInstance<NodeRowItem>()
             // Keep the drag controller's view of node addresses in sync with what's on screen.
-            drag.items = rows.filterIsInstance<NodeRowItem>()
-                .associate { it.node.id.value to NodeItemInfo(it.node, it.ownAddress) }
+            drag.items = nodeItems.associate { it.node.id.value to NodeItemInfo(it.node, it.ownAddress) }
+            // The visible top-to-bottom order a shift-click range extends along (C10).
+            val visibleOrder = remember(nodeItems) { nodeItems.map { it.node.id } }
 
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 rows.forEach { item ->
@@ -107,6 +114,7 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
                             state = state,
                             drag = drag,
                             item = item,
+                            visibleOrder = visibleOrder,
                             expanded = expanded[item.node.id.value] ?: true,
                             renaming = renamingId == item.node.id,
                             onToggleExpand = { expanded[item.node.id.value] = !(expanded[item.node.id.value] ?: true) },
@@ -259,6 +267,7 @@ private fun NodeRow(
     state: EditorState,
     drag: TreeDragState,
     item: NodeRowItem,
+    visibleOrder: List<NodeId>,
     expanded: Boolean,
     renaming: Boolean,
     onToggleExpand: () -> Unit,
@@ -267,11 +276,18 @@ private fun NodeRow(
 ) {
     val node = item.node
     val key = node.id.value
-    val selected = state.selectedId == node.id
+    val selected = state.isSelected(node.id)
+    val isPrimary = state.selectedId == node.id
     val hasChildren = node.allChildren().isNotEmpty()
     val isDragged = drag.draggingId == node.id
+    val windowInfo = LocalWindowInfo.current
 
-    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    // The primary selection gets the full container tint; the rest of a multi-selection a fainter one (C10).
+    val background = when {
+        isPrimary -> MaterialTheme.colorScheme.primaryContainer
+        selected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+        else -> Color.Transparent
+    }
 
     Row(
         modifier = Modifier
@@ -295,7 +311,16 @@ private fun NodeRow(
                 )
             }
             .combinedClickable(
-                onClick = { state.select(node.id) },
+                onClick = {
+                    // Ctrl/Cmd-click toggles a node in/out of the selection; Shift-click extends a range
+                    // from the anchor along the visible order; a plain click selects just this node (C10).
+                    val mods = windowInfo.keyboardModifiers
+                    when {
+                        mods.isShiftPressed -> state.extendSelectionTo(node.id, visibleOrder)
+                        mods.isCtrlPressed || mods.isMetaPressed -> state.toggleSelection(node.id)
+                        else -> state.select(node.id)
+                    }
+                },
                 // Double-clicking an instance enters its component (#68); any other node starts a rename.
                 onDoubleClick = { if (!state.openInstanceComponent(node)) onStartRename() },
             )

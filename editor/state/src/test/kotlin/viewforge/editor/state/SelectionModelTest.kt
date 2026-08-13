@@ -137,6 +137,61 @@ class SelectionModelTest {
         assertEquals(listOf(a, b), s.selectedNodes)
     }
 
+    private val order = listOf(NodeId("root"), NodeId("a"), NodeId("b"), NodeId("locked"))
+
+    @Test
+    fun `extendSelectionTo selects the inclusive range from the anchor and makes the target primary`() {
+        val s = state()
+        s.select(NodeId("root")) // anchor = root
+        s.extendSelectionTo(NodeId("b"), order)
+        assertEquals(listOf(NodeId("root"), NodeId("a"), NodeId("b")), s.selectedIds)
+        assertEquals(NodeId("b"), s.selectedId) // clicked end is primary
+    }
+
+    @Test
+    fun `extendSelectionTo works upward and keeps the target last`() {
+        val s = state()
+        s.select(NodeId("b")) // anchor = b
+        s.extendSelectionTo(NodeId("root"), order)
+        assertEquals(listOf(NodeId("b"), NodeId("a"), NodeId("root")), s.selectedIds) // target (root) last
+        assertEquals(NodeId("root"), s.selectedId)
+    }
+
+    @Test
+    fun `successive shift-clicks measure from the same fixed anchor`() {
+        val s = state()
+        s.select(NodeId("a")) // anchor = a
+        s.extendSelectionTo(NodeId("b"), order)
+        assertEquals(listOf(NodeId("a"), NodeId("b")), s.selectedIds)
+        // A second shift-click re-measures from a (the pivot), not from b (the last click).
+        s.extendSelectionTo(NodeId("root"), order)
+        assertEquals(listOf(NodeId("a"), NodeId("root")), s.selectedIds)
+    }
+
+    @Test
+    fun `extendSelectionTo skips locked nodes in the span`() {
+        val s = state()
+        s.select(NodeId("a")) // anchor = a
+        s.extendSelectionTo(NodeId("locked"), order) // span a..locked includes the locked node
+        assertEquals(listOf(NodeId("a"), NodeId("b")), s.selectedIds) // locked dropped
+    }
+
+    @Test
+    fun `extendSelectionTo with no anchor falls back to a plain select`() {
+        val s = state()
+        s.extendSelectionTo(NodeId("b"), order)
+        assertEquals(listOf(NodeId("b")), s.selectedIds)
+    }
+
+    @Test
+    fun `toggleSelection moves the range anchor to the added node`() {
+        val s = state()
+        s.select(NodeId("root")) // anchor = root
+        s.toggleSelection(NodeId("a")) // ctrl-add a -> anchor becomes a
+        s.extendSelectionTo(NodeId("b"), order) // range measured from a (the new anchor), not root
+        assertEquals(listOf(NodeId("a"), NodeId("b")), s.selectedIds)
+    }
+
     @Test
     fun `a command collapses selection to the reconciled target (slice-1 behavior)`() {
         // Until batch operations land (slice 3), running a command reconciles selection to a single

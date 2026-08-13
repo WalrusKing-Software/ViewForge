@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -18,9 +19,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalWindowInfo
 import viewforge.editor.state.EditorState
 import viewforge.model.ChildAddress
 import viewforge.model.Node
@@ -202,10 +207,14 @@ internal fun insertionCaret(
  * unchanged window-space [hitTest] stays correct because the node bounds it tests against come back
  * from `boundsInWindow` already scaled by that same layer.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds, modifier: Modifier = Modifier) {
     var transform by remember { mutableStateOf<CanvasTransform?>(null) }
     var hovered by remember { mutableStateOf<NodeId?>(null) }
+    // Live keyboard-modifier state, read at tap time to tell a plain click (replace selection) from a
+    // ctrl/cmd- or shift-click (toggle into a multi-selection, C10).
+    val windowInfo = LocalWindowInfo.current
     // The last tapped node and when — for manual double-tap detection that keeps single-tap selection
     // instant (unlike detectTapGestures' onDoubleTap, which delays every tap). Reset per edit surface.
     var lastTap by remember(root) { mutableStateOf<Pair<NodeId, Long>?>(null) }
@@ -244,7 +253,16 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                     if (state.isSpaceHeld) return@detectTapGestures
                     val point = transform?.localToWindow(local) ?: local
                     val hit = hitTest(bounds.snapshot(), root, point)
-                    state.select(hit) // select instantly on every tap
+                    val mods = windowInfo.keyboardModifiers
+                    // Ctrl/Cmd- or Shift-click toggles the hit in/out of a multi-selection (C10). The canvas
+                    // has no natural order, so Shift is additive like Ctrl here — a range is a tree gesture.
+                    // A modified click on empty canvas leaves the selection untouched.
+                    if (mods.isCtrlPressed || mods.isMetaPressed || mods.isShiftPressed) {
+                        hit?.let { state.toggleSelection(it) }
+                        lastTap = null
+                        return@detectTapGestures
+                    }
+                    state.select(hit) // plain click selects instantly (replacing) on every tap
                     // A quick second tap on the same instance enters its component (#68); double-tapping
                     // anything else just re-selects it.
                     val now = System.currentTimeMillis()
@@ -332,10 +350,17 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             return@Canvas
         }
         // Hover first, selection on top: when a node is both, the selection outline wins visually.
-        hovered?.takeIf { it != state.selectedId }?.let { id ->
+        hovered?.takeIf { !state.isSelected(it) }?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), HOVER_COLOR, HOVER_STROKE) }
         }
-        state.selectedId?.let { id ->
+        // Every selected node is outlined (C10); the secondary selections draw faded, the primary solid
+        // and on top so it reads as the focused node.
+        val primary = state.selectedId
+        state.selectedIds.forEach { id ->
+            if (id == primary) return@forEach
+            bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), MULTI_SELECTION_COLOR, SELECTION_STROKE) }
+        }
+        primary?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), SELECTION_COLOR, SELECTION_STROKE) }
         }
     }
@@ -351,6 +376,9 @@ private fun DrawScope.drawOutline(rect: Rect, color: Color, width: Float) {
 }
 
 private val SELECTION_COLOR = Color(0xFF1E88E5)
+
+// Faded blue for the non-primary members of a multi-selection (C10), so the solid primary stands out.
+private val MULTI_SELECTION_COLOR = Color(0x991E88E5)
 private val HOVER_COLOR = Color(0x881E88E5)
 private const val SELECTION_STROKE = 2f // px; a thin editor outline, deliberately not layout-affecting
 private const val HOVER_STROKE = 1f
