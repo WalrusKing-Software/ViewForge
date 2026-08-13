@@ -16,6 +16,7 @@ import viewforge.editor.state.ComponentCatalog
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ExportMode
 import viewforge.editor.state.PaletteEntry
+import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
 import viewforge.model.ComponentDef
 import viewforge.model.ModifierDefinition
@@ -97,29 +98,31 @@ fun main() = application {
 /**
  * Binds the editor's Compose-free [CodePreviewService] seam (G3) to the Compose code generator, the same
  * bootstrapping role `Main` plays for the renderer, catalog, and export (ADR-013) — the live code panel
- * shows generated source without the editor ever naming the framework package. Read-only: it calls
- * `generateScreen`, the same lowering the golden suite asserts on, so the panel and the export agree.
+ * shows generated source without the editor ever naming the framework package. Read-only: it calls the
+ * `*WithSpans` lowering, whose `code` is identical to the golden `generateScreen`, plus the node→source
+ * map (#51) it maps into the seam's [PreviewSource] — so the panel and the export still agree.
  */
 private object DesktopCodePreviewService : CodePreviewService {
     private val generator = ComposeCodeGenerator()
 
-    override fun previewScreen(project: Project, screen: Screen): String = generator.generateScreen(
+    override fun previewScreen(project: Project, screen: Screen): PreviewSource = generator.generateScreenWithSpans(
         screen,
         project.theme,
         project.name.ifBlank { "Project" },
         project.schemaVersion,
         project.assets,
         project.components,
-    )
+    ).let { PreviewSource(it.code, it.spans) }
 
-    override fun previewComponent(project: Project, component: ComponentDef): String = generator.generateComponent(
-        component,
-        project.theme,
-        project.name.ifBlank { "Project" },
-        project.schemaVersion,
-        project.assets,
-        project.components,
-    )
+    override fun previewComponent(project: Project, component: ComponentDef): PreviewSource =
+        generator.generateComponentWithSpans(
+            component,
+            project.theme,
+            project.name.ifBlank { "Project" },
+            project.schemaVersion,
+            project.assets,
+            project.components,
+        ).let { PreviewSource(it.code, it.spans) }
 }
 
 /**

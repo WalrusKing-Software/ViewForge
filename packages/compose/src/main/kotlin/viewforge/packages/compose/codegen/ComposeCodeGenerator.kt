@@ -88,6 +88,31 @@ class ComposeCodeGenerator : CodeGenerator {
     )
 
     /**
+     * Like [generateScreen] but also returns the node→source-range map for the live preview (G3, #51).
+     * [GeneratedSource.code] is identical to [generateScreen]'s output — the spans are a read-only
+     * side-channel produced by an instrumented pass the export path never runs.
+     */
+    fun generateScreenWithSpans(
+        screen: Screen,
+        theme: Theme,
+        sourceName: String,
+        schemaVersion: Int,
+        assets: List<Asset> = emptyList(),
+        components: List<ComponentDef> = emptyList(),
+    ): GeneratedSource = SourceSpans.strip(
+        generateComposable(
+            KotlinIdentifiers.requireFunctionName(screen.name),
+            screen.root,
+            theme,
+            sourceName,
+            schemaVersion,
+            assets,
+            components,
+            recordSpans = true,
+        ),
+    )
+
+    /**
      * Generates the source text for a single user [component] — the same `@Composable fun Name(modifier)`
      * shape as a screen (D7). Instances reference it by a call, so this one definition backs every use.
      */
@@ -110,6 +135,32 @@ class ComposeCodeGenerator : CodeGenerator {
     )
 
     /**
+     * Like [generateComponent] but also returns the node→source-range map for the live preview (G3, #51),
+     * so the panel can highlight the selected node while a component is open for in-place editing (#69).
+     * [GeneratedSource.code] is identical to [generateComponent]'s output.
+     */
+    fun generateComponentWithSpans(
+        component: ComponentDef,
+        theme: Theme,
+        sourceName: String,
+        schemaVersion: Int,
+        assets: List<Asset> = emptyList(),
+        components: List<ComponentDef> = emptyList(),
+    ): GeneratedSource = SourceSpans.strip(
+        generateComposable(
+            KotlinIdentifiers.requireFunctionName(component.name),
+            component.root,
+            theme,
+            sourceName,
+            schemaVersion,
+            assets,
+            components,
+            component.parameters,
+            recordSpans = true,
+        ),
+    )
+
+    /**
      * The shared lowering for a top-level composable (a screen or a user component): emit [root] under a
      * `@Composable fun [fnName](<params>, modifier: Modifier = Modifier)`, chaining the root's own
      * modifier chain onto the caller's `modifier` (DATA_MODEL §12.1). [components] lets a
@@ -126,8 +177,9 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset>,
         components: List<ComponentDef>,
         parameters: List<Parameter> = emptyList(),
+        recordSpans: Boolean = false,
     ): String {
-        val emitter = ComponentEmitter(theme, assets, components)
+        val emitter = ComponentEmitter(theme, assets, components, recordSpans)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
         val function = FunSpec.builder(fnName)
