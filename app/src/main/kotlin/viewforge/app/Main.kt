@@ -1,5 +1,9 @@
 package viewforge.app
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -66,8 +70,12 @@ fun main() = application {
         }
 
     val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))
+    // Save-on-close guard (#56): closing with unsaved edits raises this flag so the shell can prompt
+    // Save/Discard/Cancel instead of quitting outright; a clean document exits immediately. Recovery (#54)
+    // still protects a hard kill — this is only the clean-exit UX.
+    var closeRequested by remember { mutableStateOf(false) }
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = { if (state.isDirty) closeRequested = true else exitApplication() },
         state = windowState,
         title = "ViewForge",
     ) {
@@ -78,6 +86,9 @@ fun main() = application {
             DesktopCodePreviewService,
             ConfigDir.resolve(),
             autosaveIntervalMs = prefs.autosaveIntervalSeconds * 1000L,
+            closeRequested = closeRequested,
+            onCloseHandled = { closeRequested = false },
+            onExit = ::exitApplication,
         )
     }
 }

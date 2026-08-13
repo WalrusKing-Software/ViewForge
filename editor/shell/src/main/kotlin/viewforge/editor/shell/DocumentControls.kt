@@ -1,5 +1,8 @@
 package viewforge.editor.shell
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -8,6 +11,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
 import viewforge.project.LoadFailure
 import viewforge.project.LoadResult
@@ -131,6 +136,47 @@ internal fun DocumentDialogs(controller: DocumentController) {
             confirmButton = { TextButton(onClick = controller::dismissError) { Text("OK") } },
         )
     }
+}
+
+/**
+ * The save-on-close prompt (#56): shown when the user tries to close the window with unsaved edits.
+ * Save writes through the existing [DocumentController] flow (which opens a Save As dialog for a
+ * never-saved document) and exits **only if the save actually landed** — a cancelled Save As or a write
+ * error leaves the document dirty, so the close is aborted rather than losing work. Discard exits without
+ * saving; crash recovery (#54) is the real safety net, this is only the clean-exit UX. Cancel — or
+ * dismissing the dialog — aborts the close.
+ *
+ * Rendered once at the shell root like [DocumentDialogs]; [visible] is driven by the window's
+ * `onCloseRequest` in `:app`, which raises it only when the document is dirty.
+ */
+@Composable
+internal fun ExitConfirmation(
+    visible: Boolean,
+    state: EditorState,
+    document: DocumentController,
+    onExit: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (!visible) return
+    AlertDialog(
+        onDismissRequest = onCancel, // an away-click aborts the close — the safe direction, never data loss
+        title = { Text("Save changes before closing?") },
+        text = { Text("“${state.document.name}” has unsaved changes. Save them before ViewForge closes?") },
+        confirmButton = {
+            TextButton(onClick = {
+                document.save()
+                // Exit only if the save landed; a cancelled Save As or a write error keeps it dirty, so stay.
+                if (state.isDirty) onCancel() else onExit()
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onExit) { Text("Discard") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
+        },
+    )
 }
 
 private const val VFORGE_EXTENSION = "vforge"
