@@ -116,6 +116,27 @@ class EditInPlaceTest {
     }
 
     @Test
+    fun `addFromPalette inserts into the open component, not the screen`() {
+        val s = state()
+        s.openComponent("c1")
+        val before = s.document.components.first { it.id == "c1" }.root.children.size
+        s.addFromPalette(PaletteEntry("compose.material3.Text", "Text", "Content"))
+
+        assertEquals(before + 1, s.document.components.first { it.id == "c1" }.root.children.size)
+        assertEquals(screenRoot, s.document.screens.first().root) // screen untouched
+    }
+
+    @Test
+    fun `editingComponentName reflects the open component`() {
+        val s = state()
+        assertNull(s.editingComponentName)
+        s.openComponent("c1")
+        assertEquals("PrimaryButton", s.editingComponentName)
+        s.closeComponent()
+        assertNull(s.editingComponentName)
+    }
+
+    @Test
     fun `closeComponent returns to the screen and clears selection`() {
         val s = state()
         s.openComponent("c1")
