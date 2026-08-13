@@ -105,6 +105,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val editingComponentName: String?
         get() = editingComponent?.name
 
+    /**
+     * What the code preview should show (G3, #69): the open component when one is being edited in place,
+     * else the active screen. Null only for an empty project with no screen. Follows [activeEditRoot].
+     */
+    val previewTarget: PreviewTarget?
+        get() = editingComponent?.let { PreviewTarget.OfComponent(it) }
+            ?: activeScreen?.let { PreviewTarget.OfScreen(it) }
+
     /** Open reusable component [id] for in-place editing; selection resets into the component's own tree. */
     fun openComponent(id: String) {
         if (document.components.none { it.id == id }) return

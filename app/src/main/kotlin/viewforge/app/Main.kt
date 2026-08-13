@@ -13,6 +13,7 @@ import viewforge.editor.state.EditorState
 import viewforge.editor.state.ExportMode
 import viewforge.editor.state.PaletteEntry
 import viewforge.editor.state.ProjectExportService
+import viewforge.model.ComponentDef
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
@@ -83,6 +84,15 @@ private object DesktopCodePreviewService : CodePreviewService {
 
     override fun previewScreen(project: Project, screen: Screen): String = generator.generateScreen(
         screen,
+        project.theme,
+        project.name.ifBlank { "Project" },
+        project.schemaVersion,
+        project.assets,
+        project.components,
+    )
+
+    override fun previewComponent(project: Project, component: ComponentDef): String = generator.generateComponent(
+        component,
         project.theme,
         project.name.ifBlank { "Project" },
         project.schemaVersion,
