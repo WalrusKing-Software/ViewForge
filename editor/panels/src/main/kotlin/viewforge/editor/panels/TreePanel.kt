@@ -88,7 +88,7 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
 
     Column(modifier) {
         PanelHeader("Layers")
-        val root = state.activeScreen?.root
+        val root = state.activeEditRoot
         if (root == null) {
             MutedText("No screen")
         } else {
@@ -183,7 +183,7 @@ private class TreeDragState(private val state: EditorState) {
     }
 
     fun update(windowY: Float) {
-        val root = state.activeScreen?.root
+        val root = state.activeEditRoot
         val dragged = draggingId
         if (root == null || dragged == null) return clearTarget()
         val hit = bounds.entries.firstOrNull { windowY >= it.value.top && windowY < it.value.bottom }

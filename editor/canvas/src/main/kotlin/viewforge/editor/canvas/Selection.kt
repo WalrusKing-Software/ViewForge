@@ -116,7 +116,7 @@ internal class CanvasDragState(private val state: EditorState, private val bound
 
     /** Resolve the drop for a window-space [point] and update the feedback; a no-op if not dragging. */
     fun update(point: Offset) {
-        val root = state.activeScreen?.root
+        val root = state.activeEditRoot
         val dragged = draggingId ?: return
         if (root == null) return clearTarget()
         val rects = bounds.snapshot()
