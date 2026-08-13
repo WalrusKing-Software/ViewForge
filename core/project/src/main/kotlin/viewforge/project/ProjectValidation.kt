@@ -2,8 +2,7 @@ package viewforge.project
 
 import viewforge.model.Node
 import viewforge.model.Project
-import viewforge.model.PropValue
-import viewforge.model.UserComponent
+import viewforge.model.referencedComponentIds
 
 /** Raised when a loaded project violates a structural or safety invariant (SECURITY §3). */
 class ProjectValidationException(message: String) : RuntimeException(message)
@@ -76,7 +75,7 @@ object ProjectValidator {
         val byId = project.components.associateBy { it.id }
         val edges: Map<String, Set<String>> =
             project.components.associate { component ->
-                component.id to referencedComponentIds(component.root).filter { it in byId }.toSet()
+                component.id to component.root.referencedComponentIds().filter { it in byId }.toSet()
             }
 
         val visiting = HashSet<String>()
@@ -93,19 +92,5 @@ object ProjectValidator {
         }
 
         project.components.forEach { dfs(it.id) }
-    }
-
-    private fun referencedComponentIds(node: Node): List<String> {
-        val here =
-            if (node.type == UserComponent.TYPE) {
-                (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)
-                    ?.value?.content
-                    ?.let { listOf(it) }
-                    .orEmpty()
-            } else {
-                emptyList()
-            }
-        val descendants = (node.children + node.slots.values.flatten()).flatMap(::referencedComponentIds)
-        return here + descendants
     }
 }
