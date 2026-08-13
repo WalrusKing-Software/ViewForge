@@ -77,4 +77,33 @@ class DevicePreviewTest {
         s.setPreviewProfile("desktop_1280x800")
         assertEquals(false, s.canUndo)
     }
+
+    @Test
+    fun `fitToFrame sizes the zoom to the active profile within the given area`() {
+        // 1920x1080 profile at density 1 in a 960x1080 area: width binds -> 960/1920 = 0.5.
+        val s = state("desktop_1920x1080")
+        s.fitToFrame(availW = 960f, availH = 1080f, density = 1f)
+        assertEquals(0.5f, s.viewport.zoom)
+        assertEquals(0f, s.viewport.panX)
+        assertEquals(0f, s.viewport.panY)
+    }
+
+    @Test
+    fun `no-arg fitToFrame uses the recorded bounds and is a no-op until measured`() {
+        val s = state("desktop_1920x1080")
+        s.fitToFrame() // nothing measured yet
+        assertEquals(CanvasViewport(), s.viewport)
+
+        s.canvasFitBounds = CanvasFitBounds(availW = 960f, availH = 1080f, density = 1f)
+        s.fitToFrame()
+        assertEquals(0.5f, s.viewport.zoom)
+    }
+
+    @Test
+    fun `canFitToFrame needs both an edit root and a measured canvas`() {
+        val s = state(null)
+        assertEquals(false, s.canFitToFrame) // has a screen root, but no measured area yet
+        s.canvasFitBounds = CanvasFitBounds(800f, 600f, 1f)
+        assertEquals(true, s.canFitToFrame)
+    }
 }

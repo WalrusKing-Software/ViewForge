@@ -102,6 +102,8 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Zoom In", "Ctrl++"), enabled = view.canZoomIn, onClick = state::zoomIn)
             Item(withAccel("Zoom Out", "Ctrl+-"), enabled = view.canZoomOut, onClick = state::zoomOut)
             Item(withAccel("Reset Zoom", "Ctrl+0"), enabled = view.canResetZoom, onClick = state::resetZoom)
+            // Fit the device frame (C6, #59) — sets the zoom so the whole frame shows, no manual zoom-out.
+            Item(withAccel("Fit to Frame", "Ctrl+9"), enabled = view.canFit, onClick = state::fitToFrame)
             Separator()
             // Panel visibility (S1, #39) — checked when shown, mirroring the Dark canvas toggle above.
             // Routed through the preferences controller so a toggle persists across sessions (#43).
@@ -148,15 +150,22 @@ internal fun EditorState.editMenuModel(): EditMenuModel = EditMenuModel(
 
 /**
  * The enabled-state the canvas [viewport][EditorState.viewport] gives the View menu's zoom items:
- * Zoom In/Out grey out at the clamp bounds, Reset only enables when the view is off its default.
- * Pure data, unit-tested without a composition (mirrors [EditMenuModel]).
+ * Zoom In/Out grey out at the clamp bounds, Reset only enables when the view is off its default, and
+ * Fit needs something to frame and a measured canvas (C6, #59). Pure data, unit-tested without a
+ * composition (mirrors [EditMenuModel]).
  */
-internal data class ViewMenuModel(val canZoomIn: Boolean, val canZoomOut: Boolean, val canResetZoom: Boolean)
+internal data class ViewMenuModel(
+    val canZoomIn: Boolean,
+    val canZoomOut: Boolean,
+    val canResetZoom: Boolean,
+    val canFit: Boolean,
+)
 
 internal fun EditorState.viewMenuModel(): ViewMenuModel = ViewMenuModel(
     canZoomIn = viewport.canZoomIn,
     canZoomOut = viewport.canZoomOut,
     canResetZoom = viewport != CanvasViewport(),
+    canFit = canFitToFrame,
 )
 
 /**

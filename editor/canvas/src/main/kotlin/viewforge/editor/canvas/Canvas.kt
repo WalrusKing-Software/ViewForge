@@ -2,11 +2,13 @@ package viewforge.editor.canvas
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,8 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import viewforge.editor.state.CanvasFitBounds
 import viewforge.editor.state.EditorState
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -54,37 +58,51 @@ fun interface CanvasRenderer {
  */
 @Composable
 fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize().background(CANVAS_BACKDROP).clipToBounds().padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        // The edit surface is the active screen's root, or an opened component's root (#61).
-        val editRoot = state.activeEditRoot
-        if (editRoot == null) {
-            EmptyCanvasHint()
-        } else {
-            val bounds = remember { NodeBounds() }
-            val viewport = state.viewport
-            // The frame is sized to the screen's device profile (C6) rather than filling the viewport, so
-            // the canvas clips to a real device size and a `fillMaxSize` root fills the *device*. The C5
-            // zoom/pan graphicsLayer wraps it, so a frame larger than the viewport stays navigable.
-            val profile = state.activeDeviceProfile
-            Box(
-                Modifier
-                    .size(profile.width.dp, profile.height.dp)
-                    .graphicsLayer {
-                        scaleX = viewport.zoom
-                        scaleY = viewport.zoom
-                        translationX = viewport.panX
-                        translationY = viewport.panY
-                    }
-                    .background(Color.White),
-            ) {
-                renderer.Render(editRoot) { id ->
-                    Modifier.onGloballyPositioned { bounds.record(id, it.boundsInWindow()) }
+    // `BoxWithConstraints` (inside the padding) hands us the available content area in pixels, which the
+    // auto-fit (C6, #59) needs to compute the zoom that shows the whole device frame.
+    Box(modifier.fillMaxSize().background(CANVAS_BACKDROP).clipToBounds()) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            // The edit surface is the active screen's root, or an opened component's root (#61).
+            val editRoot = state.activeEditRoot
+            if (editRoot == null) {
+                EmptyCanvasHint()
+            } else {
+                val bounds = remember { NodeBounds() }
+                val viewport = state.viewport
+                // The frame is sized to the screen's device profile (C6) rather than filling the viewport, so
+                // the canvas clips to a real device size and a `fillMaxSize` root fills the *device*. The C5
+                // zoom/pan graphicsLayer wraps it, so a frame larger than the viewport stays navigable.
+                val profile = state.activeDeviceProfile
+                val density = LocalDensity.current.density
+                val availW = constraints.maxWidth.toFloat()
+                val availH = constraints.maxHeight.toFloat()
+                // Record the measured area so the on-demand Fit (View menu / Ctrl+9) has a size to fit to.
+                LaunchedEffect(availW, availH, density) {
+                    state.canvasFitBounds = CanvasFitBounds(availW, availH, density)
                 }
+                // Auto-fit when the profile changes (and on first show) so a frame larger than the viewport
+                // is visible without a manual zoom-out. Keyed on the profile alone, not the size, so a window
+                // resize doesn't overwrite a zoom the user set by hand.
+                LaunchedEffect(profile.id) {
+                    if (availW > 0f && availH > 0f) state.fitToFrame(availW, availH, density)
+                }
+                Box(
+                    Modifier
+                        .size(profile.width.dp, profile.height.dp)
+                        .graphicsLayer {
+                            scaleX = viewport.zoom
+                            scaleY = viewport.zoom
+                            translationX = viewport.panX
+                            translationY = viewport.panY
+                        }
+                        .background(Color.White),
+                ) {
+                    renderer.Render(editRoot) { id ->
+                        Modifier.onGloballyPositioned { bounds.record(id, it.boundsInWindow()) }
+                    }
+                }
+                SelectionOverlay(state, editRoot, bounds, Modifier.fillMaxSize())
             }
-            SelectionOverlay(state, editRoot, bounds, Modifier.fillMaxSize())
         }
     }
 }

@@ -75,4 +75,34 @@ class CanvasViewportTest {
         val moved = CanvasViewport(zoom = 3f, panX = 40f, panY = 12f)
         assertEquals(CanvasViewport(), moved.reset())
     }
+
+    @Test
+    fun `fittedTo scales by the tighter axis`() {
+        // Content twice as wide as the window but the same height: width is the binding axis (0.5).
+        assertEquals(0.5f, CanvasViewport().fittedTo(800f, 600f, 1600f, 600f).zoom)
+        // Content twice as tall: height binds (0.5).
+        assertEquals(0.5f, CanvasViewport().fittedTo(800f, 600f, 800f, 1200f).zoom)
+    }
+
+    @Test
+    fun `fittedTo clamps to the zoom range`() {
+        // Tiny content would want a huge zoom; saturates at the max.
+        assertEquals(MAX_ZOOM, CanvasViewport().fittedTo(8000f, 8000f, 100f, 100f).zoom)
+        // Huge content would want a minuscule zoom; saturates at the min (still clipped, but navigable).
+        assertEquals(MIN_ZOOM, CanvasViewport().fittedTo(100f, 100f, 8000f, 8000f).zoom)
+    }
+
+    @Test
+    fun `fittedTo recentres the frame`() {
+        // Whatever the prior pan/zoom, a fit resets pan to the origin so the centred frame stays centred.
+        val fitted = CanvasViewport(zoom = 3f, panX = 40f, panY = 12f).fittedTo(800f, 800f, 800f, 800f)
+        assertEquals(CanvasViewport(zoom = 1f), fitted)
+    }
+
+    @Test
+    fun `fittedTo is a no-op before the canvas is measured`() {
+        val v = CanvasViewport(zoom = 2f, panX = 5f)
+        assertEquals(v, v.fittedTo(0f, 600f, 800f, 600f))
+        assertEquals(v, v.fittedTo(800f, 600f, 0f, 600f))
+    }
 }

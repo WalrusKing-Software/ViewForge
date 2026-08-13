@@ -144,4 +144,12 @@ class AppMenuBarTest {
         s.panBy(15f, 0f)
         assertTrue(s.viewMenuModel().canResetZoom)
     }
+
+    @Test
+    fun `Fit enables only once the canvas has been measured`() {
+        val s = state()
+        assertFalse(s.viewMenuModel().canFit) // no measured area yet
+        s.canvasFitBounds = viewforge.editor.state.CanvasFitBounds(800f, 600f, 1f)
+        assertTrue(s.viewMenuModel().canFit)
+    }
 }

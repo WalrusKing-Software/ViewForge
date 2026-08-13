@@ -247,7 +247,8 @@ internal fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit)
  * The standard editing shortcuts (S2). Returns true when handled so the event stops here. Ctrl and
  * Meta are both accepted so the same bindings work on macOS. Delete/Backspace remove the selection;
  * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo/redo;
- * Ctrl +/−/0 zoom the canvas (C5). Holding the space bar puts the canvas in pan mode (space-drag).
+ * Ctrl +/−/0 zoom the canvas (C5) and Ctrl+9 fits the device frame (C6). Holding the space bar puts
+ * the canvas in pan mode (space-drag).
  */
 private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
     // Space is the one shortcut that cares about key-up: it's a held modifier for pan mode, not an
@@ -282,6 +283,10 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
         }
         cmd && event.key == Key.Zero -> {
             state.resetZoom()
+            true
+        }
+        cmd && event.key == Key.Nine -> {
+            state.fitToFrame()
             true
         }
         cmd && event.key == Key.Z && event.isShiftPressed -> {
