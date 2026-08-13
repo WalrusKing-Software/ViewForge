@@ -11,9 +11,11 @@ import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
 import viewforge.model.Screen
+import viewforge.model.UserComponent
 import viewforge.model.findById
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -146,6 +148,22 @@ class EditInPlaceTest {
         assertNull(s.editingComponentId)
         assertEquals(screenRoot.id, s.activeEditRoot?.id)
         assertNull(s.selectedId)
+    }
+
+    @Test
+    fun `openInstanceComponent enters an instance's component (double-click to enter, #68)`() {
+        val s = state()
+        val entered = s.openInstanceComponent(UserComponent.instance("c1", NodeId("i1")))
+        assertTrue(entered)
+        assertEquals("c1", s.editingComponentId)
+    }
+
+    @Test
+    fun `openInstanceComponent is a no-op returning false for a non-instance or an unresolved id`() {
+        val s = state()
+        assertFalse(s.openInstanceComponent(screenText)) // a plain node, not an instance
+        assertFalse(s.openInstanceComponent(UserComponent.instance("nope", NodeId("i1")))) // unknown id
+        assertNull(s.editingComponentId)
     }
 
     @Test

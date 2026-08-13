@@ -206,6 +206,9 @@ internal fun insertionCaret(
 internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds, modifier: Modifier = Modifier) {
     var transform by remember { mutableStateOf<CanvasTransform?>(null) }
     var hovered by remember { mutableStateOf<NodeId?>(null) }
+    // The last tapped node and when — for manual double-tap detection that keeps single-tap selection
+    // instant (unlike detectTapGestures' onDoubleTap, which delays every tap). Reset per edit surface.
+    var lastTap by remember(root) { mutableStateOf<Pair<NodeId, Long>?>(null) }
     val drag = remember(root) { CanvasDragState(state, bounds) }
 
     // Palette drag-to-canvas (P2a): while a palette drag is live, resolve its drop against the same
@@ -235,11 +238,23 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
         modifier
             .onGloballyPositioned { transform = CanvasTransform(it) }
             .pointerInput(root) {
+                val doubleTapMs = viewConfiguration.doubleTapTimeoutMillis
                 detectTapGestures { local ->
                     // While panning (space held) a press is a pan, not a selection — ignore it here.
                     if (state.isSpaceHeld) return@detectTapGestures
                     val point = transform?.localToWindow(local) ?: local
-                    state.select(hitTest(bounds.snapshot(), root, point))
+                    val hit = hitTest(bounds.snapshot(), root, point)
+                    state.select(hit) // select instantly on every tap
+                    // A quick second tap on the same instance enters its component (#68); double-tapping
+                    // anything else just re-selects it.
+                    val now = System.currentTimeMillis()
+                    val prev = lastTap
+                    lastTap = if (hit != null && prev?.first == hit && now - prev.second < doubleTapMs) {
+                        root.findById(hit)?.let { state.openInstanceComponent(it) }
+                        null
+                    } else {
+                        hit?.let { it to now }
+                    }
                 }
             }
             // Drag a node to reparent/reorder (C7). Inactive while space-panning, so the two drags are
