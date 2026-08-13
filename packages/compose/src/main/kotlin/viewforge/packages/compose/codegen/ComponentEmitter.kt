@@ -27,6 +27,7 @@ internal class ComponentEmitter(
     private val theme: Theme,
     assets: List<Asset> = emptyList(),
     components: List<ComponentDef> = emptyList(),
+    private val recordSpans: Boolean = false,
 ) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
@@ -39,8 +40,27 @@ internal class ComponentEmitter(
     var requiresMaterial3OptIn: Boolean = false
         private set
 
-    /** Emits [node]. [isRoot] chains its modifier onto the composable's `modifier` parameter. */
+    /**
+     * Emits [node]. [isRoot] chains its modifier onto the composable's `modifier` parameter. When
+     * [recordSpans] is set, the node's code is bracketed with [SourceSpans] marker lines (G3, #51) — a
+     * whole line before and after, so stripping them restores the exact un-instrumented output. Because
+     * `emit` is only ever embedded as a statement (a body line, a lazy `item { }`, a slot lambda), the
+     * markers always land on their own lines, covering nodes inside slots and lazy lists too.
+     */
     fun emit(node: Node, isRoot: Boolean): CodeBlock {
+        val core = emitCore(node, isRoot)
+        return if (!recordSpans) {
+            core
+        } else {
+            CodeBlock.builder()
+                .add("%L\n", SourceSpans.open(node.id.value))
+                .add(core)
+                .add("\n%L", SourceSpans.close(node.id.value))
+                .build()
+        }
+    }
+
+    private fun emitCore(node: Node, isRoot: Boolean): CodeBlock {
         val mod = if (isRoot) {
             ModifierEmitter.rootChain(node.modifiers, theme)
         } else {

@@ -21,18 +21,28 @@ class CodePreviewContentTest {
     private val project = Project(id = "p", name = "P", framework = FrameworkRef("compose-multiplatform", "1.0.0"))
 
     private fun service(
-        onScreen: (Project, Screen) -> String = { _, _ -> error("previewScreen should not be called") },
-        onComponent: (Project, ComponentDef) -> String = { _, _ -> error("previewComponent should not be called") },
+        onScreen: (Project, Screen) -> PreviewSource = { _, _ -> error("previewScreen should not be called") },
+        onComponent: (
+            Project,
+            ComponentDef,
+        ) -> PreviewSource = { _, _ -> error("previewComponent should not be called") },
     ) = object : CodePreviewService {
-        override fun previewScreen(project: Project, screen: Screen): String = onScreen(project, screen)
+        override fun previewScreen(project: Project, screen: Screen): PreviewSource = onScreen(project, screen)
 
-        override fun previewComponent(project: Project, component: ComponentDef): String =
+        override fun previewComponent(project: Project, component: ComponentDef): PreviewSource =
             onComponent(project, component)
     }
 
     @Test
     fun `a screen target generates the screen source`() {
-        val content = previewContent(service(onScreen = { _, _ -> "SCREEN" }), project, PreviewTarget.OfScreen(screen))
+        val content =
+            previewContent(
+                service(onScreen = { _, _ ->
+                    PreviewSource("SCREEN", emptyMap())
+                }),
+                project,
+                PreviewTarget.OfScreen(screen),
+            )
         assertEquals(PreviewContent.Source("SCREEN"), content)
     }
 
@@ -41,12 +51,23 @@ class CodePreviewContentTest {
         val content =
             previewContent(
                 service(onComponent = { _, _ ->
-                    "COMPONENT"
+                    PreviewSource("COMPONENT", emptyMap())
                 }),
                 project,
                 PreviewTarget.OfComponent(component),
             )
         assertEquals(PreviewContent.Source("COMPONENT"), content)
+    }
+
+    @Test
+    fun `the node span map is carried through to the Source`() {
+        val spans = mapOf("root" to (10 until 40))
+        val content = previewContent(
+            service(onScreen = { _, _ -> PreviewSource("SCREEN", spans) }),
+            project,
+            PreviewTarget.OfScreen(screen),
+        )
+        assertEquals(PreviewContent.Source("SCREEN", spans), content)
     }
 
     @Test
