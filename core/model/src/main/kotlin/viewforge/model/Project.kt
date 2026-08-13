@@ -39,6 +39,9 @@ object UserComponent {
         type = TYPE,
         props = mapOf(COMPONENT_ID_PROP to PropValue.Literal(JsonPrimitive(componentId))),
     )
+
+    /** The component id an instance [node] references, or null if [node] is not an instance / carries none. */
+    fun componentIdOf(node: Node): String? = (node.props[COMPONENT_ID_PROP] as? PropValue.Literal)?.value?.content
 }
 
 /**

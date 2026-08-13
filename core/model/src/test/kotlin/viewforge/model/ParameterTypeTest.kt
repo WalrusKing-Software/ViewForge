@@ -1,5 +1,6 @@
 package viewforge.model
 
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -33,5 +34,20 @@ class ParameterTypeTest {
             assertTrue(ParameterType.isPromotable(it))
             assertEquals(it, ParameterType.propTypeFor(ParameterType.nameFor(it)!!))
         }
+    }
+
+    @Test
+    fun `propDefinition synthesizes an inspector definition for a supported parameter`() {
+        val def = ParameterType.propDefinition(Parameter("label", "String", PropValue.Literal(JsonPrimitive("Hi"))))
+        assertEquals("label", def?.name)
+        assertEquals(PropType.String, def?.type)
+        assertEquals(PropValue.Literal(JsonPrimitive("Hi")), def?.default)
+        assertFalse(def!!.themeable)
+    }
+
+    @Test
+    fun `propDefinition makes a Color parameter themeable and is null for an unrepresentable type`() {
+        assertTrue(ParameterType.propDefinition(Parameter("bg", "Color"))!!.themeable)
+        assertNull(ParameterType.propDefinition(Parameter("x", "Bitmap")))
     }
 }

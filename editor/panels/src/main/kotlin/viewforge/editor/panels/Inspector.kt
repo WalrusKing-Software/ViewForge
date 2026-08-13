@@ -38,9 +38,12 @@ import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
+import viewforge.model.Parameter
+import viewforge.model.ParameterType
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
 import viewforge.model.Theme
+import viewforge.model.UserComponent
 
 /**
  * The property inspector — an **editing** surface from M5 (FEATURES I1–I5). It is entirely
@@ -75,13 +78,19 @@ private fun InspectorBody(state: EditorState, node: Node) {
         if (node.locked) KeyValueRow("locked", "true")
         if (node.hidden) KeyValueRow("hidden", "true")
 
-        SectionLabel("Props")
-        val defs = state.catalog.propsFor(node.type)
-        val known = defs.map { it.name }.toSet()
-        if (defs.isEmpty() && node.props.isEmpty()) MutedText("none")
-        defs.forEach { def -> PropRow(state, node, def, theme) }
-        // Any props the schema doesn't describe are shown read-only rather than hidden.
-        node.props.filterKeys { it !in known }.forEach { (k, v) -> KeyValueRow(k, formatPropValue(v)) }
+        // A user-component instance edits its referenced component's parameters, not a fixed prop schema.
+        if (node.type == UserComponent.TYPE) {
+            SectionLabel("Parameters")
+            InstanceParameters(state, node, theme)
+        } else {
+            SectionLabel("Props")
+            val defs = state.catalog.propsFor(node.type)
+            val known = defs.map { it.name }.toSet()
+            if (defs.isEmpty() && node.props.isEmpty()) MutedText("none")
+            defs.forEach { def -> PropRow(state, node, def, theme) }
+            // Any props the schema doesn't describe are shown read-only rather than hidden.
+            node.props.filterKeys { it !in known }.forEach { (k, v) -> KeyValueRow(k, formatPropValue(v)) }
+        }
 
         SectionLabel("Modifiers (order matters)")
         ModifierEditor(state, node, theme)
@@ -125,6 +134,61 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             onChange = { state.setProp(node.id, def.name, it) },
             enumValues = def.enumValues,
             range = def.range,
+            themeable = def.themeable,
+            assets = state.document.assets,
+        )
+    }
+}
+
+// --- component instance arguments ----------------------------------------------------------------
+
+/**
+ * The inspector surface for a `vforge.userComponent` instance: the referenced component's name and an
+ * editable control per parameter, bound to the instance's argument value (a prop keyed by parameter
+ * name, ADR-028). Editing sets or clears that prop through the same [EditorState.setProp] path as any
+ * prop, so it is undoable and the canvas/codegen update live. An unset argument shows the parameter's
+ * default; "clear" removes an explicit argument so the default applies again.
+ */
+@Composable
+private fun InstanceParameters(state: EditorState, node: Node, theme: Theme) {
+    val component = state.componentOfInstance(node)
+    if (component == null) {
+        MutedText("unresolved component")
+        return
+    }
+    KeyValueRow("component", component.name)
+    if (component.parameters.isEmpty()) {
+        MutedText("no parameters")
+        return
+    }
+    component.parameters.forEach { param -> ArgRow(state, node, param, theme) }
+}
+
+@Composable
+private fun ArgRow(state: EditorState, node: Node, param: Parameter, theme: Theme) {
+    val value = node.props[param.name]
+    val def = ParameterType.propDefinition(param)
+    if (def == null) {
+        // A parameter of a type the inspector can't edit (should not arise) is shown read-only.
+        KeyValueRow(param.name, (value ?: param.default)?.let { formatPropValue(it) } ?: "(unset)")
+        return
+    }
+    Column(Modifier.padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                param.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            // Clear an explicit argument so the parameter's own default applies again.
+            if (value != null) ActionText("clear") { state.setProp(node.id, param.name, null) }
+        }
+        ValueControl(
+            type = def.type,
+            value = value ?: def.default,
+            theme = theme,
+            onChange = { state.setProp(node.id, param.name, it) },
             themeable = def.themeable,
             assets = state.document.assets,
         )

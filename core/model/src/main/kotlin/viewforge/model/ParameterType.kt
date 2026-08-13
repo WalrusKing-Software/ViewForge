@@ -31,4 +31,21 @@ object ParameterType {
 
     /** Whether a prop of [type] can be promoted to a parameter (its type is representable). */
     fun isPromotable(type: PropType): Boolean = type in NAME_BY_TYPE
+
+    /**
+     * The inspector [PropDefinition] for editing an instance's argument to [parameter]: the control type
+     * comes from the parameter's type string, its default from the parameter's default. Color parameters
+     * are themeable (a theme-token argument is valid, like a Color prop). Null when the parameter's type
+     * is not representable in the inspector (should not arise — parameters are only created for
+     * representable types).
+     */
+    fun propDefinition(parameter: Parameter): PropDefinition? {
+        val type = propTypeFor(parameter.type) ?: return null
+        return PropDefinition(
+            name = parameter.name,
+            type = type,
+            default = parameter.default,
+            themeable = type == PropType.Color,
+        )
+    }
 }
