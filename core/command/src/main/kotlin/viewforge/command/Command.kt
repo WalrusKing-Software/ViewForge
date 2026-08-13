@@ -157,7 +157,11 @@ data class SetNodeFlags(
  * is logically atomic (a cut = capture + remove); the seam M5's slider/drag coalescing grows from.
  * The inverse is the child inverses in reverse order, each computed against the intermediate state.
  */
-data class CompositeCommand(val commands: List<Command>, override val label: String = "Edit") : Command {
+data class CompositeCommand(
+    val commands: List<Command>,
+    override val label: String = "Edit",
+    override val coalesceKey: Any? = null,
+) : Command {
     override fun apply(doc: Project): Project = commands.fold(doc) { acc, cmd -> cmd.apply(acc) }
 
     override fun invert(doc: Project): Command {
