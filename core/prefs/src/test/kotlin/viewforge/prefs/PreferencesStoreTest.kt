@@ -5,6 +5,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -21,6 +22,9 @@ class PreferencesStoreTest {
         assertEquals(EditorPreferences(), prefs)
         assertTrue(prefs.panelLayout.paletteVisible)
         assertEquals(PanelLayout.DEFAULT_TREE_WIDTH, prefs.panelLayout.treeWidth)
+        // The code preview defaults to hidden and to its own (wider) default width (#52).
+        assertFalse(prefs.panelLayout.codePreviewVisible)
+        assertEquals(PanelLayout.DEFAULT_CODE_PREVIEW_WIDTH, prefs.panelLayout.codePreviewWidth)
     }
 
     @Test
@@ -31,13 +35,30 @@ class PreferencesStoreTest {
                 paletteVisible = false,
                 treeVisible = true,
                 inspectorVisible = false,
+                codePreviewVisible = true,
                 paletteWidth = 200f,
                 treeWidth = 260f,
                 inspectorWidth = 300f,
+                codePreviewWidth = 400f,
             ),
         )
         PreferencesStore.save(prefs, dir)
         assertEquals(prefs, PreferencesStore.load(dir))
+    }
+
+    @Test
+    fun `a pre-52 file without code-preview keys loads the code-preview defaults`() {
+        val dir = tempDir()
+        // A file written before #52 carries only the three side panels; the code-preview fields must
+        // fall back to their defaults rather than being lost (forward tolerance).
+        dir.resolve(PreferencesStore.FILE_NAME).writeText(
+            """{ "prefsVersion": 1, "panelLayout": { "treeWidth": 260.0, "inspectorVisible": false } }""",
+        )
+        val layout = PreferencesStore.load(dir).panelLayout
+        assertEquals(260f, layout.treeWidth) // its own known field survives
+        assertFalse(layout.inspectorVisible)
+        assertFalse(layout.codePreviewVisible)
+        assertEquals(PanelLayout.DEFAULT_CODE_PREVIEW_WIDTH, layout.codePreviewWidth)
     }
 
     @Test

@@ -22,18 +22,24 @@ data class EditorPreferences(val prefsVersion: Int = CURRENT_VERSION, val panelL
 }
 
 /**
- * The side-panel layout (S1, issue #43): which of the three panels are shown, and how wide each is (in
- * dp). Widths are plain [Float] magnitudes rather than a Compose `Dp` so this stays Compose-free; the
- * shell attaches `.dp`. The canvas has no entry — it is always visible and takes the remaining space.
+ * The panel layout (S1, issue #43): which panels are shown, and how wide each is (in dp). Widths are
+ * plain [Float] magnitudes rather than a Compose `Dp` so this stays Compose-free; the shell attaches
+ * `.dp`. The canvas has no entry — it is always visible and takes the remaining space.
+ *
+ * The three side panels default to visible; the code-preview panel (G3, #50) defaults to *hidden* and
+ * is wider, matching how it shipped transient before this became persisted (#52). A file predating #52
+ * simply omits the code-preview fields, so they fall back to those defaults (forward tolerance).
  */
 @Serializable
 data class PanelLayout(
     val paletteVisible: Boolean = true,
     val treeVisible: Boolean = true,
     val inspectorVisible: Boolean = true,
+    val codePreviewVisible: Boolean = false,
     val paletteWidth: Float = DEFAULT_PALETTE_WIDTH,
     val treeWidth: Float = DEFAULT_TREE_WIDTH,
     val inspectorWidth: Float = DEFAULT_INSPECTOR_WIDTH,
+    val codePreviewWidth: Float = DEFAULT_CODE_PREVIEW_WIDTH,
 ) {
     /**
      * Force every width back into [[MIN_WIDTH], [MAX_WIDTH]]. Applied on load so a corrupt, hand-edited,
@@ -44,6 +50,7 @@ data class PanelLayout(
         paletteWidth = clampWidth(paletteWidth),
         treeWidth = clampWidth(treeWidth),
         inspectorWidth = clampWidth(inspectorWidth),
+        codePreviewWidth = clampWidth(codePreviewWidth),
     )
 
     companion object {
@@ -53,6 +60,9 @@ data class PanelLayout(
         const val DEFAULT_PALETTE_WIDTH = 180f
         const val DEFAULT_TREE_WIDTH = 210f
         const val DEFAULT_INSPECTOR_WIDTH = 240f
+
+        /** The code preview shows source, so it defaults wider than the side panels (matches #50). */
+        const val DEFAULT_CODE_PREVIEW_WIDTH = 340f
 
         /** The one place a panel width is bounded — reused by both the store and the live resize drag. */
         fun clampWidth(dp: Float): Float = dp.coerceIn(MIN_WIDTH, MAX_WIDTH)

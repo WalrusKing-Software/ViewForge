@@ -148,11 +148,11 @@ fun FrameWindowScope.EditorShell(
                         ResizableDivider(onResize = { state.resizeInspector(-it) }, onCommit = prefs::persist)
                         Inspector(state, Modifier.width(state.inspectorWidth.dp).fillMaxHeight())
                     }
-                    // The live code preview (G3, #50) sits furthest right. It is transient chrome not yet
-                    // in the persisted layout (#52), so its resize commits nothing — hence the empty
-                    // onCommit, unlike the persisted side panels above.
+                    // The live code preview (G3, #50) sits furthest right. Its visibility and width are
+                    // persisted across sessions (#52), so a resize commits through the same controller as
+                    // the side panels above.
                     if (state.codePreviewVisible) {
-                        ResizableDivider(onResize = { state.resizeCodePreview(-it) }, onCommit = {})
+                        ResizableDivider(onResize = { state.resizeCodePreview(-it) }, onCommit = prefs::persist)
                         CodePreview(state, previewService, Modifier.width(state.codePreviewWidth.dp).fillMaxHeight())
                     }
                 }
