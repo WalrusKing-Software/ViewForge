@@ -3,7 +3,9 @@ package viewforge.command
 import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Parameter
 import viewforge.model.Project
+import viewforge.model.PropValue
 import viewforge.model.findById
 import viewforge.model.findRoot
 import viewforge.model.replaceNode
@@ -114,3 +116,78 @@ fun extractComponent(rootId: String, targetNodeId: NodeId, component: ComponentD
         ),
         label = "Extract component",
     )
+
+/**
+ * Add [parameter] at [index] to component [componentId]'s parameter list (ADR-028). [index] is clamped,
+ * so a large index appends (how [promoteToParameter] adds a freshly derived parameter). Parameter names
+ * are unique within a component (two would generate a duplicate function parameter), so a name already
+ * present ⇒ a no-op with a no-op inverse. The inverse removes the parameter again.
+ */
+data class AddParameter(
+    val componentId: String,
+    val parameter: Parameter,
+    val index: Int,
+    override val label: String = "Add parameter",
+) : Command {
+    override fun apply(doc: Project): Project {
+        val component = doc.components.firstOrNull { it.id == componentId } ?: return doc
+        if (component.parameters.any { it.name == parameter.name }) return doc
+        val at = index.coerceIn(0, component.parameters.size)
+        val parameters = component.parameters.toMutableList().apply { add(at, parameter) }
+        return doc.withComponentParameters(componentId, parameters)
+    }
+
+    override fun invert(doc: Project): Command {
+        // If the name is already present in the pre-apply document, apply was a no-op, so undo must be
+        // too — otherwise the inverse would remove the parameter that was already there.
+        val duplicate = doc.components.firstOrNull {
+            it.id == componentId
+        }?.parameters?.any { it.name == parameter.name }
+        return if (duplicate == true) NoOp else RemoveParameter(componentId, parameter.name)
+    }
+}
+
+/**
+ * Remove the parameter [name] from component [componentId]. The inverse restores it to its exact
+ * position (reads the parameter and its index out of the pre-apply document, like [RemoveComponent]).
+ * Absent component or name ⇒ a no-op with a no-op inverse. Mechanical only — it does not rewrite any
+ * `ParamRef` in the definition body that still names [name]; the editor owns not orphaning references.
+ */
+data class RemoveParameter(
+    val componentId: String,
+    val name: String,
+    override val label: String = "Remove parameter",
+) : Command {
+    override fun apply(doc: Project): Project {
+        val component = doc.components.firstOrNull { it.id == componentId } ?: return doc
+        if (component.parameters.none { it.name == name }) return doc
+        val parameters = component.parameters.filterNot { it.name == name }
+        return doc.withComponentParameters(componentId, parameters)
+    }
+
+    override fun invert(doc: Project): Command {
+        val component = doc.components.firstOrNull { it.id == componentId } ?: return NoOp
+        val index = component.parameters.indexOfFirst { it.name == name }
+        val parameter = component.parameters.getOrNull(index) ?: return NoOp
+        return AddParameter(componentId, parameter, index)
+    }
+}
+
+/**
+ * Promote a prop of node [nodeId] in component [componentId] to a component [parameter] (ADR-028): add
+ * the parameter, then rebind that prop to a `ParamRef` naming it. One undoable step (the composite adds
+ * the parameter and rebinds the prop; undo reverses both). The caller derives [parameter] (its name,
+ * type, and default) from the prop being promoted, so the change is deterministic.
+ */
+fun promoteToParameter(componentId: String, nodeId: NodeId, propName: String, parameter: Parameter): Command =
+    CompositeCommand(
+        commands = listOf(
+            AddParameter(componentId, parameter, index = Int.MAX_VALUE),
+            SetProp(componentId, nodeId, propName, PropValue.ParamRef(parameter.name)),
+        ),
+        label = "Promote to parameter",
+    )
+
+/** Return a copy of this project with component [componentId]'s parameter list replaced by [parameters]. */
+private fun Project.withComponentParameters(componentId: String, parameters: List<Parameter>): Project =
+    copy(components = components.map { if (it.id == componentId) it.copy(parameters = parameters) else it })
