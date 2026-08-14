@@ -43,6 +43,7 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.allChildren
 import viewforge.model.findById
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -171,6 +172,58 @@ private fun parentContaining(root: Node, id: NodeId): Node? {
         parentContaining(child, id)?.let { return it }
     }
     return null
+}
+
+/** Whether an [AlignmentGuide] runs vertically (a shared x) or horizontally (a shared y). */
+enum class GuideOrientation { Vertical, Horizontal }
+
+/**
+ * One static alignment guide (C11, #118): a line at [position] on its cross axis, spanning [start]..[end]
+ * along the other axis. A [GuideOrientation.Vertical] guide draws from (position, start) to (position, end);
+ * a [GuideOrientation.Horizontal] guide from (start, position) to (end, position).
+ */
+data class AlignmentGuide(val orientation: GuideOrientation, val position: Float, val start: Float, val end: Float)
+
+/**
+ * Static alignment guides for the node [selectedId] (C11, #118): a guide wherever one of the node's three
+ * x-lines (left / centre / right) lines up (within [tolerance]) with an x-line of its parent or a sibling,
+ * and likewise for its y-lines (top / middle / bottom). Each guide sits at the *selected* node's line and
+ * spans the union of the selected node and every neighbour it aligns with there, so it reads as "this edge
+ * lines up with those". Content space, so it stays correct at any zoom/pan once mapped through
+ * [contentToScreen]. Empty when the node has no recorded bounds or no parent (the root aligns to nothing).
+ * Pure and Compose-free, unit-tested without a UI harness. (Drag-time snapping is the blocked #129.)
+ */
+fun alignmentGuides(
+    rects: Map<String, Rect>,
+    root: Node,
+    selectedId: NodeId,
+    tolerance: Float = GUIDE_TOLERANCE,
+): List<AlignmentGuide> {
+    val sel = rects[selectedId.value] ?: return emptyList()
+    val parent = parentContaining(root, selectedId) ?: return emptyList()
+    val neighbours =
+        (listOf(parent) + parent.children.filter { it.id != selectedId }).mapNotNull { rects[it.id.value] }
+    val selXs = listOf(sel.left, (sel.left + sel.right) / 2f, sel.right)
+    val selYs = listOf(sel.top, (sel.top + sel.bottom) / 2f, sel.bottom)
+    // The selected node's line (only three distinct x's / y's) keys the guide; the value is its running
+    // span along the perpendicular axis, widened to cover every neighbour that aligns on that line.
+    val vertical = mutableMapOf<Float, Pair<Float, Float>>()
+    val horizontal = mutableMapOf<Float, Pair<Float, Float>>()
+    for (n in neighbours) {
+        val nXs = listOf(n.left, (n.left + n.right) / 2f, n.right)
+        val nYs = listOf(n.top, (n.top + n.bottom) / 2f, n.bottom)
+        selXs.filter { sx -> nXs.any { abs(sx - it) <= tolerance } }
+            .forEach { sx -> mergeSpan(vertical, sx, minOf(sel.top, n.top), maxOf(sel.bottom, n.bottom)) }
+        selYs.filter { sy -> nYs.any { abs(sy - it) <= tolerance } }
+            .forEach { sy -> mergeSpan(horizontal, sy, minOf(sel.left, n.left), maxOf(sel.right, n.right)) }
+    }
+    return vertical.map { AlignmentGuide(GuideOrientation.Vertical, it.key, it.value.first, it.value.second) } +
+        horizontal.map { AlignmentGuide(GuideOrientation.Horizontal, it.key, it.value.first, it.value.second) }
+}
+
+private fun mergeSpan(map: MutableMap<Float, Pair<Float, Float>>, key: Float, start: Float, end: Float) {
+    val prev = map[key]
+    map[key] = if (prev == null) start to end else minOf(prev.first, start) to maxOf(prev.second, end)
 }
 
 /**
@@ -598,6 +651,21 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
         primary?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), SELECTION_COLOR, SELECTION_STROKE) }
         }
+        // Static alignment guides (C11, #118): while the mode is on, draw a line wherever the primary
+        // selection's edges/centre line up with a sibling or the parent. Reuses the content-space transform.
+        if (state.showGuides) {
+            primary?.let { id ->
+                alignmentGuides(bounds.snapshot(), root, id).forEach { g ->
+                    val (a, b) =
+                        if (g.orientation == GuideOrientation.Vertical) {
+                            Offset(g.position, g.start) to Offset(g.position, g.end)
+                        } else {
+                            Offset(g.start, g.position) to Offset(g.end, g.position)
+                        }
+                    drawLine(GUIDE_COLOR, pointToScreen(a), pointToScreen(b), strokeWidth = GUIDE_STROKE)
+                }
+            }
+        }
         // Measure/spacing overlay (C12, #119): while the measure key is held, annotate the gaps from the
         // primary selection to its parent container's edges. Drawn last, above the selection outline. The
         // distance is converted from content px to dp (a DrawScope is a Density) for the label.
@@ -707,6 +775,12 @@ private const val MEASURE_STROKE = 1f
 private const val MEASURE_TICK = 8f
 private val MEASURE_LABEL_STYLE = TextStyle(color = Color.White, fontSize = 10.sp)
 private const val MEASURE_LABEL_PADDING = 2f
+
+// Static alignment guides (C11, #118): a distinct pink, apart from the blue selection/hover, purple
+// #117 borders, and orange #119 measure lines. Tolerance is content px — the slack for "lines up".
+private val GUIDE_COLOR = Color(0xFFFF4081)
+private const val GUIDE_STROKE = 1f
+private const val GUIDE_TOLERANCE = 1f
 
 /** The overlay's drop feedback for a live palette drag (P2a): a caret at the gap plus a target outline. */
 private data class PaletteDropFeedback(val outlineId: NodeId?, val caret: Pair<Offset, Offset>?, val valid: Boolean)
