@@ -61,6 +61,24 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
+    /** Set the autosave cadence from the Preferences dialog and persist it (S5, #105). */
+    fun setAutosaveInterval(seconds: Int) {
+        state.updateAutosaveInterval(seconds)
+        persist()
+    }
+
+    /** Set the undo depth from the Preferences dialog and persist it (S5, #105). */
+    fun setHistoryDepth(entries: Int) {
+        state.updateHistoryDepth(entries)
+        persist()
+    }
+
+    /** Set the default export directory from the Preferences dialog and persist it (S5, #105). */
+    fun setDefaultExportPath(path: String) {
+        state.updateDefaultExportPath(path)
+        persist()
+    }
+
     /** Record [path] as the most-recent project and persist the updated list (D8). */
     fun recordRecent(path: Path) {
         state.noteRecentProject(path.toString())
@@ -83,10 +101,11 @@ internal class PreferencesController(private val state: EditorState) {
      * Persist the current preferences. Triggered at the discrete points chrome changes — a visibility
      * toggle, the end of a resize drag, or a recent-projects change.
      *
-     * It **load-merge-saves**: it reads the file, overlays only the panel layout, recent-projects, and the
-     * chrome theme from [state], and writes that back — so persisting one facet never clobbers another. In
-     * particular the #55 autosave interval, which has no in-memory home in this controller, is preserved
-     * rather than reset to its default on every panel toggle (the bug this replaces).
+     * It **load-merge-saves**: it reads the file, overlays only the facets held live in [state] — panel
+     * layout, recent projects, chrome theme, and the S5 editor settings (autosave interval, history depth,
+     * default export path) — and writes that back, so persisting one facet never clobbers another. Every
+     * persisted preference now has an in-memory home in [state], so the load-merge only guards against a
+     * newer build's unknown keys.
      */
     fun persist() {
         runCatching {
@@ -96,6 +115,9 @@ internal class PreferencesController(private val state: EditorState) {
                     panelLayout = state.panelLayout(),
                     recentProjects = state.recentProjects,
                     chromeDark = state.chromeDark,
+                    autosaveIntervalSeconds = state.autosaveIntervalSeconds,
+                    historyDepth = state.historyDepth,
+                    defaultExportPath = state.defaultExportPath,
                 ),
             )
         }

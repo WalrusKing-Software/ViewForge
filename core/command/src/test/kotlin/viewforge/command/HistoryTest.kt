@@ -75,6 +75,21 @@ class HistoryTest {
     }
 
     @Test
+    fun `lowering the limit trims the oldest entries immediately`() {
+        val history = History(limit = 10)
+        var doc = doc0
+        doc = history.execute(RenameNode(Fixtures.SCREEN, NodeId("a"), "one"), doc)
+        doc = history.execute(RenameNode(Fixtures.SCREEN, NodeId("a"), "two"), doc)
+        doc = history.execute(RenameNode(Fixtures.SCREEN, NodeId("a"), "three"), doc)
+
+        // Tightening the cap (S5 preference change) drops the oldest entry now, not on the next execute.
+        history.limit = 1
+        doc = history.undo(doc)
+        assertFalse(history.canUndo) // only the newest of the three survives
+        assertEquals("two", doc.rootOf().findById(NodeId("a"))!!.name) // "three"→"two", the older steps gone
+    }
+
+    @Test
     fun `consecutive same-key edits coalesce into one undo step`() {
         val history = History()
         val id = NodeId("a")

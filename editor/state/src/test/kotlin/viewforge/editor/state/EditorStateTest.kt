@@ -15,6 +15,7 @@ import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Screen
 import viewforge.model.findById
+import viewforge.prefs.EditorPreferences
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -341,6 +342,38 @@ class EditorStateTest {
         s.toggleCanvasDark()
         assertTrue(s.canvasDark)
         assertEquals(before, s.document) // view state only
+    }
+
+    @Test
+    fun `applyPreferences seeds the editor settings, clamped and trimmed`() {
+        val s = state()
+        s.applyPreferences(
+            EditorPreferences(
+                chromeDark = false,
+                autosaveIntervalSeconds = 100_000, // out of range -> clamps down
+                historyDepth = 0, // out of range -> clamps up to the minimum
+                defaultExportPath = "  /tmp/out  ",
+            ),
+        )
+        assertFalse(s.chromeDark)
+        assertEquals(EditorPreferences.MAX_AUTOSAVE_INTERVAL_SECONDS, s.autosaveIntervalSeconds)
+        assertEquals(EditorPreferences.MIN_HISTORY_DEPTH, s.historyDepth)
+        assertEquals("/tmp/out", s.defaultExportPath) // trimmed
+    }
+
+    @Test
+    fun `setHistoryDepth re-caps the live undo history`() {
+        val s = state()
+        s.updateHistoryDepth(EditorPreferences.MIN_HISTORY_DEPTH) // 10
+        s.select(NodeId("root"))
+        repeat(15) { s.addFromPalette("compose.material3.Text") } // 15 undoable edits, but the cap is 10
+
+        var undone = 0
+        while (s.canUndo) {
+            s.undo()
+            undone++
+        }
+        assertEquals(EditorPreferences.MIN_HISTORY_DEPTH, undone) // only the cap's worth remained undoable
     }
 
     @Test

@@ -73,7 +73,6 @@ fun FrameWindowScope.EditorShell(
     exportService: ProjectExportService,
     previewService: CodePreviewService,
     recoveryDir: Path,
-    autosaveIntervalMs: Long = AUTOSAVE_INTERVAL_MS,
     // Save-on-close (#56): the window's onCloseRequest raises [closeRequested] when the document is dirty;
     // the shell shows a Save/Discard/Cancel prompt and calls [onExit] to actually quit or [onCloseHandled]
     // to abort. Defaulted so the shell stays usable (and the signature stable) without the close wiring.
@@ -86,18 +85,22 @@ fun FrameWindowScope.EditorShell(
     var showThemeEditor by remember { mutableStateOf(false) }
     // Export is driven from both the toolbar and the File menu, so its flow is hoisted to a controller.
     val export = rememberExportController(state, exportService)
-    // Preferences persistence (#43/#55/#88): panel layout, autosave interval, recent projects. Created
-    // before the document controller, which records opened/saved paths as recents through it.
+    // Preferences persistence (#43/#55/#88/#104/#105): panel layout, chrome theme, recent projects, and the
+    // S5 editor settings. Created before the document controller, which records opened/saved paths through it.
     val prefs = rememberPreferencesController(state)
+    // In-app Preferences dialog (S5, #105): a modal editing the persisted editor settings, opened from the
+    // File menu. Its visibility lives here so it survives recomposition, like the theme editor.
+    var showPreferences by remember { mutableStateOf(false) }
     // .vforge New/Open/Save/Save As (#37) + Open Recent (#88): its own controller, shared by the File
     // menu and shortcuts.
     val document = rememberDocumentController(state, prefs)
     // Autosave + crash recovery (D4): a timer snapshots unsaved work; a snapshot found at launch prompts
-    // to restore. The config dir comes from :app (the wiring site), like the panel-layout load.
-    val recovery = rememberRecoveryController(state, recoveryDir, autosaveIntervalMs)
-    LaunchedEffect(recovery) {
+    // to restore. The config dir comes from :app (the wiring site), like the panel-layout load. The cadence
+    // is the live S5 preference (#105): keying the timer on it re-drives the interval without a restart.
+    val recovery = rememberRecoveryController(state, recoveryDir)
+    LaunchedEffect(recovery, state.autosaveIntervalSeconds) {
         while (true) {
-            delay(recovery.intervalMs)
+            delay(state.autosaveIntervalSeconds * 1000L)
             recovery.tick()
         }
     }
@@ -107,6 +110,7 @@ fun FrameWindowScope.EditorShell(
         prefs,
         onExport = export::start,
         onOpenThemeEditor = { showThemeEditor = true },
+        onOpenPreferences = { showPreferences = true },
         onNew = document::newDocument,
         onOpen = document::open,
         onOpenRecent = document::openRecent,
@@ -122,6 +126,7 @@ fun FrameWindowScope.EditorShell(
         LaunchedEffect(Unit) { focus.requestFocus() }
 
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
+        if (showPreferences) PreferencesDialog(state, prefs) { showPreferences = false }
         ExportDialogs(export)
         DocumentDialogs(document)
         RecoveryDialog(recovery)

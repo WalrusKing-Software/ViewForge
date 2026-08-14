@@ -32,6 +32,7 @@ internal fun FrameWindowScope.AppMenuBar(
     prefs: PreferencesController,
     onExport: (ExportMode) -> Unit,
     onOpenThemeEditor: () -> Unit,
+    onOpenPreferences: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onOpenRecent: (String) -> Unit,
@@ -68,6 +69,9 @@ internal fun FrameWindowScope.AppMenuBar(
             // The one File action that has a backing service today (M7 export, ADR-013 seam).
             Item("Export → .kt files", onClick = { onExport(ExportMode.LOOSE_FILES) })
             Item("Export → Gradle project", onClick = { onExport(ExportMode.GRADLE_PROJECT) })
+            Separator()
+            // In-app Preferences dialog (S5, #105) — edits the persisted editor settings.
+            Item("Preferences…", onClick = onOpenPreferences)
         }
         Menu("Edit", mnemonic = 'E') {
             Item(withAccel("Undo", "Ctrl+Z"), enabled = edit.canUndo, onClick = state::undo)

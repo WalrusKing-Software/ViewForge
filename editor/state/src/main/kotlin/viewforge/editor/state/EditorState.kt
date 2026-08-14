@@ -44,6 +44,7 @@ import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
+import viewforge.prefs.EditorPreferences
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
 import java.nio.file.Path
@@ -160,6 +161,59 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * hardcoded chrome so an upgrading user sees no change.
      */
     var chromeDark: Boolean by mutableStateOf(true)
+
+    /**
+     * How often crash-recovery autosave writes while there are unsaved edits, in seconds (S5, #55/#105).
+     * Seeded from prefs at startup and editable live in the Preferences dialog; the shell's autosave timer
+     * observes it, so a change re-drives the cadence without a restart. Clamped through the single
+     * [EditorPreferences.clampAutosaveInterval] bound so a bad value can't hammer the disk or disable recovery.
+     */
+    var autosaveIntervalSeconds: Int by mutableStateOf(EditorPreferences.DEFAULT_AUTOSAVE_INTERVAL_SECONDS)
+        private set
+
+    /**
+     * The directory an Export dialog opens in by default (S5, #105); blank means "let the OS picker choose".
+     * Seeded from prefs and editable in the Preferences dialog. Transient editor chrome — never document data.
+     */
+    var defaultExportPath: String by mutableStateOf("")
+        private set
+
+    /**
+     * How many undo entries the editor keeps (S5, #105). Setting it also re-caps the live [history] so a
+     * lowered depth trims immediately. Seeded from prefs and editable in the Preferences dialog. Clamped
+     * through the single [EditorPreferences.clampHistoryDepth] bound.
+     */
+    var historyDepth: Int by mutableStateOf(EditorPreferences.DEFAULT_HISTORY_DEPTH)
+        private set
+
+    /** Set the autosave cadence (S5), clamped to the sane range. The shell's timer observes this value. */
+    fun updateAutosaveInterval(seconds: Int) {
+        autosaveIntervalSeconds = EditorPreferences.clampAutosaveInterval(seconds)
+    }
+
+    /** Set the default export directory (S5); blank clears it. */
+    fun updateDefaultExportPath(path: String) {
+        defaultExportPath = path.trim()
+    }
+
+    /** Set the undo depth (S5), clamped, and re-cap the live history so a lower value takes effect at once. */
+    fun updateHistoryDepth(entries: Int) {
+        historyDepth = EditorPreferences.clampHistoryDepth(entries)
+        history.limit = historyDepth
+    }
+
+    /**
+     * Seed the live editor-setting scalars from persisted prefs at startup (S3/S5): chrome theme, autosave
+     * cadence, undo depth, and default export path. Called once by `:app` before the first frame, alongside
+     * [applyLayout] and [applyRecentProjects]. View state only — it never touches the document or history
+     * contents (only the history *cap*).
+     */
+    fun applyPreferences(prefs: EditorPreferences) {
+        chromeDark = prefs.chromeDark
+        updateAutosaveInterval(prefs.autosaveIntervalSeconds)
+        updateHistoryDepth(prefs.historyDepth)
+        updateDefaultExportPath(prefs.defaultExportPath)
+    }
 
     /**
      * Whether each side panel is shown (S1, #39). Transient editor-chrome state — never part of the
