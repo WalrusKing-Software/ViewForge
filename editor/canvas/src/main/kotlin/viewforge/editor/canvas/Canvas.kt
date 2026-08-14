@@ -36,10 +36,14 @@ import viewforge.model.NodeId
  * [instrument] is the editor-instrumentation hook (ADR-009): the renderer appends its returned
  * [Modifier] to each node, letting the editor capture per-node bounds for hit-testing. The editor
  * owns *what* the instrumentation does; the renderer only agrees to apply it.
+ *
+ * [interactive] is the C13 preview mode (#120): when true the renderer gives its stateful inputs real
+ * local state and live callbacks, so buttons, fields, and toggles respond to the pointer instead of being
+ * inert. The editor pairs it with removing the selection overlay, so pointer events reach the live tree.
  */
 fun interface CanvasRenderer {
     @Composable
-    fun Render(root: Node, instrument: (NodeId) -> Modifier)
+    fun Render(root: Node, interactive: Boolean, instrument: (NodeId) -> Modifier)
 }
 
 /**
@@ -105,7 +109,7 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                         .background(Color.White),
                 ) {
                     Box(Modifier.matchParentSize().onGloballyPositioned { contentCoords = it }) {
-                        renderer.Render(editRoot) { id ->
+                        renderer.Render(editRoot, state.interactivePreview) { id ->
                             Modifier.onGloballyPositioned { child ->
                                 contentCoords?.let {
                                     bounds.record(id, it.localBoundingBoxOf(child, clipBounds = false))
@@ -114,7 +118,11 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                         }
                     }
                 }
-                SelectionOverlay(state, editRoot, bounds, Modifier.fillMaxSize())
+                // In interactive preview (C13, #120) the selection overlay is removed so pointer events reach
+                // the live tree — clicks, typing, and scrolling hit the real components rather than being
+                // captured for selection/hover/drag. Selection state is untouched, so leaving preview restores
+                // the outlines.
+                if (!state.interactivePreview) SelectionOverlay(state, editRoot, bounds, Modifier.fillMaxSize())
             }
         }
     }

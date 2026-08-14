@@ -173,6 +173,17 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the canvas is in **interactive preview** mode (C13, #120): a run-mode toggle that lets the
+     * user click buttons, type in fields, and flip toggles on the live rendered UI instead of editing it.
+     * Editor-only view state, never serialized — like [showBorders], it only changes how the canvas behaves.
+     * The canvas removes its selection overlay (so pointer events reach the real components) and renders with
+     * interactivity on; selection is untouched, so leaving preview restores the outlines. Reset on a document
+     * swap so a fresh document always opens in edit mode.
+     */
+    var interactivePreview: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * Whether the editor *chrome* (panels, menus, toolbar) uses the dark color scheme (S3, #104). This is
      * the editor's own theme, wholly independent of [canvasDark] (the project preview, H2): changing one
      * never changes the other. Seeded from persisted prefs at startup and toggled from the View menu, which
@@ -572,6 +583,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         viewport = CanvasViewport()
         isSpaceHeld = false
         isMeasuring = false
+        interactivePreview = false // a fresh document opens in edit mode, not run mode (C13, #120)
         activeScreenId = project.screens.firstOrNull()?.id
         editingComponentId = null
         currentPath = path
@@ -1137,6 +1149,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the static alignment-guide overlay (C11, #118). Editor view state, not an edit. */
     fun toggleShowGuides() {
         showGuides = !showGuides
+    }
+
+    /** Toggle interactive preview / run mode (C13, #120). Editor view state, not an edit. */
+    fun toggleInteractivePreview() {
+        interactivePreview = !interactivePreview
     }
 
     /** Toggle the editor chrome between light and dark (S3, #104). View state, persisted; not an edit. */

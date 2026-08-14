@@ -87,7 +87,7 @@ private fun runEditor() = application {
     // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
     // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
-        CanvasRenderer { root, instrument ->
+        CanvasRenderer { root, interactive, instrument ->
             ComposeRenderer.RenderScreen(
                 root = root,
                 theme = state.document.theme,
@@ -95,6 +95,7 @@ private fun runEditor() = application {
                 instrument = instrument,
                 imageLoader = images::load,
                 components = state.document.components,
+                interactive = interactive,
             )
         }
 

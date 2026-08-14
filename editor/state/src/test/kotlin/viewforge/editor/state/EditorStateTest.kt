@@ -365,6 +365,25 @@ class EditorStateTest {
     }
 
     @Test
+    fun `toggleInteractivePreview flips run mode without touching the document`() {
+        val s = state()
+        val before = s.document
+        assertFalse(s.interactivePreview)
+        s.toggleInteractivePreview()
+        assertTrue(s.interactivePreview)
+        assertEquals(before, s.document) // view state only
+    }
+
+    @Test
+    fun `a new document resets interactive preview to edit mode`() {
+        val s = state()
+        s.toggleInteractivePreview()
+        assertTrue(s.interactivePreview)
+        s.newDocument() // swaps the document via replaceDocument
+        assertFalse(s.interactivePreview)
+    }
+
+    @Test
     fun `applyPreferences seeds the editor settings, clamped and trimmed`() {
         val s = state()
         s.applyPreferences(

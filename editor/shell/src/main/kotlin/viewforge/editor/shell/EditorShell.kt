@@ -221,6 +221,12 @@ private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEdi
             ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
             ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
             ToolbarButton("Theme…", enabled = true, onClick = onOpenThemeEditor)
+            // Interactive preview / run mode (C13, #120): flip between editing and interacting with the live UI.
+            ToolbarButton(
+                if (state.interactivePreview) "◼ Exit preview" else "▶ Preview",
+                enabled = true,
+                onClick = state::toggleInteractivePreview,
+            )
             DeviceProfileSelector(state)
             // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
             ToolbarButton(
