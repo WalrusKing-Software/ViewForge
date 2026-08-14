@@ -55,6 +55,12 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
+    /** Flip code-preview soft-wrap and persist the choice across sessions (#115). */
+    fun toggleCodePreviewWrap() {
+        state.toggleCodePreviewWrap()
+        persist()
+    }
+
     /** Flip the editor chrome light/dark and persist the choice across sessions (S3, #104). */
     fun toggleChromeDark() {
         state.toggleChromeDark()

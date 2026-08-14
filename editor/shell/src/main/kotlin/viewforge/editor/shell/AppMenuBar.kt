@@ -145,6 +145,11 @@ internal fun FrameWindowScope.AppMenuBar(
             CheckboxItem("Code preview", checked = state.codePreviewVisible, onCheckedChange = {
                 prefs.toggleCodePreview()
             })
+            // Soft-wrap long lines in the code preview instead of scrolling horizontally (#115). Persisted
+            // like the panel toggles above, so it routes through the preferences controller.
+            CheckboxItem("Wrap code preview", checked = state.codePreviewWrap, onCheckedChange = {
+                prefs.toggleCodePreviewWrap()
+            })
         }
     }
 }

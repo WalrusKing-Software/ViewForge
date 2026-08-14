@@ -81,7 +81,8 @@ class PanelLayoutTest {
                 paletteWidth = 250f,
                 treeWidth = 99999f, // out of range: must clamp
                 inspectorWidth = 300f,
-                codePreviewWidth = 360f,
+                codePreviewWidth = 700f, // wider than a side panel's MAX_WIDTH: its own bound keeps it (#115)
+                codePreviewWrap = true,
             ),
         )
         assertFalse(s.paletteVisible)
@@ -91,7 +92,8 @@ class PanelLayoutTest {
         assertEquals(250f, s.paletteWidth)
         assertEquals(PanelLayout.MAX_WIDTH, s.treeWidth)
         assertEquals(300f, s.inspectorWidth)
-        assertEquals(360f, s.codePreviewWidth)
+        assertEquals(700f, s.codePreviewWidth)
+        assertTrue(s.codePreviewWrap)
     }
 
     @Test
@@ -120,9 +122,18 @@ class PanelLayoutTest {
             paletteWidth = 190f,
             treeWidth = 240f,
             inspectorWidth = 260f,
-            codePreviewWidth = 320f,
+            codePreviewWidth = 700f,
+            codePreviewWrap = true,
         )
         s.applyLayout(layout)
         assertEquals(layout, s.panelLayout())
+    }
+
+    @Test
+    fun `toggleCodePreviewWrap flips the soft-wrap flag`() {
+        val s = state()
+        assertFalse(s.codePreviewWrap)
+        s.toggleCodePreviewWrap()
+        assertTrue(s.codePreviewWrap)
     }
 }
