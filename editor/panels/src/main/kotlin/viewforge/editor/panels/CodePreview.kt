@@ -1,5 +1,6 @@
 package viewforge.editor.panels
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
@@ -19,12 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.PreviewContent
@@ -41,13 +44,12 @@ import viewforge.model.NodeId
  * Selecting a node scrolls the panel to, and highlights, the code emitted for it (#51): the seam returns
  * a node→source-range map alongside the source, so this reads `state.selectedId` against it. The reverse
  * also holds (#103): tapping in the source selects the innermost node whose span encloses the caret, via
- * the same map ([nodeAt]). Text stays selectable so a user can still copy by hand; copy-to-clipboard
- * remains a follow-up (G8, #102).
+ * the same map ([nodeAt]). A header Copy action puts the shown source on the system clipboard (G8, #102);
+ * the text also stays drag-selectable for copying by hand.
  */
 @Composable
 fun CodePreview(state: EditorState, service: CodePreviewService, modifier: Modifier = Modifier) {
     Column(modifier) {
-        PanelHeader("Code")
         // The document is an immutable value replaced per command, so a change to its reference (or the
         // preview target) means an edit landed — regenerate then, not every frame (G3 "updates with the
         // document"). The target follows the open component when one is being edited, else the active
@@ -55,6 +57,9 @@ fun CodePreview(state: EditorState, service: CodePreviewService, modifier: Modif
         val content = remember(state.document, state.editingComponentId, state.activeScreen?.id) {
             previewContent(service, state.document, state.previewTarget)
         }
+        // Copy the shown source to the system clipboard (G8, #102) — the same bytes the exporter emits,
+        // for pasting into an existing project. Only offered when there is source (not a failure message).
+        PanelHeader("Code", trailing = { if (content is PreviewContent.Source) CopyAction(content.code) })
         when (content) {
             // A generation failure is shown loudly in the error colour, never a blank panel (CLAUDE.md).
             is PreviewContent.Failure -> Text(
@@ -116,6 +121,34 @@ private fun SourceView(state: EditorState, content: PreviewContent.Source) {
                 },
         )
     }
+}
+
+/**
+ * The code panel's Copy header action (G8, #102): copies [code] — the exact source shown, byte-identical
+ * to the export — to the system clipboard, briefly confirming with a "Copied" label. Panel-layer only
+ * (`LocalClipboardManager`), so the render/codegen layers stay pure.
+ */
+@Composable
+private fun CopyAction(code: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1200)
+            copied = false
+        }
+    }
+    Text(
+        text = if (copied) "Copied" else "Copy",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .clickable {
+                clipboard.setText(AnnotatedString(code))
+                copied = true
+            }
+            .padding(horizontal = 4.dp),
+    )
 }
 
 /** [code] with a background [color] over [range] (the selected node's span), or plain when there is none. */
