@@ -45,7 +45,7 @@ feature/*     ●──●      ●──●         ●────●         
 | Type | Use | Branches from | Merges to |
 |---|---|---|---|
 | `feature/` | New capability | `develop` | `develop` |
-| `bugfix/` | Bug fix in unreleased work | `develop` | `develop` |
+| `bugfix/` (or `fix/`) | Bug fix in unreleased work | `develop` | `develop` |
 | `hotfix/` | Fix to released code | `main` | `main` + `develop` |
 | `refactor/` | Behavior-preserving restructure | `develop` | `develop` |
 | `docs/` | Documentation only | `develop` | `develop` |
@@ -59,8 +59,9 @@ Examples:
 `hotfix/0.3.1` · `spike/jewel-evaluation`
 
 **Distinguish `bugfix/` from `hotfix/` strictly.** `bugfix/` fixes something not yet released and
-goes through `develop` normally. `hotfix/` branches from `main` because the bug is in released code
-and cannot wait for the next release train.
+goes through `develop` normally (`fix/` is accepted as a synonym for `bugfix/`). `hotfix/` branches
+from `main` because the bug is in released code and cannot wait for the next release train; it merges
+to `main` **and** back to `develop`.
 
 **Spikes matter here.** When exploring whether an approach works, branch as a spike, learn, throw it
 away, then implement cleanly. Merging exploratory code is how prototypes quietly become permanent.
