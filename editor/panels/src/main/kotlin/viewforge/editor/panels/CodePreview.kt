@@ -98,16 +98,19 @@ private fun SourceView(state: EditorState, content: PreviewContent.Source) {
         vScroll.animateScrollTo(laid.getLineTop(line).toInt())
     }
 
+    // Soft-wrap (#115): when on, the source wraps to the panel width and the horizontal scroll is dropped
+    // (it would do nothing); when off, lines stay full-width and scroll horizontally as before.
+    val wrap = state.codePreviewWrap
     SelectionContainer(Modifier.fillMaxSize()) {
         Text(
             text = annotated,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            softWrap = false,
+            softWrap = wrap,
             onTextLayout = { layout = it },
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(vScroll)
-                .horizontalScroll(hScroll)
+                .then(if (wrap) Modifier else Modifier.horizontalScroll(hScroll))
                 .padding(12.dp)
                 // Tap the source to select the innermost node whose span covers the caret (#103, reverse of
                 // #51). Keyed on the shown source so it always resolves against the current spans; a tap

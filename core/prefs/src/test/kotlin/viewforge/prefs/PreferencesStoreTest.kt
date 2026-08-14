@@ -39,7 +39,8 @@ class PreferencesStoreTest {
                 paletteWidth = 200f,
                 treeWidth = 260f,
                 inspectorWidth = 300f,
-                codePreviewWidth = 400f,
+                codePreviewWidth = 700f, // wider than a side panel's MAX_WIDTH (520) — its own bound (#115)
+                codePreviewWrap = true,
             ),
             autosaveIntervalSeconds = 30,
         )
@@ -179,6 +180,24 @@ class PreferencesStoreTest {
         val layout = PreferencesStore.load(dir).panelLayout
         assertEquals(PanelLayout.MIN_WIDTH, layout.paletteWidth)
         assertEquals(PanelLayout.MAX_WIDTH, layout.inspectorWidth)
+    }
+
+    @Test
+    fun `the code preview has its own wider width bound (#115)`() {
+        val dir = tempDir()
+        // 700 exceeds a side panel's MAX_WIDTH (520) but is within the code preview's bound: it survives.
+        // 99999 is beyond even that, so it clamps to the code preview's own maximum.
+        dir.resolve(PreferencesStore.FILE_NAME).writeText(
+            """{ "prefsVersion": 1, "panelLayout": { "codePreviewWidth": 700.0, "treeWidth": 99999.0 } }""",
+        )
+        val within = PreferencesStore.load(dir).panelLayout
+        assertEquals(700f, within.codePreviewWidth) // not clamped down to the side-panel MAX_WIDTH
+        assertEquals(PanelLayout.MAX_WIDTH, within.treeWidth) // a side panel still uses the narrower bound
+
+        dir.resolve(PreferencesStore.FILE_NAME).writeText(
+            """{ "prefsVersion": 1, "panelLayout": { "codePreviewWidth": 99999.0 } }""",
+        )
+        assertEquals(PanelLayout.MAX_CODE_PREVIEW_WIDTH, PreferencesStore.load(dir).panelLayout.codePreviewWidth)
     }
 
     @Test

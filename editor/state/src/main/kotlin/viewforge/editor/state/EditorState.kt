@@ -272,6 +272,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the code-preview panel soft-wraps long lines instead of scrolling horizontally (#115).
+     * Persisted alongside the panel layout ([applyLayout]/[panelLayout]); the panel reads it to pick
+     * `softWrap` and whether to attach a horizontal scroll. Defaults off, so upgrading users keep the
+     * previous scroll behaviour.
+     */
+    var codePreviewWrap: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * The canvas zoom & pan (C5). Transient view state — where the editor is looking, never part of
      * the document. The menu, keyboard shortcuts and canvas gestures all mutate this one value; the
      * canvas realises it as a single `graphicsLayer`, so hit-testing stays correct at every level.
@@ -1148,9 +1157,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         codePreviewVisible = !codePreviewVisible
     }
 
-    /** Grow/shrink the code-preview panel by [delta] dp (splitter drag), clamped. */
+    /** Toggle soft-wrapping in the code-preview panel (#115). Persisted via the panel layout. */
+    fun toggleCodePreviewWrap() {
+        codePreviewWrap = !codePreviewWrap
+    }
+
+    /** Grow/shrink the code-preview panel by [delta] dp (splitter drag), clamped to its own wider bound. */
     fun resizeCodePreview(delta: Float) {
-        codePreviewWidth = PanelLayout.clampWidth(codePreviewWidth + delta)
+        codePreviewWidth = PanelLayout.clampCodePreviewWidth(codePreviewWidth + delta)
     }
 
     /**
@@ -1166,7 +1180,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteWidth = PanelLayout.clampWidth(layout.paletteWidth)
         treeWidth = PanelLayout.clampWidth(layout.treeWidth)
         inspectorWidth = PanelLayout.clampWidth(layout.inspectorWidth)
-        codePreviewWidth = PanelLayout.clampWidth(layout.codePreviewWidth)
+        codePreviewWidth = PanelLayout.clampCodePreviewWidth(layout.codePreviewWidth)
+        codePreviewWrap = layout.codePreviewWrap
     }
 
     /** Snapshot the current panel layout for persistence. */
@@ -1179,6 +1194,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         treeWidth = treeWidth,
         inspectorWidth = inspectorWidth,
         codePreviewWidth = codePreviewWidth,
+        codePreviewWrap = codePreviewWrap,
     )
 
     // --- recent projects (D8) ---------------------------------------------------------------------
