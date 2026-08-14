@@ -355,6 +355,16 @@ class EditorStateTest {
     }
 
     @Test
+    fun `toggleShowGuides flips the alignment-guide overlay without touching the document`() {
+        val s = state()
+        val before = s.document
+        assertFalse(s.showGuides)
+        s.toggleShowGuides()
+        assertTrue(s.showGuides)
+        assertEquals(before, s.document) // view state only
+    }
+
+    @Test
     fun `applyPreferences seeds the editor settings, clamped and trimmed`() {
         val s = state()
         s.applyPreferences(

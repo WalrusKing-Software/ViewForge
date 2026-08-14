@@ -119,6 +119,13 @@ internal fun FrameWindowScope.AppMenuBar(
                 checked = state.showBorders,
                 onCheckedChange = { state.toggleShowBorders() },
             )
+            // Static alignment guides for the selection (C11, #118) — editor-only, transient like the
+            // borders toggle above, so routed through `state` rather than the preferences controller.
+            CheckboxItem(
+                "Alignment guides",
+                checked = state.showGuides,
+                onCheckedChange = { state.toggleShowGuides() },
+            )
             Separator()
             // Canvas zoom (C5). Accelerators are display-only — the shell's handleShortcut binds the
             // real keys — matching the Edit menu's pattern. Zoom In/Out grey out at the clamp bounds.

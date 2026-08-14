@@ -163,6 +163,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the canvas draws static alignment guides for the primary selection (C11, #118). Editor-only
+     * view state, never serialized — like [showBorders], it only changes what the editor overlays. When on,
+     * the overlay draws a guide line wherever the selected node's edges/center line up with a sibling's or
+     * the parent's, reusing the per-node content-space bounds (#116). (Drag-time snapping is #129, blocked.)
+     */
+    var showGuides: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * Whether the editor *chrome* (panels, menus, toolbar) uses the dark color scheme (S3, #104). This is
      * the editor's own theme, wholly independent of [canvasDark] (the project preview, H2): changing one
      * never changes the other. Seeded from persisted prefs at startup and toggled from the View menu, which
@@ -1092,6 +1101,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the debug container-border overlay (#117). Editor view state, not an edit. */
     fun toggleShowBorders() {
         showBorders = !showBorders
+    }
+
+    /** Toggle the static alignment-guide overlay (C11, #118). Editor view state, not an edit. */
+    fun toggleShowGuides() {
+        showGuides = !showGuides
     }
 
     /** Toggle the editor chrome between light and dark (S3, #104). View state, persisted; not an edit. */

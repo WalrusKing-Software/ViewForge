@@ -105,7 +105,11 @@ canonical transform; any new overlay that draws per-node chrome reuses it rather
 coordinate math. The debug container-border overlay (**#117**, a View-menu toggle outlining every layout
 container via `containerNodes` + `contentRectToScreen`) is the first such reuse; the measure/spacing
 overlay (**#119**, hold **M** to show the pure `measureGaps` distances from the selection to its
-container edges, held-key-tracked like space-pan) is the second.
+container edges, held-key-tracked like space-pan) is the second; the static alignment guides (**#118**, a
+View toggle drawing the pure `alignmentGuides` lines where the selection's edges/centre meet a sibling or
+the parent) are the third. Note #118 is C11 **reinterpreted** for the container-layout model: free-move
+snapping-during-drag presumes absolute positioning the canvas doesn't have (drag is reparent-only), so
+that part is split to the blocked #129 rather than forcing a positioning model the layout doesn't use.
 
 ---
 
