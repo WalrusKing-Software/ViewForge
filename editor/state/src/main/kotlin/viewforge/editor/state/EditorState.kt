@@ -285,6 +285,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     var isSpaceHeld: Boolean by mutableStateOf(false)
 
     /**
+     * Whether the measure/spacing overlay is active (C12, #119) — i.e. the measure key is held. Like
+     * [isSpaceHeld], the shell's focus-aware key handler owns it (it's the one place that knows the key
+     * isn't being typed into a field), and the canvas reads it to draw the gaps from the primary selection
+     * to its parent container's edges. Transient view state, never serialized.
+     */
+    var isMeasuring: Boolean by mutableStateOf(false)
+
+    /**
      * A pending request to rename a node inline (T3, F2). Transient view state: the shell's focus-aware
      * key handler sets it (F2 acts on the selection regardless of which surface has focus), and the tree
      * panel — which owns the inline edit field — observes it, enters rename mode for that node, and
@@ -527,6 +535,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         clipboard = emptyList()
         viewport = CanvasViewport()
         isSpaceHeld = false
+        isMeasuring = false
         activeScreenId = project.screens.firstOrNull()?.id
         editingComponentId = null
         currentPath = path

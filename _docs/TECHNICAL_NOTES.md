@@ -103,7 +103,9 @@ through the pure `contentToScreen`/`screenToContent`/`contentRectToScreen` helpe
 unit-tested in `CanvasTransformTest`) when it draws and when it maps a pointer. This is the single
 canonical transform; any new overlay that draws per-node chrome reuses it rather than re-deriving
 coordinate math. The debug container-border overlay (**#117**, a View-menu toggle outlining every layout
-container via `containerNodes` + `contentRectToScreen`) is the first such reuse.
+container via `containerNodes` + `contentRectToScreen`) is the first such reuse; the measure/spacing
+overlay (**#119**, hold **M** to show the pure `measureGaps` distances from the selection to its
+container edges, held-key-tracked like space-pan) is the second.
 
 ---
 
