@@ -98,14 +98,26 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
         }
     }
 
+    // Type-ahead search/filter (T6, #122). Panel-local, ephemeral view state — it filters the displayed
+    // rows only, so it lives here rather than on EditorState.
+    var query by remember { mutableStateOf("") }
+
     Column(modifier) {
         PanelHeader("Layers")
         val root = state.activeEditRoot
         if (root == null) {
             MutedText("No screen")
         } else {
-            val rows = remember(root, expanded.toMap()) {
-                flatten(root, depth = 0, ownAddress = null, expanded = expanded)
+            TreeSearchField(query = query, onQueryChange = { query = it })
+            // Filter to matching nodes and their ancestors (null = no query = full tree). When filtering,
+            // `flatten` force-expands along the kept paths so a match under a collapsed ancestor still shows.
+            val keep = remember(root, query) { searchKeepSet(root, query) }
+            val rows = remember(root, expanded.toMap(), keep) {
+                if (keep != null && keep.isEmpty()) emptyList() else flatten(root, 0, null, expanded, keep)
+            }
+            if (rows.isEmpty()) {
+                MutedText("No matches")
+                return@Column
             }
             val nodeItems = rows.filterIsInstance<NodeRowItem>()
             // Keep the drag controller's view of node addresses in sync with what's on screen.
@@ -165,18 +177,36 @@ private data class NodeRowItem(val node: Node, override val depth: Int, val ownA
 /** A non-interactive header separating a parent's named slot region. */
 private data class SlotRowItem(val name: String, override val depth: Int) : TreeRow
 
-private fun flatten(node: Node, depth: Int, ownAddress: ChildAddress?, expanded: Map<String, Boolean>): List<TreeRow> {
+/**
+ * Flatten [node] into display rows. When [keep] is non-null (a search is active, T6/#122) only nodes in it
+ * are emitted, and the walk force-expands (ignoring collapse state) so a match under a collapsed ancestor
+ * still shows; a slot header appears only if the slot has a kept child. When [keep] is null the collapse
+ * state is honoured and every slot header shows, as before. Child indices stay the *original* positions so
+ * a filtered row still carries the right [ChildAddress] for drop resolution.
+ */
+private fun flatten(
+    node: Node,
+    depth: Int,
+    ownAddress: ChildAddress?,
+    expanded: Map<String, Boolean>,
+    keep: Set<String>?,
+): List<TreeRow> {
     val out = ArrayList<TreeRow>()
     out += NodeRowItem(node, depth, ownAddress)
-    val isExpanded = expanded[node.id.value] ?: true
-    if (isExpanded && node.allChildren().isNotEmpty()) {
+    val descend = if (keep != null) true else (expanded[node.id.value] ?: true)
+    if (descend && node.allChildren().isNotEmpty()) {
         node.children.forEachIndexed { i, child ->
-            out += flatten(child, depth + 1, ChildAddress(node.id, null, i), expanded)
+            if (keep == null || child.id.value in keep) {
+                out += flatten(child, depth + 1, ChildAddress(node.id, null, i), expanded, keep)
+            }
         }
         node.slots.forEach { (slot, list) ->
-            out += SlotRowItem(slot, depth + 1)
-            list.forEachIndexed { i, child ->
-                out += flatten(child, depth + 2, ChildAddress(node.id, slot, i), expanded)
+            val shown = list.withIndex().filter { keep == null || it.value.id.value in keep }
+            if (keep == null || shown.isNotEmpty()) {
+                out += SlotRowItem(slot, depth + 1)
+                shown.forEach { (i, child) ->
+                    out += flatten(child, depth + 2, ChildAddress(node.id, slot, i), expanded, keep)
+                }
             }
         }
     }
@@ -515,6 +545,41 @@ private fun RenameField(initial: String, onCommit: (String) -> Unit, onCancel: (
                 }
             },
     )
+}
+
+/** The type-ahead search box at the top of the layers panel (T6, #122). Bare like [RenameField]. */
+@Composable
+private fun TreeSearchField(query: String, onQueryChange: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f)) {
+            if (query.isEmpty()) {
+                Text(
+                    text = "Search",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Text(
+                text = "✕",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { onQueryChange("") }.padding(start = 4.dp),
+            )
+        }
+    }
 }
 
 @Composable
