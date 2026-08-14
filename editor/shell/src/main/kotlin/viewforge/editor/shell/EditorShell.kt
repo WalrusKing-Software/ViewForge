@@ -271,6 +271,17 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
         }
         return state.isSpaceHeld
     }
+    // M (unmodified) is likewise a held key, not an action: hold it to show the measure/spacing overlay
+    // (C12, #119). Tracked on both edges like space; a Cmd/Ctrl-M chord is left alone. Bubbling, so a
+    // focused text field types its own 'm' first and we only see it when the canvas has focus.
+    if (event.key == Key.M && !event.isCtrlPressed && !event.isMetaPressed) {
+        when (event.type) {
+            KeyEventType.KeyDown -> state.isMeasuring = true
+            KeyEventType.KeyUp -> state.isMeasuring = false
+            else -> {}
+        }
+        return state.isMeasuring
+    }
     if (event.type != KeyEventType.KeyDown) return false
     val cmd = event.isCtrlPressed || event.isMetaPressed
     return when {

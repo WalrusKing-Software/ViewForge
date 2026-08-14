@@ -43,6 +43,7 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.allChildren
 import viewforge.model.findById
+import kotlin.math.roundToInt
 
 /**
  * The per-node spatial index behind hit-testing (ARCHITECTURE §4.4, ADR-009). Each rendered node's
@@ -130,6 +131,46 @@ private fun collectContainers(node: Node, isContainer: (String) -> Boolean, out:
     if (node.hidden) return
     if (isContainer(node.type)) out += node
     node.allChildren().forEach { collectContainers(it, isContainer, out) }
+}
+
+/** Whether a [MeasureSegment] runs horizontally (a left/right gap) or vertically (a top/bottom gap). */
+enum class MeasureAxis { Horizontal, Vertical }
+
+/** One gap of the measure overlay (C12, #119): a line from [start] to [end] labelled with [distance] px. */
+data class MeasureSegment(val start: Offset, val end: Offset, val distance: Float, val axis: MeasureAxis)
+
+/**
+ * The spacing gaps from the node [selectedId] to its parent container's four inner edges (C12, #119),
+ * for the measure overlay — the distance from each edge of the node to the corresponding edge of the
+ * container that holds it. Content space, so the result stays correct at any zoom/pan once the overlay
+ * maps it through [contentToScreen]. Each gap is centred on the node along the perpendicular axis.
+ *
+ * Empty when the node has no recorded bounds, no parent (it is the root — nothing to measure against), or
+ * the parent has no bounds. A side whose gap is negative (the node overflows the container there) is
+ * dropped rather than drawn backwards. Pure and Compose-free, so it is unit-tested without a UI harness.
+ * v1 measures to the container edges; measuring to the nearest sibling per side is the #127 follow-up.
+ */
+fun measureGaps(rects: Map<String, Rect>, root: Node, selectedId: NodeId): List<MeasureSegment> {
+    val child = rects[selectedId.value] ?: return emptyList()
+    val parent = parentContaining(root, selectedId) ?: return emptyList()
+    val p = rects[parent.id.value] ?: return emptyList()
+    val cx = (child.left + child.right) / 2f
+    val cy = (child.top + child.bottom) / 2f
+    return listOf(
+        MeasureSegment(Offset(p.left, cy), Offset(child.left, cy), child.left - p.left, MeasureAxis.Horizontal),
+        MeasureSegment(Offset(child.right, cy), Offset(p.right, cy), p.right - child.right, MeasureAxis.Horizontal),
+        MeasureSegment(Offset(cx, p.top), Offset(cx, child.top), child.top - p.top, MeasureAxis.Vertical),
+        MeasureSegment(Offset(cx, child.bottom), Offset(cx, p.bottom), p.bottom - child.bottom, MeasureAxis.Vertical),
+    ).filter { it.distance >= 0f }
+}
+
+/** The node in [root]'s subtree whose direct children/slots contain [id], or null (id is the root/absent). */
+private fun parentContaining(root: Node, id: NodeId): Node? {
+    root.allChildren().forEach { child ->
+        if (child.id == id) return root
+        parentContaining(child, id)?.let { return it }
+    }
+    return null
 }
 
 /**
@@ -557,6 +598,20 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
         primary?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), SELECTION_COLOR, SELECTION_STROKE) }
         }
+        // Measure/spacing overlay (C12, #119): while the measure key is held, annotate the gaps from the
+        // primary selection to its parent container's edges. Drawn last, above the selection outline. The
+        // distance is converted from content px to dp (a DrawScope is a Density) for the label.
+        if (state.isMeasuring) {
+            primary?.let { id ->
+                measureGaps(bounds.snapshot(), root, id).forEach { seg ->
+                    val a = pointToScreen(seg.start)
+                    val b = pointToScreen(seg.end)
+                    drawLine(MEASURE_COLOR, a, b, strokeWidth = MEASURE_STROKE)
+                    drawMeasureTicks(a, b, seg.axis)
+                    drawMeasureLabel(textMeasurer, seg.distance.toDp().value.roundToInt().toString(), (a + b) / 2f)
+                }
+            }
+        }
     }
 }
 
@@ -577,6 +632,31 @@ private fun DrawScope.drawOutline(rect: Rect, color: Color, width: Float, dash: 
         size = rect.size,
         style = Stroke(width = width, pathEffect = dash),
     )
+}
+
+/** Short perpendicular ticks at each end of a measure segment (#119), so the measured span reads clearly. */
+private fun DrawScope.drawMeasureTicks(a: Offset, b: Offset, axis: MeasureAxis) {
+    val half = MEASURE_TICK / 2f
+    if (axis == MeasureAxis.Horizontal) {
+        drawLine(MEASURE_COLOR, Offset(a.x, a.y - half), Offset(a.x, a.y + half), strokeWidth = MEASURE_STROKE)
+        drawLine(MEASURE_COLOR, Offset(b.x, b.y - half), Offset(b.x, b.y + half), strokeWidth = MEASURE_STROKE)
+    } else {
+        drawLine(MEASURE_COLOR, Offset(a.x - half, a.y), Offset(a.x + half, a.y), strokeWidth = MEASURE_STROKE)
+        drawLine(MEASURE_COLOR, Offset(b.x - half, b.y), Offset(b.x + half, b.y), strokeWidth = MEASURE_STROKE)
+    }
+}
+
+/** A distance label (dp) centred on a measure segment's midpoint, on a chip for legibility (#119). */
+private fun DrawScope.drawMeasureLabel(measurer: TextMeasurer, text: String, at: Offset) {
+    val layout = measurer.measure(text, MEASURE_LABEL_STYLE)
+    val topLeft =
+        at - Offset(layout.size.width / 2f + MEASURE_LABEL_PADDING, layout.size.height / 2f + MEASURE_LABEL_PADDING)
+    drawRect(
+        color = MEASURE_COLOR,
+        topLeft = topLeft,
+        size = Size(layout.size.width + MEASURE_LABEL_PADDING * 2, layout.size.height + MEASURE_LABEL_PADDING * 2),
+    )
+    drawText(layout, topLeft = topLeft + Offset(MEASURE_LABEL_PADDING, MEASURE_LABEL_PADDING))
 }
 
 /** A small type-name tag at a container's top-left corner for the debug border overlay (#117). */
@@ -619,6 +699,14 @@ private const val BORDER_STROKE = 1f
 private val BORDER_DASH by lazy { PathEffect.dashPathEffect(floatArrayOf(6f, 4f)) }
 private val BORDER_LABEL_STYLE = TextStyle(color = Color.White, fontSize = 10.sp)
 private const val BORDER_LABEL_PADDING = 2f
+
+// Measure/spacing overlay (C12, #119): a distinct orange, apart from the blue selection/hover, the purple
+// debug borders (#117), and the green/red drop feedback, so the annotations read as their own layer.
+private val MEASURE_COLOR = Color(0xFFF57C00)
+private const val MEASURE_STROKE = 1f
+private const val MEASURE_TICK = 8f
+private val MEASURE_LABEL_STYLE = TextStyle(color = Color.White, fontSize = 10.sp)
+private const val MEASURE_LABEL_PADDING = 2f
 
 /** The overlay's drop feedback for a live palette drag (P2a): a caret at the gap plus a target outline. */
 private data class PaletteDropFeedback(val outlineId: NodeId?, val caret: Pair<Offset, Offset>?, val valid: Boolean)
