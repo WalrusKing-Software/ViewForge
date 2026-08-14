@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,9 +60,13 @@ fun interface CanvasRenderer {
  * aligned at every zoom/pan level. The overlay itself is left **unscaled** on top, so its outlines keep a
  * constant stroke thickness rather than growing with the zoom.
  *
- * The frame has bounded size so a root that asks to `fillMaxSize` fills the viewport rather than
- * collapsing. The viewport `clipToBounds` so a zoomed-in or panned frame can't bleed over the
- * neighbouring panels.
+ * The frame has a bounded size so a root that asks to `fillMaxSize` fills the viewport rather than
+ * collapsing. It is sized with `requiredSize`, **not** `size`: `size` is clamped by the incoming
+ * constraints, so in a canvas panel narrower than the device profile the frame would shrink to the panel
+ * (and the recorded content bounds with it) instead of being its true profile size — which both misrenders
+ * the device preview and desyncs the selection overlay from the content (#137). `requiredSize` forces the
+ * profile size and lets the frame overflow, exactly as C6/#59 (auto-fit a frame larger than the viewport)
+ * intend. The viewport `clipToBounds` so a zoomed-in or panned frame can't bleed over the neighbouring panels.
  */
 @Composable
 fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifier = Modifier) {
@@ -99,7 +103,7 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                 var contentCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
                 Box(
                     Modifier
-                        .size(profile.width.dp, profile.height.dp)
+                        .requiredSize(profile.width.dp, profile.height.dp)
                         .graphicsLayer {
                             scaleX = viewport.zoom
                             scaleY = viewport.zoom
