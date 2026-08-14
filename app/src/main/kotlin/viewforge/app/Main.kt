@@ -73,6 +73,7 @@ private fun runEditor() = application {
     val prefs = PreferencesStore.load()
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
+    state.chromeDark = prefs.chromeDark // Editor chrome theme (S3, #104), seeded before the first frame
     val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds

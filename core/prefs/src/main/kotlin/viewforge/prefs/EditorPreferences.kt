@@ -7,8 +7,9 @@ import kotlinx.serialization.Serializable
  * [prefsVersion], independent of the `.vforge` `schemaVersion`: editor layout is not project data, so
  * it must never travel in a project file and does not share the document's migration chain.
  *
- * Holds the [panelLayout] (S1), the [autosaveIntervalSeconds] (S5, #55), and the [recentProjects] list
- * (D8, #88); window size and the default export path are the natural next tenants of this same file.
+ * Holds the [panelLayout] (S1), the [autosaveIntervalSeconds] (S5, #55), the [recentProjects] list
+ * (D8, #88), and the [chromeDark] editor-theme flag (S3, #104); window size and the default export path
+ * are the natural next tenants of this same file.
  *
  * @property autosaveIntervalSeconds how often crash-recovery autosave writes its sidecar while there
  *   are unsaved edits (D4, #54). Clamped on load to a sane range so a hand-edited value can neither
@@ -16,6 +17,10 @@ import kotlinx.serialization.Serializable
  * @property recentProjects recently opened/saved `.vforge` paths, most-recent first (D8). Absolute paths
  *   are fine here — `preferences.json` is per-user config that is never committed, unlike a `.vforge`
  *   file (PR-4). De-duplicated and capped on load via [RecentProjects.sanitized].
+ * @property chromeDark whether the editor *chrome* (panels, menus, toolbar) uses the dark color scheme
+ *   (S3, #104). This is the editor's own theme, wholly independent of the project preview's light/dark
+ *   (`EditorState.canvasDark`, H2). Defaults to `true` so an upgrading user keeps the previously
+ *   hardcoded-dark chrome, and a prefs file predating this field falls back to dark (forward tolerance).
  */
 @Serializable
 data class EditorPreferences(
@@ -23,6 +28,7 @@ data class EditorPreferences(
     val panelLayout: PanelLayout = PanelLayout(),
     val autosaveIntervalSeconds: Int = DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
     val recentProjects: List<String> = emptyList(),
+    val chromeDark: Boolean = DEFAULT_CHROME_DARK,
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
@@ -37,6 +43,9 @@ data class EditorPreferences(
 
         /** Matches the interval #54 shipped hardcoded, so an upgrading user sees no behaviour change. */
         const val DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 10
+
+        /** Matches the chrome #19 shipped hardcoded-dark, so an upgrading user sees no theme change (S3). */
+        const val DEFAULT_CHROME_DARK = true
         const val MIN_AUTOSAVE_INTERVAL_SECONDS = 2
         const val MAX_AUTOSAVE_INTERVAL_SECONDS = 600
 

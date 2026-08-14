@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -114,7 +115,9 @@ fun FrameWindowScope.EditorShell(
         onSaveAs = document::saveAs,
     )
 
-    MaterialTheme(colorScheme = darkColorScheme()) {
+    // Editor chrome theme (S3, #104), independent of the project preview the canvas renders: a View-menu
+    // toggle flips it and prefs persist it. Defaults dark, matching the previously hardcoded scheme.
+    MaterialTheme(colorScheme = if (state.chromeDark) darkColorScheme() else lightColorScheme()) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
 

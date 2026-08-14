@@ -153,6 +153,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the editor *chrome* (panels, menus, toolbar) uses the dark color scheme (S3, #104). This is
+     * the editor's own theme, wholly independent of [canvasDark] (the project preview, H2): changing one
+     * never changes the other. Seeded from persisted prefs at startup and toggled from the View menu, which
+     * persists it back (mirrors the panel-visibility flags). Defaults to dark, matching the previously
+     * hardcoded chrome so an upgrading user sees no change.
+     */
+    var chromeDark: Boolean by mutableStateOf(true)
+
+    /**
      * Whether each side panel is shown (S1, #39). Transient editor-chrome state — never part of the
      * document. The View menu toggles these; the shell hides the panel (and its divider) when false.
      * The canvas has no flag: it is always visible, so hiding every panel still leaves something to
@@ -1006,6 +1015,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the canvas between the theme's light and dark values (H2). View state, not an edit. */
     fun toggleCanvasDark() {
         canvasDark = !canvasDark
+    }
+
+    /** Toggle the editor chrome between light and dark (S3, #104). View state, persisted; not an edit. */
+    fun toggleChromeDark() {
+        chromeDark = !chromeDark
     }
 
     /** Show/hide the palette panel (S1). */

@@ -55,6 +55,12 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
+    /** Flip the editor chrome light/dark and persist the choice across sessions (S3, #104). */
+    fun toggleChromeDark() {
+        state.toggleChromeDark()
+        persist()
+    }
+
     /** Record [path] as the most-recent project and persist the updated list (D8). */
     fun recordRecent(path: Path) {
         state.noteRecentProject(path.toString())
@@ -77,16 +83,20 @@ internal class PreferencesController(private val state: EditorState) {
      * Persist the current preferences. Triggered at the discrete points chrome changes — a visibility
      * toggle, the end of a resize drag, or a recent-projects change.
      *
-     * It **load-merge-saves**: it reads the file, overlays only the panel layout and recent-projects from
-     * [state], and writes that back — so persisting one facet never clobbers another. In particular the
-     * #55 autosave interval, which has no in-memory home in this controller, is preserved rather than reset
-     * to its default on every panel toggle (the bug this replaces).
+     * It **load-merge-saves**: it reads the file, overlays only the panel layout, recent-projects, and the
+     * chrome theme from [state], and writes that back — so persisting one facet never clobbers another. In
+     * particular the #55 autosave interval, which has no in-memory home in this controller, is preserved
+     * rather than reset to its default on every panel toggle (the bug this replaces).
      */
     fun persist() {
         runCatching {
             val current = PreferencesStore.load()
             PreferencesStore.save(
-                current.copy(panelLayout = state.panelLayout(), recentProjects = state.recentProjects),
+                current.copy(
+                    panelLayout = state.panelLayout(),
+                    recentProjects = state.recentProjects,
+                    chromeDark = state.chromeDark,
+                ),
             )
         }
     }
