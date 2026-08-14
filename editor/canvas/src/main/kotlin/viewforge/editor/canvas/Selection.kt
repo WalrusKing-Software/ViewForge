@@ -141,15 +141,19 @@ enum class MeasureAxis { Horizontal, Vertical }
 data class MeasureSegment(val start: Offset, val end: Offset, val distance: Float, val axis: MeasureAxis)
 
 /**
- * The spacing gaps from the node [selectedId] to its parent container's four inner edges (C12, #119),
- * for the measure overlay — the distance from each edge of the node to the corresponding edge of the
- * container that holds it. Content space, so the result stays correct at any zoom/pan once the overlay
- * maps it through [contentToScreen]. Each gap is centred on the node along the perpendicular axis.
+ * The spacing gaps from the node [selectedId] to its nearest neighbour on each of its four sides (C12,
+ * #119 / #127), for the measure overlay. Per side the gap measures to the nearest *sibling* that sits
+ * between the node and the parent on that side — one whose span overlaps the node on the perpendicular
+ * axis, so it is genuinely across the gap and not merely off to one corner — falling back to the parent
+ * container's inner edge when there is no such sibling (the "spacing to neighbours" a design tool shows).
+ * Content space, so the result stays correct at any zoom/pan once the overlay maps it through
+ * [contentToScreen]. Each gap is centred on the node along the perpendicular axis.
  *
+ * A sibling here is another child of the same parent's default region (mirroring [alignmentGuides]).
  * Empty when the node has no recorded bounds, no parent (it is the root — nothing to measure against), or
- * the parent has no bounds. A side whose gap is negative (the node overflows the container there) is
- * dropped rather than drawn backwards. Pure and Compose-free, so it is unit-tested without a UI harness.
- * v1 measures to the container edges; measuring to the nearest sibling per side is the #127 follow-up.
+ * the parent has no bounds. A side whose gap is negative (the node overflows the container there, with no
+ * sibling to measure to) is dropped rather than drawn backwards; a sibling-derived gap is never negative.
+ * Pure and Compose-free, so it is unit-tested without a UI harness.
  */
 fun measureGaps(rects: Map<String, Rect>, root: Node, selectedId: NodeId): List<MeasureSegment> {
     val child = rects[selectedId.value] ?: return emptyList()
@@ -157,11 +161,29 @@ fun measureGaps(rects: Map<String, Rect>, root: Node, selectedId: NodeId): List<
     val p = rects[parent.id.value] ?: return emptyList()
     val cx = (child.left + child.right) / 2f
     val cy = (child.top + child.bottom) / 2f
+    // Sibling rects laid out beside the node; a side measures to the nearest one that both sits fully on
+    // that side of the node and overlaps it on the perpendicular axis, else falls back to the parent edge.
+    val siblings = parent.children.filter { it.id != selectedId }.mapNotNull { rects[it.id.value] }
+    val overlapsVertically = { s: Rect -> s.top < child.bottom && s.bottom > child.top }
+    val overlapsHorizontally = { s: Rect -> s.left < child.right && s.right > child.left }
+    val leftEdge =
+        siblings.filter { overlapsVertically(it) && it.right <= child.left }.maxOfOrNull { it.right } ?: p.left
+    val rightEdge =
+        siblings.filter { overlapsVertically(it) && it.left >= child.right }.minOfOrNull { it.left } ?: p.right
+    val topEdge =
+        siblings.filter { overlapsHorizontally(it) && it.bottom <= child.top }.maxOfOrNull { it.bottom } ?: p.top
+    val bottomEdge =
+        siblings.filter { overlapsHorizontally(it) && it.top >= child.bottom }.minOfOrNull { it.top } ?: p.bottom
     return listOf(
-        MeasureSegment(Offset(p.left, cy), Offset(child.left, cy), child.left - p.left, MeasureAxis.Horizontal),
-        MeasureSegment(Offset(child.right, cy), Offset(p.right, cy), p.right - child.right, MeasureAxis.Horizontal),
-        MeasureSegment(Offset(cx, p.top), Offset(cx, child.top), child.top - p.top, MeasureAxis.Vertical),
-        MeasureSegment(Offset(cx, child.bottom), Offset(cx, p.bottom), p.bottom - child.bottom, MeasureAxis.Vertical),
+        MeasureSegment(Offset(leftEdge, cy), Offset(child.left, cy), child.left - leftEdge, MeasureAxis.Horizontal),
+        MeasureSegment(Offset(child.right, cy), Offset(rightEdge, cy), rightEdge - child.right, MeasureAxis.Horizontal),
+        MeasureSegment(Offset(cx, topEdge), Offset(cx, child.top), child.top - topEdge, MeasureAxis.Vertical),
+        MeasureSegment(
+            Offset(cx, child.bottom),
+            Offset(cx, bottomEdge),
+            bottomEdge - child.bottom,
+            MeasureAxis.Vertical,
+        ),
     ).filter { it.distance >= 0f }
 }
 
