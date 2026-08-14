@@ -91,6 +91,10 @@ fun FrameWindowScope.EditorShell(
     // In-app Preferences dialog (S5, #105): a modal editing the persisted editor settings, opened from the
     // File menu. Its visibility lives here so it survives recomposition, like the theme editor.
     var showPreferences by remember { mutableStateOf(false) }
+    // The command palette (S4, #123): a Ctrl+Shift+P fuzzy launcher over the editor's actions. Its
+    // visibility lives here like the dialogs above; the command catalog is rebuilt from the live wiring
+    // each time it opens, so every command's enabled-state is current.
+    var showPalette by remember { mutableStateOf(false) }
     // .vforge New/Open/Save/Save As (#37) + Open Recent (#88): its own controller, shared by the File
     // menu and shortcuts.
     val document = rememberDocumentController(state, prefs)
@@ -132,6 +136,19 @@ fun FrameWindowScope.EditorShell(
         DocumentDialogs(document)
         RecoveryDialog(recovery)
         ExitConfirmation(closeRequested, state, document, onExit = onExit, onCancel = onCloseHandled)
+        // The command palette (S4, #123). Built from the live wiring so enablement is current when opened.
+        if (showPalette) {
+            CommandPalette(
+                buildPaletteCommands(
+                    state,
+                    document,
+                    prefs,
+                    export,
+                    onOpenThemeEditor = { showThemeEditor = true },
+                    onOpenPreferences = { showPreferences = true },
+                ),
+            ) { showPalette = false }
+        }
 
         Surface(Modifier.fillMaxSize()) {
             Column(
@@ -142,7 +159,11 @@ fun FrameWindowScope.EditorShell(
                     // Root-level shortcuts use onKeyEvent (bubbling) so a focused text field — palette
                     // search, inline rename — consumes its keys first and typing is never hijacked.
                     // Editing shortcuts first, then the File-menu document shortcuts (New/Open/Save).
-                    .onKeyEvent { handleShortcut(it, state) || handleDocumentShortcut(it, document) },
+                    .onKeyEvent {
+                        handlePaletteShortcut(it) { showPalette = true } ||
+                            handleShortcut(it, state) ||
+                            handleDocumentShortcut(it, document)
+                    },
             ) {
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
@@ -339,6 +360,21 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
         }
         else -> false
     }
+}
+
+/**
+ * The command-palette shortcut (S4, #123): Ctrl+Shift+P (Cmd on macOS) opens the fuzzy launcher. Checked
+ * before the editing/document shortcuts so it wins the chord, and only on KeyDown. Once open, the palette's
+ * focusable popup captures keys, so this never competes with typing a query.
+ */
+private fun handlePaletteShortcut(event: KeyEvent, onOpen: () -> Unit): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val cmd = event.isCtrlPressed || event.isMetaPressed
+    if (cmd && event.isShiftPressed && event.key == Key.P) {
+        onOpen()
+        return true
+    }
+    return false
 }
 
 /**
