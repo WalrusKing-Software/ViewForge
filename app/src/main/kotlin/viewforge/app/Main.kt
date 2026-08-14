@@ -32,6 +32,7 @@ import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
+import viewforge.project.CrashReporter
 import viewforge.project.ExportFile
 import viewforge.project.ProjectExporter
 import java.nio.file.Path
@@ -44,7 +45,27 @@ import java.nio.file.Path
  * M2 loads a hardcoded document ([sampleProject]) and renders it in a real Compose Desktop window;
  * open/save, packaging, and the rest of the shell arrive in later milestones.
  */
-fun main() = application {
+fun main() {
+    installCrashReporter()
+    runEditor()
+}
+
+/**
+ * Route uncaught exceptions on any thread to a local crash log under the config dir (S6, #106), then
+ * delegate to the JVM's previous handler so default print-and-exit still happens. **Local only** — no
+ * network (SECURITY / ADR-011); the working document is preserved separately by recovery (#54). Installed
+ * before the UI starts so an early failure is still captured.
+ */
+private fun installCrashReporter() {
+    val dir = ConfigDir.resolve()
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        CrashReporter.write(dir, throwable, context = "thread=${thread.name}")
+        previous?.uncaughtException(thread, throwable)
+    }
+}
+
+private fun runEditor() = application {
     val state = EditorState(sampleProject(), ComposeCatalog)
     // Load persisted preferences once, before the first frame — a missing/corrupt file yields defaults,
     // so this never fails startup. Restore the panel layout (#43) now; the shell persists changes back on
