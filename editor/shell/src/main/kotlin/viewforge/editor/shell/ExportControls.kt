@@ -34,6 +34,14 @@ internal class ExportController(private val state: EditorState, private val serv
     var result by mutableStateOf<String?>(null)
         private set
 
+    /** A regeneration awaiting confirmation because it would delete orphaned files (G10). */
+    var pendingRegen by mutableStateOf<PendingRegen?>(null)
+        private set
+
+    /** The unowned files that blocked a regeneration (G10); shown so the user can resolve them. */
+    var blockedRegen by mutableStateOf<List<String>?>(null)
+        private set
+
     /** Pick a directory and export, deferring to an overwrite confirmation when files would clash. */
     fun start(mode: ExportMode) {
         val dir = chooseDirectory("Export ${state.document.name}", state.defaultExportPath) ?: return
@@ -58,6 +66,53 @@ internal class ExportController(private val state: EditorState, private val serv
 
     fun dismissResult() {
         result = null
+    }
+
+    /**
+     * Safely regenerate the managed Gradle project into a chosen directory (G10). A dry-run decides the UX:
+     * unowned files that would be clobbered raise a refusal; orphan deletions raise a confirmation; an
+     * otherwise-clean run applies straight away.
+     */
+    fun regenerate() {
+        val dir = chooseDirectory("Regenerate ${state.document.name}", state.defaultExportPath) ?: return
+        val report = runCatching { service.regenerationReport(state.document, dir) }
+            .getOrElse { e ->
+                result = "Regeneration failed: ${e.message}"
+                return
+            }
+        when {
+            report.blocked.isNotEmpty() -> blockedRegen = report.blocked
+            report.deleted.isNotEmpty() -> pendingRegen = PendingRegen(dir, report.written.size, report.deleted)
+            else -> applyRegen(dir)
+        }
+    }
+
+    fun confirmRegen() {
+        val p = pendingRegen ?: return
+        pendingRegen = null
+        applyRegen(p.dir)
+    }
+
+    fun dismissRegen() {
+        pendingRegen = null
+    }
+
+    fun dismissBlockedRegen() {
+        blockedRegen = null
+    }
+
+    private fun applyRegen(dir: Path) {
+        val report = runCatching { service.regenerate(state.document, dir) }
+            .getOrElse { e ->
+                result = "Regeneration failed: ${e.message}"
+                return
+            }
+        result = if (report.blocked.isNotEmpty()) {
+            "Regeneration refused — these files are not managed by ViewForge:\n\n" + report.blocked.joinToString("\n")
+        } else {
+            val removed = if (report.deleted.isNotEmpty()) ", removed ${report.deleted.size} orphaned file(s)" else ""
+            "Regenerated ${report.written.size} file(s)$removed in $dir"
+        }
     }
 
     private fun write(mode: ExportMode, dir: Path) {
@@ -98,6 +153,38 @@ internal fun ExportDialogs(controller: ExportController) {
         )
     }
 
+    controller.pendingRegen?.let { pending ->
+        val orphans = pending.orphans
+        AlertDialog(
+            onDismissRequest = controller::dismissRegen,
+            title = { Text("Regenerate project?") },
+            text = {
+                Text(
+                    "This will (re)write ${pending.writeCount} generated file(s) and delete " +
+                        "${orphans.size} orphaned file(s) ViewForge previously generated:\n\n" +
+                        orphans.joinToString("\n"),
+                )
+            },
+            confirmButton = { TextButton(onClick = controller::confirmRegen) { Text("Regenerate") } },
+            dismissButton = { TextButton(onClick = controller::dismissRegen) { Text("Cancel") } },
+        )
+    }
+
+    controller.blockedRegen?.let { unowned ->
+        AlertDialog(
+            onDismissRequest = controller::dismissBlockedRegen,
+            title = { Text("Regeneration blocked") },
+            text = {
+                Text(
+                    "These files in the target directory are not managed by ViewForge and will not be " +
+                        "overwritten. Move or remove them, or choose another directory:\n\n" +
+                        unowned.joinToString("\n"),
+                )
+            },
+            confirmButton = { TextButton(onClick = controller::dismissBlockedRegen) { Text("OK") } },
+        )
+    }
+
     controller.result?.let { message ->
         AlertDialog(
             onDismissRequest = controller::dismissResult,
@@ -109,6 +196,9 @@ internal fun ExportDialogs(controller: ExportController) {
 }
 
 internal data class PendingExport(val mode: ExportMode, val dir: Path, val conflicts: List<String>)
+
+/** A regeneration awaiting confirmation (G10): [orphans] would be deleted and [writeCount] files (re)written. */
+internal data class PendingRegen(val dir: Path, val writeCount: Int, val orphans: List<String>)
 
 /**
  * A native directory picker. Runs modally on the calling (UI) thread — standard for a file dialog.

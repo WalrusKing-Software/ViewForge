@@ -109,6 +109,7 @@ fun FrameWindowScope.EditorShell(
         state,
         prefs,
         onExport = export::start,
+        onRegenerate = export::regenerate,
         onOpenThemeEditor = { showThemeEditor = true },
         onOpenPreferences = { showPreferences = true },
         onNew = document::newDocument,

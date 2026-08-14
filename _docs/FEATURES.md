@@ -150,7 +150,7 @@ into issues directly.
 | G7 | Formatting pass on output | P0 | A formatting pass makes output idiomatic, not merely valid (M7: a deterministic normalizer strips KotlinPoet's redundant `public`; KotlinPoet handles imports/indent/wrap. ADR-019). |
 | G8 | Copy composable to clipboard | P1 | For pasting into an existing project. |
 | G9 | Per-target source-set routing | P1 | Phase 2+: files land in `commonMain` vs `androidMain` correctly. |
-| G10 | Regeneration into an owned directory | P1 | Wholesale regeneration is safe and doesn't clobber user files. |
+| G10 | Regeneration into an owned directory | P1 | Wholesale regeneration is safe and doesn't clobber user files. (#107: **shipped** — File → Regenerate Gradle project writes an `.viewforge/manifest.json` of owned paths and, on re-export, replaces ViewForge's own files, deletes its orphans, and **refuses** to overwrite unowned files (reported, not clobbered). Ownership = manifest, with the G6 header as a fallback signal for text files; manifest load is total (corrupt → nothing owned). Pure `planRegeneration` + `ProjectExporter.regenerate`/`regenerationPlan`, root-confined `GuardedWriter.delete`. ADR-029. No `.vforge` schema change.) |
 
 ## 8. Editor shell
 

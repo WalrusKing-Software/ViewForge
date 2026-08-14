@@ -88,6 +88,19 @@ object GuardedWriter {
         }
     }
 
+    /**
+     * Deletes [target] if it exists, confined to [root] with the same root/symlink guard as a write
+     * (FW-2/FW-4/FW-8) so a regeneration's orphan cleanup (G10) can never remove a file outside the owned
+     * output tree. Returns whether a file was actually removed. Missing files are a no-op.
+     */
+    fun delete(target: Path, root: Path): Boolean {
+        val normalized = target.toAbsolutePath().normalize()
+        val parent = normalized.parent
+            ?: throw UnsafeWriteException("Destination has no parent directory: $target")
+        assertInsideRoot(normalized, parent, root)
+        return Files.deleteIfExists(normalized)
+    }
+
     private fun markExecutable(path: Path) {
         val view = Files.getFileAttributeView(path, java.nio.file.attribute.PosixFileAttributeView::class.java)
             ?: return // Not a POSIX filesystem (e.g. Windows): nothing to do.
