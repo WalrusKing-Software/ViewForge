@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -28,7 +29,12 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import viewforge.editor.state.CanvasViewport
 import viewforge.editor.state.EditorState
@@ -106,6 +112,25 @@ private fun collectMarquee(rects: Map<String, Rect>, node: Node, marquee: Rect, 
 /** True if this rectangle fully contains [inner] (edges may touch). */
 private fun Rect.enclosesRect(inner: Rect): Boolean =
     left <= inner.left && top <= inner.top && right >= inner.right && bottom >= inner.bottom
+
+/**
+ * Every layout container in [root]'s subtree (including [root] itself when it is one), for the debug
+ * "show borders" overlay (#117). A container is any node the catalog reports as holding children in its
+ * default region or a named slot ([viewforge.editor.state.ComponentCatalog.isContainer]) — Box, Row,
+ * Column, Card, Surface, Scaffold, and so on. Hidden subtrees are skipped: they are not rendered, so they
+ * have no recorded bounds to outline. Pure and Compose-free, so it is unit-tested without a UI harness.
+ */
+fun containerNodes(root: Node, isContainer: (String) -> Boolean): List<Node> {
+    val out = mutableListOf<Node>()
+    collectContainers(root, isContainer, out)
+    return out
+}
+
+private fun collectContainers(node: Node, isContainer: (String) -> Boolean, out: MutableList<Node>) {
+    if (node.hidden) return
+    if (isContainer(node.type)) out += node
+    node.allChildren().forEach { collectContainers(it, isContainer, out) }
+}
 
 /**
  * The one canonical content↔screen transform (TECHNICAL_NOTES §5, #116): all coordinate math goes
@@ -337,6 +362,9 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     // ctrl/cmd- or shift-click (toggle into a multi-selection, C10).
     val windowInfo = LocalWindowInfo.current
     val density = LocalDensity.current
+    // Measures the short type-name tags drawn on the debug container-border overlay (#117); cached
+    // internally by the measurer, so re-drawing every frame while the mode is on stays cheap.
+    val textMeasurer = rememberTextMeasurer()
     // The last tapped node and when — for manual double-tap detection that keeps single-tap selection
     // instant (unlike detectTapGestures' onDoubleTap, which delays every tap). Reset per edit surface.
     var lastTap by remember(root) { mutableStateOf<Pair<NodeId, Long>?>(null) }
@@ -475,6 +503,19 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
         val rectToScreen = { rect: Rect -> contentRectToScreen(rect, overlaySize, framePx, viewport) }
         val pointToScreen = { p: Offset -> contentToScreen(p, overlaySize, framePx, viewport) }
 
+        // Debug container-border overlay (#117): a distinct dashed outline + type tag around every layout
+        // container. Drawn first — beneath the selection/hover/drop feedback and before any early-return —
+        // so it reads as a separate structural layer and stays visible even mid-drag or mid-marquee.
+        if (state.showBorders) {
+            containerNodes(root, state.catalog::isContainer).forEach { node ->
+                bounds.boundsOf(node.id)?.let { content ->
+                    val screen = rectToScreen(content)
+                    drawOutline(screen, BORDER_COLOR, BORDER_STROKE, BORDER_DASH)
+                    drawContainerLabel(textMeasurer, node.type.substringAfterLast('.'), screen.topLeft)
+                }
+            }
+        }
+
         // Palette drag wins the overlay while it's live: show its drop feedback and nothing else.
         paletteFeedback?.let { fb ->
             val color = if (fb.valid) DROP_OK else DROP_BAD
@@ -529,13 +570,24 @@ private fun PointerInputScope.pointerToContent(local: Offset, state: EditorState
     return screenToContent(local, size.toSize(), framePx, state.viewport)
 }
 
-private fun DrawScope.drawOutline(rect: Rect, color: Color, width: Float) {
+private fun DrawScope.drawOutline(rect: Rect, color: Color, width: Float, dash: PathEffect? = null) {
     drawRect(
         color = color,
         topLeft = rect.topLeft,
         size = rect.size,
-        style = Stroke(width = width),
+        style = Stroke(width = width, pathEffect = dash),
     )
+}
+
+/** A small type-name tag at a container's top-left corner for the debug border overlay (#117). */
+private fun DrawScope.drawContainerLabel(measurer: TextMeasurer, text: String, at: Offset) {
+    val layout = measurer.measure(text, BORDER_LABEL_STYLE)
+    drawRect(
+        color = BORDER_COLOR,
+        topLeft = at,
+        size = Size(layout.size.width + BORDER_LABEL_PADDING * 2, layout.size.height + BORDER_LABEL_PADDING * 2),
+    )
+    drawText(layout, topLeft = at + Offset(BORDER_LABEL_PADDING, BORDER_LABEL_PADDING))
 }
 
 private val SELECTION_COLOR = Color(0xFF1E88E5)
@@ -555,6 +607,18 @@ private const val MARQUEE_STROKE = 1f
 private val DROP_OK = Color(0xFF43A047)
 private val DROP_BAD = Color(0xFFB00020)
 private const val DROP_STROKE = 2f
+
+// Debug container-border overlay (#117): a dashed purple outline + type tag, deliberately unlike the
+// solid blue selection/hover, the green/red drop, and the blue marquee, so structure reads as its own layer.
+private val BORDER_COLOR = Color(0xFFAB47BC)
+private const val BORDER_STROKE = 1f
+
+// `PathEffect` is skia-backed, so it must not be built at file (class) init — that would drag Skiko's
+// native lib into pure, headless unit tests that only load the top-level helpers here (e.g. `hitTest`,
+// `containerNodes`). `by lazy` defers it to the first actual draw, on the UI thread with Skiko present.
+private val BORDER_DASH by lazy { PathEffect.dashPathEffect(floatArrayOf(6f, 4f)) }
+private val BORDER_LABEL_STYLE = TextStyle(color = Color.White, fontSize = 10.sp)
+private const val BORDER_LABEL_PADDING = 2f
 
 /** The overlay's drop feedback for a live palette drag (P2a): a caret at the gap plus a target outline. */
 private data class PaletteDropFeedback(val outlineId: NodeId?, val caret: Pair<Offset, Offset>?, val valid: Boolean)

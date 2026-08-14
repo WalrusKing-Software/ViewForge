@@ -345,6 +345,16 @@ class EditorStateTest {
     }
 
     @Test
+    fun `toggleShowBorders flips the debug overlay without touching the document`() {
+        val s = state()
+        val before = s.document
+        assertFalse(s.showBorders)
+        s.toggleShowBorders()
+        assertTrue(s.showBorders)
+        assertEquals(before, s.document) // view state only
+    }
+
+    @Test
     fun `applyPreferences seeds the editor settings, clamped and trimmed`() {
         val s = state()
         s.applyPreferences(
