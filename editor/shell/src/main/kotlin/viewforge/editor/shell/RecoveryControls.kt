@@ -17,15 +17,16 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-/** Fallback autosave cadence when no configured interval is supplied (D4); matches #54's original constant. */
-internal const val AUTOSAVE_INTERVAL_MS: Long = 10_000L
-
 /**
  * Autosave + crash recovery (D4). Remembered once in the shell, like [DocumentController]: a timer calls
  * [tick] on an interval, and — at launch — any [pending] snapshot loaded from disk drives a restore
  * prompt. It names no framework package: it reads and writes through [RecoveryStore] in `core/project`
  * (the same no-seam precedent [DocumentController] uses), against the per-user config [dir] the wiring
  * site supplies.
+ *
+ * The cadence is not held here: the shell's timer reads the live [EditorState.autosaveIntervalSeconds]
+ * preference (S5, #105) so a change takes effect without a restart. This controller only decides *what*
+ * a tick does.
  *
  * The guarantee is *never lose work*: while unsaved edits exist a snapshot is written; it is cleared
  * only on a clean state (after a real Save) or an explicit discard — so a crash **or** a
@@ -35,8 +36,6 @@ internal const val AUTOSAVE_INTERVAL_MS: Long = 10_000L
 internal class RecoveryController(
     private val state: EditorState,
     private val dir: Path,
-    /** How often [tick] should be driven, from the persisted S5 preference (#55); the shell's timer reads it. */
-    val intervalMs: Long = AUTOSAVE_INTERVAL_MS,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     /**
@@ -86,11 +85,8 @@ internal class RecoveryController(
 }
 
 @Composable
-internal fun rememberRecoveryController(
-    state: EditorState,
-    dir: Path,
-    intervalMs: Long = AUTOSAVE_INTERVAL_MS,
-): RecoveryController = remember(state, dir, intervalMs) { RecoveryController(state, dir, intervalMs) }
+internal fun rememberRecoveryController(state: EditorState, dir: Path): RecoveryController =
+    remember(state, dir) { RecoveryController(state, dir) }
 
 private val RECOVERED_AT_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())

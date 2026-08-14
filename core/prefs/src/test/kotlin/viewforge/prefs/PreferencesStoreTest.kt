@@ -108,6 +108,30 @@ class PreferencesStoreTest {
     }
 
     @Test
+    fun `history depth and default export path round-trip, default, and clamp on load`() {
+        val dir = tempDir()
+        // Absent file -> the shipped defaults (undo depth matches History's, export path blank).
+        val defaults = PreferencesStore.load(dir)
+        assertEquals(EditorPreferences.DEFAULT_HISTORY_DEPTH, defaults.historyDepth)
+        assertEquals("", defaults.defaultExportPath)
+
+        // Both survive a save/load round-trip.
+        val prefs = EditorPreferences(historyDepth = 500, defaultExportPath = "/home/me/out")
+        PreferencesStore.save(prefs, dir)
+        assertEquals(prefs, PreferencesStore.load(dir))
+
+        // A too-small depth (would wedge undo off) clamps up; a pre-105 file omitting the keys gets defaults.
+        dir.resolve(PreferencesStore.FILE_NAME).writeText("""{ "prefsVersion": 1, "historyDepth": 0 }""")
+        val loaded = PreferencesStore.load(dir)
+        assertEquals(EditorPreferences.MIN_HISTORY_DEPTH, loaded.historyDepth)
+        assertEquals("", loaded.defaultExportPath) // absent key -> default (forward tolerance)
+
+        // A too-large depth clamps down.
+        dir.resolve(PreferencesStore.FILE_NAME).writeText("""{ "prefsVersion": 1, "historyDepth": 100000 }""")
+        assertEquals(EditorPreferences.MAX_HISTORY_DEPTH, PreferencesStore.load(dir).historyDepth)
+    }
+
+    @Test
     fun `chrome theme round-trips and defaults to dark when absent`() {
         val dir = tempDir()
         // Absent file -> chrome defaults to dark, matching the previously hardcoded scheme (#104).

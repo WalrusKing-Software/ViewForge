@@ -15,13 +15,23 @@ import viewforge.model.Project
  * History is **not** part of the document and is never serialized; it is cleared when a document is
  * closed. It is capped at [limit] entries, dropping the oldest, so an unbounded session can't grow
  * memory without bound.
+ *
+ * [limit] is adjustable at runtime (S5, #105: it is a user preference): lowering it trims the oldest undo
+ * entries immediately so the cap is honoured the moment it changes, not only on the next `execute`.
  */
-class History(private val limit: Int = DEFAULT_LIMIT) {
+class History(limit: Int = DEFAULT_LIMIT) {
     /** An applied command paired with the inverse that undoes it. */
     private data class Entry(val command: Command, val inverse: Command)
 
     private val undoStack = ArrayDeque<Entry>()
     private val redoStack = ArrayDeque<Entry>()
+
+    /** The maximum number of undo entries kept; oldest are dropped past it. Trims immediately when lowered. */
+    var limit: Int = limit
+        set(value) {
+            field = value
+            while (undoStack.size > field) undoStack.removeFirst()
+        }
 
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()

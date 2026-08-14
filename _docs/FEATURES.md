@@ -160,7 +160,7 @@ into issues directly.
 | S2 | Keyboard shortcuts | P0 | Standard set; discoverable in menus. |
 | S3 | Editor light/dark theme | P1 | Independent of the *project's* theme — don't conflate them. (#104: **shipped** — a View → Dark editor toggle switches the chrome `MaterialTheme` between `darkColorScheme()`/`lightColorScheme()` via `EditorState.chromeDark`, wholly independent of `canvasDark` (H2). Persisted additively as `EditorPreferences.chromeDark` (defaults dark, so upgrading users see no change; `prefsVersion` unchanged), seeded before the first frame.) |
 | S4 | Command palette | P2 | — |
-| S5 | Preferences | P1 | Autosave interval, history depth, default export path. (#55: **autosave interval** is now a persisted `core/prefs` preference — `EditorPreferences.autosaveIntervalSeconds`, clamped on load, defaulting to #54's original 10s; the shell's `RecoveryController` drives its timer from it. A Preferences UI to edit it in-app is a further slice; the value is hand-editable in `preferences.json` today.) |
+| S5 | Preferences | P1 | Autosave interval, history depth, default export path. (#55: **autosave interval** persisted as `EditorPreferences.autosaveIntervalSeconds`, clamped on load. #105: **shipped** — a File → Preferences… dialog edits autosave interval, undo `historyDepth`, and `defaultExportPath` (two new additive prefs; `prefsVersion` unchanged), rejecting invalid numeric input inline (I8) so a bad value is never written. Edits persist through the load-merge `PreferencesController` and take effect live — the autosave timer re-keys on the interval and a lowered depth trims `History` immediately.) |
 | S6 | Crash reporter (local only) | P1 | Writes a local log; **no network transmission**. |
 
 ## 9. Framework package system

@@ -8,8 +8,8 @@ import kotlinx.serialization.Serializable
  * it must never travel in a project file and does not share the document's migration chain.
  *
  * Holds the [panelLayout] (S1), the [autosaveIntervalSeconds] (S5, #55), the [recentProjects] list
- * (D8, #88), and the [chromeDark] editor-theme flag (S3, #104); window size and the default export path
- * are the natural next tenants of this same file.
+ * (D8, #88), the [chromeDark] editor-theme flag (S3, #104), and the S5 [historyDepth]/[defaultExportPath]
+ * settings (#105); window geometry is the natural next tenant of this same file.
  *
  * @property autosaveIntervalSeconds how often crash-recovery autosave writes its sidecar while there
  *   are unsaved edits (D4, #54). Clamped on load to a sane range so a hand-edited value can neither
@@ -21,6 +21,11 @@ import kotlinx.serialization.Serializable
  *   (S3, #104). This is the editor's own theme, wholly independent of the project preview's light/dark
  *   (`EditorState.canvasDark`, H2). Defaults to `true` so an upgrading user keeps the previously
  *   hardcoded-dark chrome, and a prefs file predating this field falls back to dark (forward tolerance).
+ * @property historyDepth how many undo entries the editor keeps (S5, #105). Clamped on load so a
+ *   hand-edited value can neither wedge undo off nor grow memory without bound. Defaults to the value the
+ *   undo history [core/command `History`] shipped hardcoded, so an upgrading user sees no change.
+ * @property defaultExportPath the directory an Export dialog opens in by default (S5, #105); blank means
+ *   "no default — let the picker start wherever the OS chooses". A per-user config path, never a `.vforge`.
  */
 @Serializable
 data class EditorPreferences(
@@ -29,12 +34,15 @@ data class EditorPreferences(
     val autosaveIntervalSeconds: Int = DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
     val recentProjects: List<String> = emptyList(),
     val chromeDark: Boolean = DEFAULT_CHROME_DARK,
+    val historyDepth: Int = DEFAULT_HISTORY_DEPTH,
+    val defaultExportPath: String = "",
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
         panelLayout = panelLayout.sanitized(),
         autosaveIntervalSeconds = clampAutosaveInterval(autosaveIntervalSeconds),
         recentProjects = RecentProjects.sanitized(recentProjects),
+        historyDepth = clampHistoryDepth(historyDepth),
     )
 
     companion object {
@@ -49,9 +57,17 @@ data class EditorPreferences(
         const val MIN_AUTOSAVE_INTERVAL_SECONDS = 2
         const val MAX_AUTOSAVE_INTERVAL_SECONDS = 600
 
+        /** Matches `History.DEFAULT_LIMIT`, so an upgrading user's undo depth is unchanged (S5). */
+        const val DEFAULT_HISTORY_DEPTH = 200
+        const val MIN_HISTORY_DEPTH = 10
+        const val MAX_HISTORY_DEPTH = 1000
+
         /** The one place the autosave interval is bounded — used on load and by any future editor UI. */
         fun clampAutosaveInterval(seconds: Int): Int =
             seconds.coerceIn(MIN_AUTOSAVE_INTERVAL_SECONDS, MAX_AUTOSAVE_INTERVAL_SECONDS)
+
+        /** The one place the history depth is bounded — used on load and by the Preferences dialog (S5). */
+        fun clampHistoryDepth(entries: Int): Int = entries.coerceIn(MIN_HISTORY_DEPTH, MAX_HISTORY_DEPTH)
     }
 }
 

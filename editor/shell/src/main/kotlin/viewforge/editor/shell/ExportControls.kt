@@ -36,7 +36,7 @@ internal class ExportController(private val state: EditorState, private val serv
 
     /** Pick a directory and export, deferring to an overwrite confirmation when files would clash. */
     fun start(mode: ExportMode) {
-        val dir = chooseDirectory("Export ${state.document.name}") ?: return
+        val dir = chooseDirectory("Export ${state.document.name}", state.defaultExportPath) ?: return
         runCatching { service.conflicts(state.document, dir, mode) }
             .fold(
                 onSuccess = { conflicts ->
@@ -112,12 +112,16 @@ internal data class PendingExport(val mode: ExportMode, val dir: Path, val confl
 
 /**
  * A native directory picker. Runs modally on the calling (UI) thread — standard for a file dialog.
- * Returns null when the user cancels.
+ * Returns null when the user cancels. Opens in [startIn] (the S5 default-export-path preference, #105) when
+ * that is a non-blank, existing directory; otherwise it starts wherever the OS chooses.
  */
-private fun chooseDirectory(title: String): Path? {
+private fun chooseDirectory(title: String, startIn: String = ""): Path? {
     val chooser = JFileChooser().apply {
         dialogTitle = title
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        startIn.trim().takeIf { it.isNotEmpty() }
+            ?.let { runCatching { java.io.File(it).takeIf(java.io.File::isDirectory) }.getOrNull() }
+            ?.let { currentDirectory = it }
     }
     return if (chooser.showDialog(null, "Export here") == JFileChooser.APPROVE_OPTION) {
         chooser.selectedFile?.toPath()

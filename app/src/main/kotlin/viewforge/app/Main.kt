@@ -73,7 +73,9 @@ private fun runEditor() = application {
     val prefs = PreferencesStore.load()
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
-    state.chromeDark = prefs.chromeDark // Editor chrome theme (S3, #104), seeded before the first frame
+    // Editor chrome theme (S3, #104) + the S5 editor settings — autosave cadence, undo depth, default export
+    // path (#105) — seeded before the first frame; the Preferences dialog edits them live thereafter.
+    state.applyPreferences(prefs)
     val images = AssetImageLoader { state.document.assets }
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
@@ -109,7 +111,6 @@ private fun runEditor() = application {
             DesktopExportService,
             DesktopCodePreviewService,
             ConfigDir.resolve(),
-            autosaveIntervalMs = prefs.autosaveIntervalSeconds * 1000L,
             closeRequested = closeRequested,
             onCloseHandled = { closeRequested = false },
             onExit = ::exitApplication,
