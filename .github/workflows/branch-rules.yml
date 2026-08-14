@@ -6,8 +6,8 @@ name: Branch Rules
 #
 #   main        <-  release/x.y.z | hotfix/x.y.z            (releases + urgent fixes to released code)
 #   release/*   <-  develop (the cut) | hotfix/*            (fix into an in-flight release)
-#   develop     <-  feature|bugfix|chore|docs|refactor|test/*   (work branches)
-#                   + release/* | hotfix/* back-merges      (carry release/hotfix fixes back)
+#   develop     <-  feature|bugfix|fix|chore|docs|refactor|test|hotfix/*   (work branches; fix = bugfix)
+#                   + release/* back-merges                 (carry release fixes back)
 #
 # spike/* is intentionally rejected everywhere — spikes are throwaway and must never merge
 # (BRANCHING.md §2). Adapted from homeflow-forgejo's branch-rules (which had a develop-* train and
@@ -63,10 +63,10 @@ jobs:
             develop)
               # dependabot/* are Dependabot's dependency-bump branches (.github/dependabot.yml) —
               # they integrate like work branches and pass the same CI gates.
-              if [[ "$HEAD" =~ ^(feature|bugfix|chore|docs|refactor|test|dependabot)/.+ || "$HEAD" =~ $release_re || "$HEAD" =~ $hotfix_re ]]; then
-                echo "OK: '$HEAD' -> 'develop' (work branch, dependabot, or release/hotfix back-merge)."
+              if [[ "$HEAD" =~ ^(feature|bugfix|fix|chore|docs|refactor|test|dependabot|hotfix)/.+ || "$HEAD" =~ $release_re ]]; then
+                echo "OK: '$HEAD' -> 'develop' (work branch, dependabot, hotfix, or release back-merge)."
               else
-                fail "Only 'feature/*', 'bugfix/*', 'chore/*', 'docs/*', 'refactor/*', 'test/*', 'dependabot/*', or a 'release/*'/'hotfix/*' back-merge may be merged into 'develop' (got head '$HEAD'). spike/* branches must never merge."
+                fail "Only 'feature/*', 'bugfix/*', 'fix/*', 'chore/*', 'docs/*', 'refactor/*', 'test/*', 'dependabot/*', 'hotfix/*', or a 'release/*' back-merge may be merged into 'develop' (got head '$HEAD'). spike/* branches must never merge."
               fi
               ;;
             *)
