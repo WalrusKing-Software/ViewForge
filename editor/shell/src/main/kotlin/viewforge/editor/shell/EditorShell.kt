@@ -178,7 +178,7 @@ fun FrameWindowScope.EditorShell(
                     // state (persisted across sessions), and the drag grows it toward the canvas — so the
                     // left panels add the delta and the right-hand inspector subtracts it.
                     if (state.paletteVisible) {
-                        Palette(state, Modifier.width(state.paletteWidth.dp).fillMaxHeight())
+                        Palette(state, prefs::toggleFavorite, Modifier.width(state.paletteWidth.dp).fillMaxHeight())
                         ResizableDivider(onResize = state::resizePalette, onCommit = prefs::persist)
                     }
                     if (state.treeVisible) {

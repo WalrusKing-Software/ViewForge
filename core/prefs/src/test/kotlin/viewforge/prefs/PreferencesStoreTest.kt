@@ -68,6 +68,20 @@ class PreferencesStoreTest {
     }
 
     @Test
+    fun `favorite components round-trip and are sanitized (deduped, blanks dropped) on load`() {
+        val dir = tempDir()
+        val prefs = EditorPreferences(favoriteComponents = listOf("compose.material3.Text", "01ABC"))
+        PreferencesStore.save(prefs, dir)
+        assertEquals(prefs, PreferencesStore.load(dir))
+
+        // A hand-edited file with blanks and duplicates is cleaned on load, keeping order and staying uncapped.
+        dir.resolve(PreferencesStore.FILE_NAME).writeText(
+            """{ "prefsVersion": 1, "favoriteComponents": ["a", "", "a", "b"] }""",
+        )
+        assertEquals(listOf("a", "b"), PreferencesStore.load(dir).favoriteComponents)
+    }
+
+    @Test
     fun `autosave interval defaults when absent and clamps out-of-range values on load`() {
         val dir = tempDir()
         // No prefs file -> the default cadence (matching #54's original constant).

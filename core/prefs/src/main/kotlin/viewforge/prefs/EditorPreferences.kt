@@ -26,6 +26,10 @@ import kotlinx.serialization.Serializable
  *   undo history [core/command `History`] shipped hardcoded, so an upgrading user sees no change.
  * @property defaultExportPath the directory an Export dialog opens in by default (S5, #105); blank means
  *   "no default — let the picker start wherever the OS chooses". A per-user config path, never a `.vforge`.
+ * @property favoriteComponents palette entries the user has pinned (P5a, #121), by stable key
+ *   (`componentId ?: type`) in the order they were starred. Built-in keys are stable across projects; a
+ *   user-component key only resolves in its own document and is otherwise ignored, so the raw list is safe
+ *   to persist. De-duplicated and blank-dropped on load via [FavoriteComponents.sanitized].
  */
 @Serializable
 data class EditorPreferences(
@@ -36,6 +40,7 @@ data class EditorPreferences(
     val chromeDark: Boolean = DEFAULT_CHROME_DARK,
     val historyDepth: Int = DEFAULT_HISTORY_DEPTH,
     val defaultExportPath: String = "",
+    val favoriteComponents: List<String> = emptyList(),
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
@@ -43,6 +48,7 @@ data class EditorPreferences(
         autosaveIntervalSeconds = clampAutosaveInterval(autosaveIntervalSeconds),
         recentProjects = RecentProjects.sanitized(recentProjects),
         historyDepth = clampHistoryDepth(historyDepth),
+        favoriteComponents = FavoriteComponents.sanitized(favoriteComponents),
     )
 
     companion object {
@@ -86,6 +92,21 @@ object RecentProjects {
     /** Drop blanks and duplicates and cap — applied on load so a hand-edited file can't wedge the list. */
     fun sanitized(list: List<String>, max: Int = MAX): List<String> =
         list.filter { it.isNotBlank() }.distinct().take(max)
+}
+
+/**
+ * Pure operations on the palette favorites list (P5a, #121): a set of pinned palette keys kept in the
+ * order they were starred. Shared by the persisted [EditorPreferences] and the editor's live copy so the
+ * pinned rows the palette shows are exactly what is saved. Uncapped — favorites are explicit user choices,
+ * not an automatic history like [RecentProjects].
+ */
+object FavoriteComponents {
+    /** Toggle membership of [key]: remove it if already pinned, else append it (preserving starring order). */
+    fun toggled(current: List<String>, key: String): List<String> =
+        if (key in current) current.filterNot { it == key } else current + key
+
+    /** Drop blanks and duplicates — applied on load so a hand-edited file can't carry junk. */
+    fun sanitized(list: List<String>): List<String> = list.filter { it.isNotBlank() }.distinct()
 }
 
 /**

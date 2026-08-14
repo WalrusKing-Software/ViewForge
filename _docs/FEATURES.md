@@ -34,7 +34,7 @@ into issues directly.
 | P2a | Drag from palette to canvas | P0 | Drop position determines parent and index. |
 | P3a | Search/filter | P0 | Type-ahead filtering by name and category. |
 | P4a | Insert into tree panel | P1 | Can add via the tree as well as the canvas — needed when targets are tiny. |
-| P5a | Favorites / recent | P2 | — |
+| P5a | Favorites / recent | P2 | (#121: **shipped** — with the search box blank, two quick-access sections sit above the categories: **★ Favorites** (user-pinned, persisted) and **Recent** (auto-tracked on insert, session-only). A star on every row pins/unpins it. Entries are keyed by `componentId ?: type` (built-ins stable across projects; user components by ULID) and resolved against the live palette so stale keys drop. Favorites persist additively in `core/prefs` (`EditorPreferences.favoriteComponents`, `prefsVersion` unchanged) via the load-merge `PreferencesController`; recents are transient `EditorState` state (capped, deliberately not persisted to avoid writing prefs on every insert). Pure list ops (`FavoriteComponents`) and entry resolution are unit-tested.) |
 | P6a | Custom user components in palette | P1 | User-defined components appear alongside built-ins. (#18: `EditorState.palette` appends the document's components as instance entries beneath the built-ins, updating as they are extracted; click/drag inserts an instance. ADR-024.) |
 
 ### Phase 1 component set (deliberately small)

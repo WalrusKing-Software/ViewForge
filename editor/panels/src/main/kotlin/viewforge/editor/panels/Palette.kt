@@ -3,10 +3,12 @@ package viewforge.editor.panels
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -32,35 +35,58 @@ import viewforge.editor.state.EditorState
 import viewforge.editor.state.PaletteEntry
 
 /**
- * The component palette (FEATURES P1a/P3a/P4a/P6a): a categorized, type-ahead-filtered list built from
+ * The component palette (FEATURES P1a/P3a/P4a/P5a/P6a): a categorized, type-ahead-filtered list built from
  * `state.palette` — the framework package's catalog plus this document's own user components (P6a).
  * Clicking an entry inserts a node at the current insertion point via a command (`addFromPalette`) —
  * adding a built-in requires **no palette code**, and user components appear automatically as they are
  * extracted, so the list grows on its own.
  *
+ * When the search box is blank, two quick-access sections sit above the categories (P5a, #121): the user's
+ * pinned **★ Favorites** (persisted) and the auto-tracked **Recent** entries (session-only). Every row —
+ * in either section or the main list — carries a star that pins/unpins it, via [onToggleFavorite].
+ *
  * Add-by-click into the current selection is M4's insertion gesture; drag-from-palette-to-canvas
  * (P2a) is a deliberate follow-up (see ADR-015).
  */
 @Composable
-fun Palette(state: EditorState, modifier: Modifier = Modifier) {
+fun Palette(state: EditorState, onToggleFavorite: (PaletteEntry) -> Unit, modifier: Modifier = Modifier) {
     var query by remember { mutableStateOf("") }
     Column(modifier) {
         PanelHeader("Palette")
         SearchField(query, onChange = { query = it })
-        val entries = state.palette.filter { it.matches(query) }
         Column(Modifier.verticalScroll(rememberScrollState())) {
+            // Quick access to pinned + recent components (P5a) — only with no active search, since a filtered
+            // list already shows everything matching and the sections would just duplicate it.
+            if (query.isBlank()) {
+                QuickAccessSection("★ Favorites", state.favoriteEntries, state, onToggleFavorite)
+                QuickAccessSection("Recent", state.recentEntries, state, onToggleFavorite)
+            }
+            val entries = state.palette.filter { it.matches(query) }
             if (entries.isEmpty()) {
                 MutedText("No matches")
             } else {
                 entries.groupBy { it.category }.forEach { (category, items) ->
                     SectionLabelInset(category)
                     items.forEach { entry ->
-                        PaletteRow(state, entry)
+                        PaletteRow(state, entry, onToggleFavorite)
                     }
                 }
             }
         }
     }
+}
+
+/** A quick-access section (★ Favorites / Recent), shown only when it has entries so the palette stays compact (P5a). */
+@Composable
+private fun QuickAccessSection(
+    title: String,
+    entries: List<PaletteEntry>,
+    state: EditorState,
+    onToggleFavorite: (PaletteEntry) -> Unit,
+) {
+    if (entries.isEmpty()) return
+    SectionLabelInset(title)
+    entries.forEach { entry -> PaletteRow(state, entry, onToggleFavorite) }
 }
 
 /** Case-insensitive match against the label and category (type-ahead filtering, P3a). */
@@ -71,35 +97,45 @@ private fun PaletteEntry.matches(query: String): Boolean {
 }
 
 /**
- * A palette entry: click to insert at the current selection (M4), or **drag onto the canvas** to drop
- * it at a position (P2a). The drag streams the pointer in window space (via the row's own
- * [LayoutCoordinates]) into [EditorState]; the canvas overlay resolves the target and the release
- * commits it. A press with no movement stays a click, so add-by-click is unchanged.
- *
- * A user-component entry additionally **double-clicks to open it for in-place editing** (#61) — the
- * canvas/tree switch to the component's own tree; the shell's breadcrumb returns to the screen. A
- * built-in has no definition, so double-click does nothing there.
- *
- * While a component is open for editing, an entry that would form a reference cycle — inserting a
- * component that (transitively) contains the one being edited — is **greyed out** and its click and
- * drag are refused, with a tooltip explaining why (#70). Double-click-to-open stays enabled: opening
- * such a component for editing is unrelated to inserting an instance of it here.
+ * A palette entry row: a label (click to insert / drag to the canvas / double-click a component to open) plus
+ * a trailing star that pins or unpins it as a favorite (P5a, #121). A cycle-forming entry (#70) has its label
+ * greyed with a tooltip and its insert/drag refused, but the star stays active — pinning is unrelated to
+ * whether the entry can be inserted right here.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaletteRow(state: EditorState, entry: PaletteEntry) {
+private fun PaletteRow(state: EditorState, entry: PaletteEntry, onToggleFavorite: (PaletteEntry) -> Unit) {
     val cyclic = state.paletteEntryWouldCycle(entry)
-    if (cyclic) {
-        TooltipArea(tooltip = { CycleTooltip(entry) }) { PaletteRowLabel(state, entry, disabled = true) }
-    } else {
-        PaletteRowLabel(state, entry, disabled = false)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        val labelModifier = Modifier.weight(1f)
+        if (cyclic) {
+            TooltipArea(tooltip = { CycleTooltip(entry) }) {
+                PaletteRowLabel(state, entry, disabled = true, modifier = labelModifier)
+            }
+        } else {
+            PaletteRowLabel(state, entry, disabled = false, modifier = labelModifier)
+        }
+        FavoriteStar(favorite = state.isFavorite(entry), onClick = { onToggleFavorite(entry) })
     }
 }
 
-/** The label row itself: click to insert, drag to the canvas, double-click (a component) to open. */
+/** The trailing pin: a filled star when favorited, an outline otherwise; click toggles without inserting (P5a). */
+@Composable
+private fun FavoriteStar(favorite: Boolean, onClick: () -> Unit) {
+    Text(
+        text = if (favorite) "★" else "☆",
+        style = MaterialTheme.typography.bodySmall,
+        color = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    )
+}
+
+/** The label itself: click to insert, drag to the canvas, double-click (a component) to open. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: Boolean) {
+private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: Boolean, modifier: Modifier = Modifier) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     Text(
         text = entry.label,
@@ -107,8 +143,7 @@ private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: B
         color = if (disabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else Color.Unspecified,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .onGloballyPositioned { coords = it }
             .pointerInput(entry) {
                 detectDragGestures(
@@ -134,7 +169,7 @@ private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: B
                 onClick = { state.addFromPalette(entry) },
                 onDoubleClick = entry.componentId?.let { id -> { state.openComponent(id) } },
             )
-            .padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+            .padding(start = 20.dp, top = 5.dp, bottom = 5.dp),
     )
 }
 

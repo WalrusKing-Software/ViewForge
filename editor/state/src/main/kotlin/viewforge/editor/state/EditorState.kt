@@ -45,6 +45,7 @@ import viewforge.model.locate
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
 import viewforge.prefs.EditorPreferences
+import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
 import java.nio.file.Path
@@ -372,6 +373,23 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * history, so it lives here beside the other session state, never in the `.vforge` file.
      */
     var recentProjects: List<String> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * Palette entries the user has pinned (P5a, #121), by stable [PaletteEntry.key] in starring order.
+     * Applied from prefs at launch ([applyFavoriteComponents]) and toggled from the palette; the shell
+     * persists it. Per-user chrome, never document data — like [recentProjects].
+     */
+    var favoriteComponents: List<String> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * Palette entries used most recently, most-recent first (P5a, #121). **Session-only** transient state:
+     * recorded on every insert ([noteRecentComponent]) and reset when the app restarts, deliberately *not*
+     * persisted — recording on each insert would write the prefs file constantly. Capped at
+     * [MAX_RECENT_COMPONENTS].
+     */
+    var recentComponents: List<String> by mutableStateOf(emptyList())
         private set
 
     /**
@@ -715,6 +733,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val node = paletteNode(entry.type, entry.componentId)
         if (wouldInsertingCycle(node)) return // refuse a cycle-forming insert up front (#70)
         execute(AddNode(rootId, address, node), selectAfter = node.id)
+        noteRecentComponent(entry.key) // surface it under "Recent" in the palette (P5a, #121)
     }
 
     /** Convenience for a framework built-in identified by [type] alone (no user-component id). */
@@ -758,7 +777,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         if (type != null && address != null && rootId != null) {
             val node = paletteNode(type, paletteDragComponentId)
             // A cycle-forming drop is refused (#70); the palette disables the drag source, so this is defence.
-            if (!wouldInsertingCycle(node)) execute(AddNode(rootId, address, node), selectAfter = node.id)
+            if (!wouldInsertingCycle(node)) {
+                execute(AddNode(rootId, address, node), selectAfter = node.id)
+                noteRecentComponent(paletteDragComponentId ?: type) // record for the palette's "Recent" (P5a)
+            }
         }
         cancelPaletteDrag()
     }
@@ -1219,6 +1241,40 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         recentProjects = emptyList()
     }
 
+    // --- palette favorites & recents (P5a, #121) --------------------------------------------------
+
+    /** Restore the persisted favorites list at startup (P5a); per-user chrome, re-sanitized defensively. */
+    fun applyFavoriteComponents(keys: List<String>) {
+        favoriteComponents = FavoriteComponents.sanitized(keys)
+    }
+
+    /** Whether [entry] is currently pinned as a favorite (P5a). */
+    fun isFavorite(entry: PaletteEntry): Boolean = entry.key in favoriteComponents
+
+    /** Pin or unpin [entry] as a favorite (P5a); the shell persists the updated list. */
+    fun toggleFavorite(entry: PaletteEntry) {
+        favoriteComponents = FavoriteComponents.toggled(favoriteComponents, entry.key)
+    }
+
+    /** Record a just-inserted entry [key] as most-recently-used (P5a): to the front, de-duplicated, capped. */
+    private fun noteRecentComponent(key: String) {
+        recentComponents = (listOf(key) + recentComponents.filterNot { it == key }).take(MAX_RECENT_COMPONENTS)
+    }
+
+    /** The pinned entries resolved against the live [palette], in starring order; stale keys drop out (P5a). */
+    val favoriteEntries: List<PaletteEntry>
+        get() = resolvePaletteKeys(favoriteComponents)
+
+    /** The recently-used entries resolved against the live [palette], most-recent first; stale keys drop out (P5a). */
+    val recentEntries: List<PaletteEntry>
+        get() = resolvePaletteKeys(recentComponents)
+
+    /** Map palette [keys] back to their live [PaletteEntry], preserving [keys] order and dropping any that no longer exist. */
+    private fun resolvePaletteKeys(keys: List<String>): List<PaletteEntry> {
+        val byKey = palette.associateBy { it.key }
+        return keys.mapNotNull { byKey[it] }
+    }
+
     // --- canvas viewport (C5) ---------------------------------------------------------------------
 
     /** Zoom the canvas in one step (View → Zoom In / Ctrl +). */
@@ -1397,5 +1453,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     companion object {
         /** The palette category the document's user components cluster under (P6a). */
         const val USER_COMPONENTS_CATEGORY = "Components"
+
+        /** How many recently-used palette entries to keep for the palette's "Recent" quick-access row (P5a, #121). */
+        const val MAX_RECENT_COMPONENTS = 8
     }
 }

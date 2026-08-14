@@ -16,6 +16,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.PaletteEntry
 import viewforge.prefs.PreferencesStore
 import java.awt.Cursor
 import java.nio.file.Path
@@ -103,13 +104,20 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
+    /** Pin or unpin a palette [entry] as a favorite and persist the updated list (P5a, #121). */
+    fun toggleFavorite(entry: PaletteEntry) {
+        state.toggleFavorite(entry)
+        persist()
+    }
+
     /**
      * Persist the current preferences. Triggered at the discrete points chrome changes — a visibility
      * toggle, the end of a resize drag, or a recent-projects change.
      *
      * It **load-merge-saves**: it reads the file, overlays only the facets held live in [state] — panel
-     * layout, recent projects, chrome theme, and the S5 editor settings (autosave interval, history depth,
-     * default export path) — and writes that back, so persisting one facet never clobbers another. Every
+     * layout, recent projects, chrome theme, favorite components (P5a), and the S5 editor settings (autosave
+     * interval, history depth, default export path) — and writes that back, so persisting one facet never
+     * clobbers another. Every
      * persisted preference now has an in-memory home in [state], so the load-merge only guards against a
      * newer build's unknown keys.
      */
@@ -124,6 +132,7 @@ internal class PreferencesController(private val state: EditorState) {
                     autosaveIntervalSeconds = state.autosaveIntervalSeconds,
                     historyDepth = state.historyDepth,
                     defaultExportPath = state.defaultExportPath,
+                    favoriteComponents = state.favoriteComponents,
                 ),
             )
         }

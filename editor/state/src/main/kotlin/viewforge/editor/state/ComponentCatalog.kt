@@ -17,6 +17,13 @@ import viewforge.model.PropDefinition
 data class PaletteEntry(val type: String, val label: String, val category: String, val componentId: String? = null)
 
 /**
+ * A stable identity for a palette entry, used to pin favorites and track recents (P5a, #121): a built-in is
+ * keyed by its [type] (stable across projects), a user component by its [componentId] (a per-document ULID,
+ * globally unique so it never collides with another project's). The one place this key is derived.
+ */
+val PaletteEntry.key: String get() = componentId ?: type
+
+/**
  * The editor's Compose-free seam onto a framework package's component set — the schema half of the
  * SPI (ARCHITECTURE §6.2), owned by the editor and *adapted* to the concrete package by `:app`, in
  * the same spirit as the `CanvasRenderer` seam (ADR-013). The editor consults it to build the palette
