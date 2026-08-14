@@ -18,6 +18,7 @@ import viewforge.editor.state.ExportMode
 import viewforge.editor.state.PaletteEntry
 import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
+import viewforge.editor.state.RegenerationReport
 import viewforge.model.ComponentDef
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
@@ -35,6 +36,7 @@ import viewforge.prefs.PreferencesStore
 import viewforge.project.CrashReporter
 import viewforge.project.ExportFile
 import viewforge.project.ProjectExporter
+import viewforge.project.RegenerationOutcome
 import java.nio.file.Path
 
 /**
@@ -160,6 +162,20 @@ private object DesktopExportService : ProjectExportService {
 
     override fun export(project: Project, dir: Path, mode: ExportMode): List<String> =
         ProjectExporter.write(dir, bundle(project, mode))
+
+    // G10 targets the managed Gradle project (an owned output directory); regeneration always uses that bundle.
+    override fun regenerationReport(project: Project, dir: Path): RegenerationReport =
+        ProjectExporter.regenerationPlan(dir, bundle(project, ExportMode.GRADLE_PROJECT)).let {
+            RegenerationReport(written = it.toWrite, deleted = it.toDelete, blocked = it.blocked)
+        }
+
+    override fun regenerate(project: Project, dir: Path): RegenerationReport =
+        when (val outcome = ProjectExporter.regenerate(dir, bundle(project, ExportMode.GRADLE_PROJECT), project.name)) {
+            is RegenerationOutcome.Blocked ->
+                RegenerationReport(written = emptyList(), deleted = emptyList(), blocked = outcome.unowned)
+            is RegenerationOutcome.Applied ->
+                RegenerationReport(written = outcome.written, deleted = outcome.deleted, blocked = emptyList())
+        }
 
     private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
         ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)

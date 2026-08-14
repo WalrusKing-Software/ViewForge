@@ -85,6 +85,64 @@ object ProjectExporter {
         return files.map { it.path }
     }
 
+    /**
+     * The regeneration diff (G10, ADR-029) for writing [files] into the managed directory [root], without
+     * touching disk: what would be written, which orphaned owned files would be deleted, and which existing
+     * files are unowned and would therefore block the regeneration. Reads the previous manifest and the
+     * current tree; the shell shows this before applying (the FW-5 preview counterpart for regeneration).
+     */
+    fun regenerationPlan(root: Path, files: List<ExportFile>): RegenerationPlan {
+        val realRoot = root.toRealPath()
+        return planRegeneration(
+            bundlePaths = files.map { it.path },
+            owned = ownedPaths(realRoot, files),
+            exists = { Files.exists(resolveInRoot(realRoot, it)) },
+        )
+    }
+
+    /**
+     * Safely regenerate the managed directory [root] from [files] (G10, ADR-029). If any bundle path would
+     * overwrite an **unowned** file the result is [RegenerationOutcome.Blocked] and **nothing is written or
+     * deleted**. Otherwise the bundle is written (replacing ViewForge's own prior files), orphaned owned
+     * files are deleted, and a fresh manifest is written recording exactly what was emitted — so the next
+     * regeneration knows what it owns. [projectName] is stored in the manifest for diagnostics only.
+     */
+    fun regenerate(root: Path, files: List<ExportFile>, projectName: String): RegenerationOutcome {
+        val realRoot = root.toRealPath()
+        val plan = planRegeneration(
+            bundlePaths = files.map { it.path },
+            owned = ownedPaths(realRoot, files),
+            exists = { Files.exists(resolveInRoot(realRoot, it)) },
+        )
+        if (plan.blocked.isNotEmpty()) return RegenerationOutcome.Blocked(plan.blocked)
+
+        val written = write(realRoot, files)
+        plan.toDelete.forEach { GuardedWriter.delete(resolveInRoot(realRoot, it), root = realRoot) }
+        ExportManifestStore.save(ExportManifest(project = projectName, paths = written), realRoot)
+        return RegenerationOutcome.Applied(written = written, deleted = plan.toDelete)
+    }
+
+    /**
+     * The set of paths ViewForge owns under [realRoot]: everything the previous manifest recorded, plus any
+     * bundle text file already on disk that carries the generated header (G6) — the manifest-or-header
+     * ownership rule (ADR-029). The header fallback lets a regeneration adopt its own source from a plain
+     * earlier export, while a user-authored file (no header, not in the manifest) stays unowned.
+     */
+    private fun ownedPaths(realRoot: Path, files: List<ExportFile>): Set<String> {
+        val manifest = ExportManifestStore.load(realRoot)?.paths?.toSet() ?: emptySet()
+        val headerOwned = files.asSequence()
+            .filterIsInstance<TextFile>()
+            .map { it.path }
+            .filter { it !in manifest }
+            .filter { path ->
+                val onDisk = resolveInRoot(realRoot, path)
+                Files.exists(onDisk) &&
+                    runCatching { Files.readString(onDisk) }.getOrNull()
+                        ?.let { ExportManifest.carriesGeneratedHeader(it) } == true
+            }
+        return manifest + headerOwned
+    }
+
     /** Resolves a forward-slash relative [path] under [root] one segment at a time (cross-platform). */
     private fun resolveInRoot(root: Path, path: String): Path =
         path.split('/').filter { it.isNotEmpty() }.fold(root) { acc, segment -> acc.resolve(segment) }
