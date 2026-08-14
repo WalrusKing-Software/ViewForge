@@ -95,6 +95,13 @@ internal fun FrameWindowScope.AppMenuBar(
                 checked = state.canvasDark,
                 onCheckedChange = { state.toggleCanvasDark() },
             )
+            // The editor chrome's own light/dark (S3, #104) — independent of the canvas preview above.
+            // Routed through the preferences controller so the choice persists across sessions.
+            CheckboxItem(
+                "Dark editor",
+                checked = state.chromeDark,
+                onCheckedChange = { prefs.toggleChromeDark() },
+            )
             Item("Theme…", onClick = onOpenThemeEditor)
             Separator()
             // Canvas zoom (C5). Accelerators are display-only — the shell's handleShortcut binds the

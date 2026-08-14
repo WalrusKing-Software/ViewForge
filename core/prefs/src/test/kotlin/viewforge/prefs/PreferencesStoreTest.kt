@@ -108,6 +108,21 @@ class PreferencesStoreTest {
     }
 
     @Test
+    fun `chrome theme round-trips and defaults to dark when absent`() {
+        val dir = tempDir()
+        // Absent file -> chrome defaults to dark, matching the previously hardcoded scheme (#104).
+        assertTrue(PreferencesStore.load(dir).chromeDark)
+
+        // A light-chrome choice survives a save/load round-trip.
+        PreferencesStore.save(EditorPreferences(chromeDark = false), dir)
+        assertFalse(PreferencesStore.load(dir).chromeDark)
+
+        // A pre-104 file omitting the field falls back to the dark default (forward tolerance).
+        dir.resolve(PreferencesStore.FILE_NAME).writeText("""{ "prefsVersion": 1, "autosaveIntervalSeconds": 10 }""")
+        assertTrue(PreferencesStore.load(dir).chromeDark)
+    }
+
+    @Test
     fun `save writes preferences_json inside the config dir`() {
         val dir = tempDir()
         PreferencesStore.save(EditorPreferences(), dir)

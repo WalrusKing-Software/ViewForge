@@ -344,6 +344,24 @@ class EditorStateTest {
     }
 
     @Test
+    fun `toggleChromeDark flips the editor chrome independently of the canvas preview`() {
+        val s = state()
+        val before = s.document
+        // Chrome defaults to dark (the previously hardcoded scheme); the canvas preview defaults to light.
+        assertTrue(s.chromeDark)
+        assertFalse(s.canvasDark)
+
+        s.toggleChromeDark()
+        assertFalse(s.chromeDark)
+        assertFalse(s.canvasDark) // the two themes are independent — toggling one never moves the other
+
+        s.toggleCanvasDark()
+        assertFalse(s.chromeDark)
+        assertTrue(s.canvasDark)
+        assertEquals(before, s.document) // view state only
+    }
+
+    @Test
     fun `addColor then setColor edits the theme and coalesces the scrub`() {
         val s = state()
         s.addColor("primary")
