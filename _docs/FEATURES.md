@@ -91,7 +91,7 @@ into issues directly.
 | T3 | Rename nodes | P0 | Sets `Node.name`; shown in tree; does not affect codegen structure. |
 | T4 | Lock / hide toggles | P1 | `locked` prevents selection; `hidden` removes from render **and** codegen. |
 | T5 | Keyboard navigation | P1 | Arrow keys traverse, Enter renames, Delete removes. |
-| T6 | Search within tree | P2 | — |
+| T6 | Search within tree | P2 | Type-ahead filter by name/type. (#122: **shipped** — a search box at the top of the layers panel filters the tree to nodes whose name or short type matches (case-insensitive), keeping each match's ancestor path and force-expanding it so a deep match stays visible; empty query = full tree, no match = "No matches". Pure `nodeMatchesQuery`/`searchKeepSet` in `TreeSearch.kt`; the flattener honours the keep-set. Keyboard nav (T5) and shift-range (C10) traverse the filtered rows.) |
 
 ## 4. Property inspector
 
