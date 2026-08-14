@@ -126,6 +126,13 @@ internal fun FrameWindowScope.AppMenuBar(
                 checked = state.showGuides,
                 onCheckedChange = { state.toggleShowGuides() },
             )
+            // Interactive preview / run mode (C13, #120): interact with the real UI instead of editing it.
+            // Transient view state like the debug toggles above, so routed through `state` not the prefs.
+            CheckboxItem(
+                "Interactive preview",
+                checked = state.interactivePreview,
+                onCheckedChange = { state.toggleInteractivePreview() },
+            )
             Separator()
             // Canvas zoom (C5). Accelerators are display-only — the shell's handleShortcut binds the
             // real keys — matching the Edit menu's pattern. Zoom In/Out grey out at the clamp bounds.

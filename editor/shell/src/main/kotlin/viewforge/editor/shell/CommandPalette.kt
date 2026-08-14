@@ -164,6 +164,12 @@ internal fun buildPaletteCommands(
     commands += PaletteCommand("view.theme", "Theme…", "View", run = onOpenThemeEditor)
     commands += PaletteCommand("view.borders", "Toggle Show borders", "View", run = state::toggleShowBorders)
     commands += PaletteCommand("view.guides", "Toggle Alignment guides", "View", run = state::toggleShowGuides)
+    commands += PaletteCommand(
+        "view.interactive",
+        "Toggle Interactive preview",
+        "View",
+        run = state::toggleInteractivePreview,
+    )
     commands += PaletteCommand("view.zoomIn", "Zoom In", "View", enabled = view.canZoomIn, run = state::zoomIn)
     commands += PaletteCommand("view.zoomOut", "Zoom Out", "View", enabled = view.canZoomOut, run = state::zoomOut)
     commands += PaletteCommand(

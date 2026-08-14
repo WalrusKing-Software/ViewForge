@@ -43,6 +43,14 @@ but nothing structurally guarantees it. Any bug in either path shows up as "the 
 - Font rendering differs slightly across OSes.
 - `RawExpression` props can't be evaluated on the canvas.
 - Platform-specific behavior (Android insets) can only be approximated in a desktop preview.
+- **Interactive preview (C13, #120) is a deliberate divergence, gated off by default.** Normally the
+  canvas draws inert inputs (a `Checkbox`'s `onCheckedChange` is a no-op, a `TextField` reflects its
+  `value` prop but isn't editable) so it mirrors the generated code. When the user turns on interactive
+  preview, the renderer's stateful inputs carry their own local `remember` state and live callbacks so the
+  UI can be clicked/typed/toggled. This flows through `CanvasRenderer.Render(interactive)` →
+  `RenderContext.interactive`, which **defaults false** — codegen and the fidelity screenshot tests never
+  set it, so the "what you see is what you get" guarantee for *generated output* is unaffected; only the
+  editor's live run-mode canvas opts in.
 
 ---
 

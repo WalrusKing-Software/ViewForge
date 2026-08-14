@@ -57,8 +57,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -107,16 +110,16 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.Button" -> RenderButton(node, modifier, ctx)
         "compose.material3.OutlinedButton" -> RenderOutlinedButton(node, modifier, ctx)
         "compose.material3.TextButton" -> RenderTextButton(node, modifier, ctx)
-        "compose.material3.Slider" -> RenderSlider(node, modifier)
-        "compose.material3.TextField" -> RenderTextField(node, modifier)
-        "compose.material3.OutlinedTextField" -> RenderOutlinedTextField(node, modifier)
+        "compose.material3.Slider" -> RenderSlider(node, modifier, ctx)
+        "compose.material3.TextField" -> RenderTextField(node, modifier, ctx)
+        "compose.material3.OutlinedTextField" -> RenderOutlinedTextField(node, modifier, ctx)
         "compose.material3.CircularProgressIndicator" -> RenderCircularProgress(modifier)
         "compose.material3.LinearProgressIndicator" -> RenderLinearProgress(modifier)
         "compose.material3.Card" -> RenderCard(node, modifier, ctx)
         "compose.material3.Surface" -> RenderSurface(node, modifier, ctx)
         "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
-        "compose.material3.Checkbox" -> RenderCheckbox(node, modifier)
-        "compose.material3.Switch" -> RenderSwitch(node, modifier)
+        "compose.material3.Checkbox" -> RenderCheckbox(node, modifier, ctx)
+        "compose.material3.Switch" -> RenderSwitch(node, modifier, ctx)
         "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
         "compose.material3.Icon" -> RenderIcon(node, modifier)
         "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, ctx)
@@ -351,36 +354,45 @@ private fun RenderTextButton(node: Node, modifier: Modifier, ctx: RenderContext)
 }
 
 @Composable
-private fun RenderSlider(node: Node, modifier: Modifier) {
-    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    Slider(
-        value = node.props["value"].literalFloat() ?: 0f,
-        onValueChange = {},
-        modifier = modifier,
-        enabled = node.props["enabled"].literalBoolean() ?: true,
-    )
+private fun RenderSlider(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4). In edit mode
+    // the thumb reflects the `value` prop and is inert; in interactive preview (C13, #120) it drags for real
+    // via local state seeded from that prop.
+    val enabled = node.props["enabled"].literalBoolean() ?: true
+    val initial = node.props["value"].literalFloat() ?: 0f
+    if (ctx.interactive) {
+        var value by remember(node.id) { mutableStateOf(initial) }
+        Slider(value = value, onValueChange = { value = it }, modifier = modifier, enabled = enabled)
+    } else {
+        Slider(value = initial, onValueChange = {}, modifier = modifier, enabled = enabled)
+    }
 }
 
 @Composable
-private fun RenderTextField(node: Node, modifier: Modifier) {
-    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); the field
-    // reflects the `value` prop but isn't interactively editable here (edit `value` in the inspector).
-    TextField(
-        value = node.props["value"].literalString() ?: "",
-        onValueChange = {},
-        modifier = modifier,
-        enabled = node.props["enabled"].literalBoolean() ?: true,
-    )
+private fun RenderTextField(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // `onValueChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4). In edit mode
+    // the field reflects the `value` prop but isn't editable (edit `value` in the inspector); in interactive
+    // preview (C13, #120) it types for real via local state seeded from that prop.
+    val enabled = node.props["enabled"].literalBoolean() ?: true
+    val initial = node.props["value"].literalString() ?: ""
+    if (ctx.interactive) {
+        var text by remember(node.id) { mutableStateOf(initial) }
+        TextField(value = text, onValueChange = { text = it }, modifier = modifier, enabled = enabled)
+    } else {
+        TextField(value = initial, onValueChange = {}, modifier = modifier, enabled = enabled)
+    }
 }
 
 @Composable
-private fun RenderOutlinedTextField(node: Node, modifier: Modifier) {
-    OutlinedTextField(
-        value = node.props["value"].literalString() ?: "",
-        onValueChange = {},
-        modifier = modifier,
-        enabled = node.props["enabled"].literalBoolean() ?: true,
-    )
+private fun RenderOutlinedTextField(node: Node, modifier: Modifier, ctx: RenderContext) {
+    val enabled = node.props["enabled"].literalBoolean() ?: true
+    val initial = node.props["value"].literalString() ?: ""
+    if (ctx.interactive) {
+        var text by remember(node.id) { mutableStateOf(initial) }
+        OutlinedTextField(value = text, onValueChange = { text = it }, modifier = modifier, enabled = enabled)
+    } else {
+        OutlinedTextField(value = initial, onValueChange = {}, modifier = modifier, enabled = enabled)
+    }
 }
 
 @Composable
@@ -412,24 +424,29 @@ private fun RenderDivider(node: Node, modifier: Modifier) {
 }
 
 @Composable
-private fun RenderCheckbox(node: Node, modifier: Modifier) {
-    // `onCheckedChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    Checkbox(
-        checked = node.props["checked"].literalBoolean() ?: false,
-        onCheckedChange = {},
-        modifier = modifier,
-        enabled = node.props["enabled"].literalBoolean() ?: true,
-    )
+private fun RenderCheckbox(node: Node, modifier: Modifier, ctx: RenderContext) {
+    // `onCheckedChange` is a RawExpression escape hatch — never evaluated on the canvas (PF-4). Inert in edit
+    // mode; toggles for real in interactive preview (C13, #120) via local state seeded from the `checked` prop.
+    val enabled = node.props["enabled"].literalBoolean() ?: true
+    val initial = node.props["checked"].literalBoolean() ?: false
+    if (ctx.interactive) {
+        var checked by remember(node.id) { mutableStateOf(initial) }
+        Checkbox(checked = checked, onCheckedChange = { checked = it }, modifier = modifier, enabled = enabled)
+    } else {
+        Checkbox(checked = initial, onCheckedChange = {}, modifier = modifier, enabled = enabled)
+    }
 }
 
 @Composable
-private fun RenderSwitch(node: Node, modifier: Modifier) {
-    Switch(
-        checked = node.props["checked"].literalBoolean() ?: false,
-        onCheckedChange = {},
-        modifier = modifier,
-        enabled = node.props["enabled"].literalBoolean() ?: true,
-    )
+private fun RenderSwitch(node: Node, modifier: Modifier, ctx: RenderContext) {
+    val enabled = node.props["enabled"].literalBoolean() ?: true
+    val initial = node.props["checked"].literalBoolean() ?: false
+    if (ctx.interactive) {
+        var checked by remember(node.id) { mutableStateOf(initial) }
+        Switch(checked = checked, onCheckedChange = { checked = it }, modifier = modifier, enabled = enabled)
+    } else {
+        Switch(checked = initial, onCheckedChange = {}, modifier = modifier, enabled = enabled)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

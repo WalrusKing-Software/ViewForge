@@ -29,6 +29,13 @@ import viewforge.model.Theme
  * validation forbids cycles (PF-3), but the canvas renders mid-edit before that runs, so the guard is a
  * necessary defence, not a duplicate. Both default to empty so the interpreter stays usable — and
  * unit-testable — for a project with no user components.
+ *
+ * [interactive] is the C13 preview mode (#120): normally the canvas draws inert components (a `Checkbox`'s
+ * `onCheckedChange` is a no-op, a `TextField` reflects its `value` prop but isn't editable) so the drawing
+ * mirrors the generated code and pointer events go to the editor's selection overlay. When true, the
+ * stateful inputs instead carry their own local `remember` state and live callbacks, so the user can click,
+ * type, and toggle to feel the real UI. It defaults false, so codegen and the fidelity tests — which never
+ * set it — are untouched; only the editor's live canvas opts in.
  */
 data class RenderContext(
     val theme: Theme,
@@ -37,4 +44,5 @@ data class RenderContext(
     val imageLoader: (assetId: String) -> ImageBitmap? = { null },
     val components: Map<String, ComponentDef> = emptyMap(),
     val expanding: Set<String> = emptySet(),
+    val interactive: Boolean = false,
 )
