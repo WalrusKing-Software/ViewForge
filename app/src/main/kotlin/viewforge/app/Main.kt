@@ -75,6 +75,7 @@ private fun runEditor() = application {
     val prefs = PreferencesStore.load()
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
+    state.applyFavoriteComponents(prefs.favoriteComponents) // palette favorites (P5a, #121), before first frame
     // Editor chrome theme (S3, #104) + the S5 editor settings — autosave cadence, undo depth, default export
     // path (#105) — seeded before the first frame; the Preferences dialog edits them live thereafter.
     state.applyPreferences(prefs)
