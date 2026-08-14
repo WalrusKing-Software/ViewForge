@@ -154,6 +154,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the canvas overlays a debug outline around every layout container (#117). Editor-only view
+     * state, never serialized and never touching the document or codegen — like [canvasDark], it only
+     * changes what the editor draws on top of the rendered UI. Reuses the per-node content-space bounds the
+     * overlay already keeps for hit-testing (ADR-009, #116), so it costs one extra draw pass and no model.
+     */
+    var showBorders: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * Whether the editor *chrome* (panels, menus, toolbar) uses the dark color scheme (S3, #104). This is
      * the editor's own theme, wholly independent of [canvasDark] (the project preview, H2): changing one
      * never changes the other. Seeded from persisted prefs at startup and toggled from the View menu, which
@@ -1069,6 +1078,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Toggle the canvas between the theme's light and dark values (H2). View state, not an edit. */
     fun toggleCanvasDark() {
         canvasDark = !canvasDark
+    }
+
+    /** Toggle the debug container-border overlay (#117). Editor view state, not an edit. */
+    fun toggleShowBorders() {
+        showBorders = !showBorders
     }
 
     /** Toggle the editor chrome between light and dark (S3, #104). View state, persisted; not an edit. */

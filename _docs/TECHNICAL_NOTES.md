@@ -97,6 +97,14 @@ hit-testing rests on Compose's layer-aware coordinates and is best confirmed wit
 test (not yet added). Gestures live only in the overlay (scroll → zoom, space-drag → pan); the shell's
 `handleShortcut` tracks the space bar and binds Ctrl +/−/0.
 
+**Refinement (#116):** node bounds are now stored in the frame's **unscaled content space** (captured
+against a reference box *below* the `graphicsLayer`), and the overlay applies the transform explicitly
+through the pure `contentToScreen`/`screenToContent`/`contentRectToScreen` helpers (`Selection.kt`,
+unit-tested in `CanvasTransformTest`) when it draws and when it maps a pointer. This is the single
+canonical transform; any new overlay that draws per-node chrome reuses it rather than re-deriving
+coordinate math. The debug container-border overlay (**#117**, a View-menu toggle outlining every layout
+container via `containerNodes` + `contentRectToScreen`) is the first such reuse.
+
 ---
 
 ## 6. Drag-and-drop validity rules

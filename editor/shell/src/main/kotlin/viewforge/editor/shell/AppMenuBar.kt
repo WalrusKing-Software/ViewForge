@@ -111,6 +111,14 @@ internal fun FrameWindowScope.AppMenuBar(
                 onCheckedChange = { prefs.toggleChromeDark() },
             )
             Item("Theme…", onClick = onOpenThemeEditor)
+            // Debug overlay outlining every layout container on the canvas (#117) — editor-only, never
+            // affects the rendered UI or codegen. Transient view state like Dark canvas, so routed through
+            // `state` rather than the preferences controller.
+            CheckboxItem(
+                "Show borders",
+                checked = state.showBorders,
+                onCheckedChange = { state.toggleShowBorders() },
+            )
             Separator()
             // Canvas zoom (C5). Accelerators are display-only — the shell's handleShortcut binds the
             // real keys — matching the Edit menu's pattern. Zoom In/Out grey out at the clamp bounds.
