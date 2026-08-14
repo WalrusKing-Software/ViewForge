@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,8 +42,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.isCtrlPressed
@@ -72,6 +75,10 @@ import viewforge.model.findById
  * **double-click to rename** (T3); and per-row **lock/hide** toggles (T4). Every change goes through
  * a command, so all of it participates in undo/redo. Delete and duplicate act on the selection from
  * the shell toolbar / keyboard.
+ *
+ * With the tree focused (a row click focuses it), the keyboard drives it (T5): Up/Down move the primary
+ * selection along the visible order (skipping locked rows), Left/Right collapse/expand or step out/in, and
+ * Enter renames the selected row. Delete stays with the shell's global handler.
  *
  * The tree is rendered from a *flattened* row list (respecting expand/collapse and slots) so drag
  * hit-testing is a simple linear scan of recorded row bounds rather than recursive geometry.
@@ -106,7 +113,24 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
             // The visible top-to-bottom order a shift-click range extends along (C10).
             val visibleOrder = remember(nodeItems) { nodeItems.map { it.node.id } }
 
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            // T5 keyboard nav: the navigable order skips locked rows (they can't be selected); plus the
+            // parent and has-children lookups the Left/Right actions consult.
+            val navigable = remember(nodeItems) { nodeItems.filterNot { it.node.locked }.map { it.node.id.value } }
+            val parentOf = remember(nodeItems) { nodeItems.associate { it.node.id.value to it.ownAddress?.parentId } }
+            val childful = remember(nodeItems) {
+                nodeItems.filter { it.node.allChildren().isNotEmpty() }.map { it.node.id.value }.toSet()
+            }
+            val treeFocus = remember { FocusRequester() }
+
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .focusRequester(treeFocus)
+                    .focusable()
+                    // Bubbling (onKeyEvent, not preview) so a focused rename field consumes Enter/Escape
+                    // first; arrows and Enter drive traversal/rename only when the tree holds focus (T5).
+                    .onKeyEvent { event -> handleTreeKey(event, state, navigable, parentOf, childful, expanded) },
+            ) {
                 rows.forEach { item ->
                     when (item) {
                         is SlotRowItem -> SlotHeader(item.name, item.depth)
@@ -120,6 +144,7 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
                             onToggleExpand = { expanded[item.node.id.value] = !(expanded[item.node.id.value] ?: true) },
                             onStartRename = { renamingId = item.node.id },
                             onEndRename = { renamingId = null },
+                            onFocusTree = { treeFocus.requestFocus() },
                         )
                     }
                 }
@@ -260,6 +285,71 @@ private class TreeDragState(private val state: EditorState) {
     }
 }
 
+// --- keyboard navigation (T5) --------------------------------------------------------------------
+
+/**
+ * Resolve a key press over the focused tree (T5): Up/Down move the primary selection along [navigable]
+ * (locked rows skipped); Left/Right collapse/expand or step out/in via [horizontalTreeAction]; Enter
+ * renames the selected row through the existing request. Returns true when the key was handled (so it is
+ * consumed and does not bubble to the shell). Delete is intentionally left to the shell's global handler.
+ */
+private fun handleTreeKey(
+    event: KeyEvent,
+    state: EditorState,
+    navigable: List<String>,
+    parentOf: Map<String, NodeId?>,
+    childful: Set<String>,
+    expanded: MutableMap<String, Boolean>,
+): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val current = state.selectedId?.value
+    return when (event.key) {
+        Key.DirectionDown -> {
+            nextNavigable(navigable, current, +1)?.let { state.select(NodeId(it)) }
+            true
+        }
+        Key.DirectionUp -> {
+            nextNavigable(navigable, current, -1)?.let { state.select(NodeId(it)) }
+            true
+        }
+        Key.DirectionRight, Key.DirectionLeft -> {
+            if (current != null) {
+                applyHorizontal(state, current, parentOf, childful, expanded, right = event.key == Key.DirectionRight)
+            }
+            true
+        }
+        Key.Enter -> {
+            if (current != null) state.requestRenameSelected()
+            true
+        }
+        else -> false
+    }
+}
+
+/** Apply the Left/Right outcome for [current]: expand/collapse the row or move selection to parent/child. */
+private fun applyHorizontal(
+    state: EditorState,
+    current: String,
+    parentOf: Map<String, NodeId?>,
+    childful: Set<String>,
+    expanded: MutableMap<String, Boolean>,
+    right: Boolean,
+) {
+    val action = horizontalTreeAction(
+        hasChildren = current in childful,
+        expanded = expanded[current] ?: true,
+        right = right,
+    )
+    when (action) {
+        TreeKeyAction.Expand -> expanded[current] = true
+        TreeKeyAction.Collapse -> expanded[current] = false
+        TreeKeyAction.ToParent -> parentOf[current]?.let { state.select(it) }
+        TreeKeyAction.ToFirstChild ->
+            parentOf.entries.firstOrNull { it.value?.value == current }?.let { state.select(NodeId(it.key)) }
+        TreeKeyAction.None -> Unit
+    }
+}
+
 // --- rows ----------------------------------------------------------------------------------------
 
 @Composable
@@ -273,6 +363,7 @@ private fun NodeRow(
     onToggleExpand: () -> Unit,
     onStartRename: () -> Unit,
     onEndRename: () -> Unit,
+    onFocusTree: () -> Unit,
 ) {
     val node = item.node
     val key = node.id.value
@@ -312,6 +403,8 @@ private fun NodeRow(
             }
             .combinedClickable(
                 onClick = {
+                    // Clicking a row focuses the tree so the arrow keys traverse from here on (T5).
+                    onFocusTree()
                     // Ctrl/Cmd-click toggles a node in/out of the selection; Shift-click extends a range
                     // from the anchor along the visible order; a plain click selects just this node (C10).
                     val mods = windowInfo.keyboardModifiers
