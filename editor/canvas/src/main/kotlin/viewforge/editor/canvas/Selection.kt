@@ -19,13 +19,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
+import viewforge.editor.state.CanvasViewport
 import viewforge.editor.state.EditorState
 import viewforge.model.ChildAddress
 import viewforge.model.Node
@@ -35,7 +40,9 @@ import viewforge.model.findById
 
 /**
  * The per-node spatial index behind hit-testing (ARCHITECTURE §4.4, ADR-009). Each rendered node's
- * editor instrumentation writes its window-space bounds here via `onGloballyPositioned`.
+ * editor instrumentation writes its **content-space** bounds here via `onGloballyPositioned` — bounds in
+ * the frame's unscaled coordinate space, invariant to the zoom/pan (#116). The overlay maps them to and
+ * from screen space with the live viewport transform ([contentToScreen]/[screenToContent]).
  *
  * Keyed by [NodeId.value] and held as snapshot state so the selection outline redraws when a node's
  * bounds change (scroll, resize, recomposition — FEATURES C4). Entries are never explicitly evicted:
@@ -45,7 +52,7 @@ import viewforge.model.findById
 class NodeBounds {
     private val rects = mutableStateMapOf<String, Rect>()
 
-    /** Record (window-space) bounds for a node; a no-op if unchanged, to avoid a recomposition loop. */
+    /** Record (content-space) bounds for a node; a no-op if unchanged, to avoid a recomposition loop. */
     fun record(id: NodeId, rect: Rect) {
         if (rects[id.value] != rect) rects[id.value] = rect
     }
@@ -57,7 +64,7 @@ class NodeBounds {
 }
 
 /**
- * The deepest node in [root]'s subtree whose recorded bounds contain [point] (window space), or null
+ * The deepest node in [root]'s subtree whose recorded bounds contain [point] (content space), or null
  * (a click on empty canvas → deselect). Children and slot children are tested before the node itself,
  * so the *innermost* hit wins (FEATURES C2). Pure and Compose-free: unit-tested without a UI harness.
  */
@@ -69,7 +76,7 @@ fun hitTest(rects: Map<String, Rect>, root: Node, point: Offset): NodeId? {
 }
 
 /**
- * Every node under [root] whose recorded bounds are *fully enclosed* by [marquee] (window space), for
+ * Every node under [root] whose recorded bounds are *fully enclosed* by [marquee] (content space), for
  * rubber-band selection (C10, #93). The result is *top-level*: once an enclosed node is taken its
  * subtree is skipped, so a swept container is selected without also selecting each of its children
  * (matching the `selectionTopLevel` dedup the batch ops use). [root] itself is never returned — a
@@ -101,30 +108,40 @@ private fun Rect.enclosesRect(inner: Rect): Boolean =
     left <= inner.left && top <= inner.top && right >= inner.right && bottom >= inner.bottom
 
 /**
- * The one canonical canvas↔screen transform (TECHNICAL_NOTES §5): all coordinate math goes through
- * here so it survives future zoom/pan instead of being scattered inline at call sites. Bounds are
- * captured in window space; the overlay works in its own local space; this bridges the two using the
- * overlay's own [LayoutCoordinates]. At M3 there is no zoom, so it is a pure translation — the single
- * place a scale factor will later be applied.
+ * The one canonical content↔screen transform (TECHNICAL_NOTES §5, #116): all coordinate math goes
+ * through here so zoom/pan is applied in exactly one place. Node bounds are stored in the frame's
+ * unscaled *content* space; the overlay draws and hit-tests in its own (screen) local space. The frame
+ * is centre-anchored in the overlay and its `graphicsLayer` scales about that centre, so a content point
+ * `c` maps to a screen point `s = center + zoom·(c − frameHalf) + pan`, where `center` is the overlay
+ * centre and `frameHalf` is half the device frame's pixel size. Pure (floats only) so the mapping is
+ * unit-tested without a composition.
  */
-private class CanvasTransform(private val overlay: LayoutCoordinates) {
-    fun windowToLocal(point: Offset): Offset = overlay.windowToLocal(point)
+internal fun contentToScreen(point: Offset, overlaySize: Size, framePx: Size, viewport: CanvasViewport): Offset {
+    val center = Offset(overlaySize.width / 2f, overlaySize.height / 2f)
+    val half = Offset(framePx.width / 2f, framePx.height / 2f)
+    return center + (point - half) * viewport.zoom + Offset(viewport.panX, viewport.panY)
+}
 
-    fun localToWindow(point: Offset): Offset = overlay.localToWindow(point)
+/** The inverse of [contentToScreen]: a screen (overlay-local) point back to unscaled content space. */
+internal fun screenToContent(point: Offset, overlaySize: Size, framePx: Size, viewport: CanvasViewport): Offset {
+    val center = Offset(overlaySize.width / 2f, overlaySize.height / 2f)
+    val half = Offset(framePx.width / 2f, framePx.height / 2f)
+    return (point - center - Offset(viewport.panX, viewport.panY)) / viewport.zoom + half
+}
 
-    fun rectToLocal(rect: Rect): Rect {
-        val topLeft = windowToLocal(rect.topLeft)
-        return Rect(topLeft, Size(rect.width, rect.height))
-    }
+/** A content-space [rect] mapped to screen: the top-left through [contentToScreen], the size scaled by zoom. */
+internal fun contentRectToScreen(rect: Rect, overlaySize: Size, framePx: Size, viewport: CanvasViewport): Rect {
+    val topLeft = contentToScreen(rect.topLeft, overlaySize, framePx, viewport)
+    return Rect(topLeft, rect.size * viewport.zoom)
 }
 
 /**
  * Transient state for a canvas drag-to-reparent gesture (C7), the geometric-drop counterpart of the
  * tree panel's `TreeDragState`. It holds the dragged node and the resolved drop, recomputed on each
- * drag move from the window-space bounds and the pure [canvasDropAddress]; validity is confirmed by
+ * drag move from the content-space bounds and the pure [canvasDropAddress]; validity is confirmed by
  * [EditorState.canDrop] and the move committed via [EditorState.moveNode], so it shares the exact drop
- * rules and post-removal index semantics the tree uses. All positions are window space (the overlay is
- * unscaled), so the resolution stays correct at every zoom/pan level.
+ * rules and post-removal index semantics the tree uses. All positions are content space — the pointer is
+ * mapped through [screenToContent] before it reaches here — so the resolution stays correct at every zoom/pan.
  *
  * The visual feedback is a green insertion caret + target outline when the drop is legal, or a red
  * outline of whatever the pointer is over when it isn't (into a non-container or the dragged node's own
@@ -140,7 +157,7 @@ internal class CanvasDragState(private val state: EditorState, private val bound
     var outlineId by mutableStateOf<NodeId?>(null)
         private set
 
-    /** The insertion-caret endpoints (window space), or null for an into-empty-container drop (outline only). */
+    /** The insertion-caret endpoints (content space), or null for an into-empty-container drop (outline only). */
     var caret by mutableStateOf<Pair<Offset, Offset>?>(null)
         private set
 
@@ -151,7 +168,7 @@ internal class CanvasDragState(private val state: EditorState, private val bound
         draggingId = id
     }
 
-    /** Resolve the drop for a window-space [point] and update the feedback; a no-op if not dragging. */
+    /** Resolve the drop for a content-space [point] and update the feedback; a no-op if not dragging. */
     fun update(point: Offset) {
         val root = state.activeEditRoot
         val dragged = draggingId ?: return
@@ -198,8 +215,8 @@ internal class CanvasDragState(private val state: EditorState, private val bound
  * (or the frame background) sweeps a rectangle and selects every node fully enclosed by it on release.
  * It coexists with the other canvas drags by *what the press lands on* — space-pan (C5) and node
  * drag-to-reparent (C7) claim a held space or a press over a node, leaving the empty-canvas press to the
- * marquee. Both endpoints are window space (the overlay is unscaled), so the [rect] and the enclosed-node
- * resolution stay correct at every zoom/pan level.
+ * marquee. Both endpoints are content space — the pointer is mapped through [screenToContent] first — so the
+ * [rect] and the enclosed-node resolution stay correct at every zoom/pan level.
  */
 internal class MarqueeState(private val state: EditorState, private val bounds: NodeBounds) {
     private var start by mutableStateOf<Offset?>(null)
@@ -209,7 +226,7 @@ internal class MarqueeState(private val state: EditorState, private val bounds: 
     /** Whether a marquee drag is in progress. */
     val active: Boolean get() = start != null
 
-    /** The normalized marquee rectangle in window space, or null when not dragging. */
+    /** The normalized marquee rectangle in content space, or null when not dragging. */
     val rect: Rect?
         get() {
             val a = start ?: return null
@@ -262,7 +279,7 @@ internal fun combineMarquee(base: List<NodeId>, hits: List<NodeId>, additive: Bo
     if (additive) base.filter { it !in hits } + hits else hits
 
 /**
- * The insertion caret for [address] in window space: a line across the target at the gap the index
+ * The insertion caret for [address] in content space: a line across the target at the gap the index
  * names, along the container's inferred axis. Null when the target's default region is empty (the
  * feedback falls back to the target outline alone). Shared by node-drag ([CanvasDragState]) and the
  * palette drag (P2a); [draggedId] is null for the latter (nothing to exclude).
@@ -299,22 +316,27 @@ internal fun insertionCaret(
  * The transparent editor chrome layer above the rendered UI (ARCHITECTURE §4.4). It owns all pointer
  * input for editing — click to select the deepest node, hover to preview, scroll to zoom, space-drag
  * to pan (C5), drag a node to reparent/reorder (C7) — and draws selection, hover, and drop outlines.
- * Because it sits *above* the render output and
- * never draws into it, editor chrome can never affect the user UI's layout.
+ * Because it sits *above* the render output and never draws into it, editor chrome can never affect the
+ * user UI's layout.
  *
- * The overlay is deliberately left outside the content's zoom/pan `graphicsLayer`, so its pointer
- * coordinates and drag deltas are already in window space: a pan drag maps 1:1 to the cursor, and the
- * unchanged window-space [hitTest] stays correct because the node bounds it tests against come back
- * from `boundsInWindow` already scaled by that same layer.
+ * The overlay sits **outside** the content's zoom/pan `graphicsLayer`, so it keeps a constant outline
+ * thickness. Node bounds are stored in the frame's unscaled *content* space (#116); the overlay applies
+ * the live viewport transform ([contentToScreen]/[screenToContent]) when it draws and when it maps a
+ * pointer position, so every outline and hit-test stays aligned at any zoom/pan. The only place that
+ * still needs the overlay's own [LayoutCoordinates] is the palette drag, whose pointer arrives in window
+ * space and is converted window → overlay-local → content.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds, modifier: Modifier = Modifier) {
-    var transform by remember { mutableStateOf<CanvasTransform?>(null) }
+    // The overlay's own layout coordinates, used only to bring the palette drag's window-space pointer
+    // into overlay-local space before the viewport transform maps it to content space.
+    var overlayCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var hovered by remember { mutableStateOf<NodeId?>(null) }
     // Live keyboard-modifier state, read at tap time to tell a plain click (replace selection) from a
     // ctrl/cmd- or shift-click (toggle into a multi-selection, C10).
     val windowInfo = LocalWindowInfo.current
+    val density = LocalDensity.current
     // The last tapped node and when — for manual double-tap detection that keeps single-tap selection
     // instant (unlike detectTapGestures' onDoubleTap, which delays every tap). Reset per edit surface.
     var lastTap by remember(root) { mutableStateOf<Pair<NodeId, Long>?>(null) }
@@ -322,17 +344,20 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     val marquee = remember(root) { MarqueeState(state, bounds) }
 
     // Palette drag-to-canvas (P2a): while a palette drag is live, resolve its drop against the same
-    // canvas geometry as a node drag, using the pointer position the palette publishes in window space.
-    // There is no dragged node to exclude (it doesn't exist yet), hence the null id. The resolved
-    // address is published back to state so the palette can commit it as an AddNode on release.
+    // canvas geometry as a node drag, using the pointer position the palette publishes in window space
+    // (converted here to content space). There is no dragged node to exclude (it doesn't exist yet),
+    // hence the null id. The resolved address is published back so the palette commits it as an AddNode.
     val dragType = state.paletteDragType
     val dragX = state.paletteDragX
     val dragY = state.paletteDragY
     var paletteAddress: ChildAddress? = null
     var paletteFeedback: PaletteDropFeedback? = null
-    if (dragType != null && dragX != null && dragY != null) {
+    val coords = overlayCoords
+    if (dragType != null && dragX != null && dragY != null && coords != null) {
+        val framePx = with(density) { state.activeDeviceProfile.let { Size(it.width.dp.toPx(), it.height.dp.toPx()) } }
+        val point =
+            screenToContent(coords.windowToLocal(Offset(dragX, dragY)), coords.size.toSize(), framePx, state.viewport)
         val rects = bounds.snapshot()
-        val point = Offset(dragX, dragY)
         paletteAddress = canvasDropAddress(rects, root, null, point, state.catalog::acceptsChildren)
         paletteFeedback = PaletteDropFeedback(
             outlineId = paletteAddress?.parentId ?: hitTest(rects, root, point),
@@ -346,14 +371,14 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
 
     Canvas(
         modifier
-            .onGloballyPositioned { transform = CanvasTransform(it) }
+            .onGloballyPositioned { overlayCoords = it }
             .pointerInput(root) {
+                val scope = this
                 val doubleTapMs = viewConfiguration.doubleTapTimeoutMillis
                 detectTapGestures { local ->
                     // While panning (space held) a press is a pan, not a selection — ignore it here.
                     if (state.isSpaceHeld) return@detectTapGestures
-                    val point = transform?.localToWindow(local) ?: local
-                    val hit = hitTest(bounds.snapshot(), root, point)
+                    val hit = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
                     val mods = windowInfo.keyboardModifiers
                     // Ctrl/Cmd- or Shift-click toggles the hit in/out of a multi-selection (C10). The canvas
                     // has no natural order, so Shift is additive like Ctrl here — a range is a tree gesture.
@@ -382,9 +407,10 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             // rubber-band selects (#93). The root fills the frame, so an "empty" press hits root.id, not null.
             .pointerInput(root, state.isSpaceHeld) {
                 if (state.isSpaceHeld) return@pointerInput
+                val scope = this
                 detectDragGestures(
                     onDragStart = { local ->
-                        val point = transform?.localToWindow(local) ?: local
+                        val point = scope.pointerToContent(local, state)
                         val hit = hitTest(bounds.snapshot(), root, point)
                         if (hit == null || hit == root.id) {
                             // Frame/empty canvas → marquee-select. A modifier held at press adds to the
@@ -396,7 +422,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                         }
                     },
                     onDrag = { change, _ ->
-                        val point = transform?.localToWindow(change.position) ?: change.position
+                        val point = scope.pointerToContent(change.position, state)
                         when {
                             marquee.active -> {
                                 change.consume()
@@ -422,6 +448,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                 }
             }
             .pointerInput(root) {
+                val scope = this
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -434,61 +461,72 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                             PointerEventType.Exit -> hovered = null
                             else -> {
                                 val local = event.changes.first().position
-                                val point = transform?.localToWindow(local) ?: local
-                                hovered = hitTest(bounds.snapshot(), root, point)
+                                hovered = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
                             }
                         }
                     }
                 }
             },
     ) {
-        val t = transform ?: return@Canvas
+        // The live viewport transform: content-space bounds → this (unscaled) overlay's screen space.
+        val viewport = state.viewport
+        val framePx = state.activeDeviceProfile.let { Size(it.width.dp.toPx(), it.height.dp.toPx()) }
+        val overlaySize = size
+        val rectToScreen = { rect: Rect -> contentRectToScreen(rect, overlaySize, framePx, viewport) }
+        val pointToScreen = { p: Offset -> contentToScreen(p, overlaySize, framePx, viewport) }
+
         // Palette drag wins the overlay while it's live: show its drop feedback and nothing else.
         paletteFeedback?.let { fb ->
             val color = if (fb.valid) DROP_OK else DROP_BAD
             fb.outlineId?.let { id ->
-                bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), color, DROP_STROKE) }
+                bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), color, DROP_STROKE) }
             }
-            fb.caret?.let { (a, b) ->
-                drawLine(color, t.windowToLocal(a), t.windowToLocal(b), strokeWidth = DROP_STROKE)
-            }
+            fb.caret?.let { (a, b) -> drawLine(color, pointToScreen(a), pointToScreen(b), strokeWidth = DROP_STROKE) }
             return@Canvas
         }
         if (drag.draggingId != null) {
             // Mid-drag: show only drop feedback (green = legal, red = rejected) so it isn't lost among
-            // the hover/selection outlines. The caret marks the exact insertion gap in window space.
+            // the hover/selection outlines. The caret marks the exact insertion gap.
             val color = if (drag.dropValid) DROP_OK else DROP_BAD
             drag.outlineId?.let { id ->
-                bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), color, DROP_STROKE) }
+                bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), color, DROP_STROKE) }
             }
-            drag.caret?.let { (a, b) ->
-                drawLine(color, t.windowToLocal(a), t.windowToLocal(b), strokeWidth = DROP_STROKE)
-            }
+            drag.caret?.let { (a, b) -> drawLine(color, pointToScreen(a), pointToScreen(b), strokeWidth = DROP_STROKE) }
             return@Canvas
         }
         // Mid-marquee: draw only the rubber-band rectangle (a translucent fill + thin outline) so it isn't
         // lost among hover/selection outlines; the enclosed nodes are resolved and selected on release.
         marquee.rect?.let { box ->
-            val local = t.rectToLocal(box)
-            drawRect(MARQUEE_FILL, topLeft = local.topLeft, size = local.size)
-            drawOutline(local, MARQUEE_STROKE_COLOR, MARQUEE_STROKE)
+            val screen = rectToScreen(box)
+            drawRect(MARQUEE_FILL, topLeft = screen.topLeft, size = screen.size)
+            drawOutline(screen, MARQUEE_STROKE_COLOR, MARQUEE_STROKE)
             return@Canvas
         }
         // Hover first, selection on top: when a node is both, the selection outline wins visually.
         hovered?.takeIf { !state.isSelected(it) }?.let { id ->
-            bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), HOVER_COLOR, HOVER_STROKE) }
+            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), HOVER_COLOR, HOVER_STROKE) }
         }
         // Every selected node is outlined (C10); the secondary selections draw faded, the primary solid
         // and on top so it reads as the focused node.
         val primary = state.selectedId
         state.selectedIds.forEach { id ->
             if (id == primary) return@forEach
-            bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), MULTI_SELECTION_COLOR, SELECTION_STROKE) }
+            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), MULTI_SELECTION_COLOR, SELECTION_STROKE) }
         }
         primary?.let { id ->
-            bounds.boundsOf(id)?.let { drawOutline(t.rectToLocal(it), SELECTION_COLOR, SELECTION_STROKE) }
+            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), SELECTION_COLOR, SELECTION_STROKE) }
         }
     }
+}
+
+/**
+ * Map a pointer position in this overlay's local (screen) space to the frame's unscaled content space,
+ * applying the live viewport transform (#116). Read at event time so it reflects the current zoom/pan
+ * and device profile, since the gesture recognizers are not re-armed when those change.
+ */
+private fun PointerInputScope.pointerToContent(local: Offset, state: EditorState): Offset {
+    val framePx = state.activeDeviceProfile.let { Size(it.width.dp.toPx(), it.height.dp.toPx()) }
+    return screenToContent(local, size.toSize(), framePx, state.viewport)
 }
 
 private fun DrawScope.drawOutline(rect: Rect, color: Color, width: Float) {
