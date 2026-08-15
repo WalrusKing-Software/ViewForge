@@ -138,5 +138,5 @@ Compose Desktop screen end to end.
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
   phases — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
-[Unreleased]: https://forgejo.thortower.net/WalrusKing-Software/ViewForge/compare/v0.1.0...HEAD
-[0.1.0]: https://forgejo.thortower.net/WalrusKing-Software/ViewForge/releases/tag/v0.1.0
+[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0
