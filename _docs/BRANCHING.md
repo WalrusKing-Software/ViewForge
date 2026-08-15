@@ -282,8 +282,8 @@ Conventions that keep agent-assisted work reviewable under this model:
    Tell Claude Code the base branch explicitly at the start of a session.
 2. **One branch per feature, one session per branch** where practical. Mixing unrelated work
    produces diffs that are hard to review and hard to revert.
-3. **Start each session by pointing at the relevant docs.** `CLAUDE.md` carries standing context;
-   name the specific feature and its acceptance criteria for the task at hand.
+3. **Start each session by pointing at the relevant docs.** Name the specific feature and its
+   acceptance criteria for the task at hand.
 4. **Ask for a plan before implementation** on anything non-trivial. Correcting a plan is far
    cheaper than correcting a thousand-line diff.
 5. **Never merge a diff you haven't read**, however good the tests look. Tests written by the same
