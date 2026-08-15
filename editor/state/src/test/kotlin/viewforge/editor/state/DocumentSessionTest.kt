@@ -119,6 +119,36 @@ class DocumentSessionTest {
     }
 
     @Test
+    fun `backupOnNextSave is set only for a migrated older-schema open and cleared on save (D9)`() {
+        val s = state()
+        assertFalse(s.backupOnNextSave) // a fresh session needs no backup
+
+        val opened = Project(
+            id = "q",
+            name = "Opened",
+            framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+            screens = listOf(Screen("s2", "Second", Node(NodeId("r2"), "compose.foundation.layout.Column"))),
+        )
+
+        // A normal open of a current-schema file does not request a backup.
+        s.replaceDocument(opened, Path.of("A.vforge"))
+        assertFalse(s.backupOnNextSave)
+
+        // Opening an older-schema (migrated) file flags the next save to back up the original.
+        s.replaceDocument(opened, Path.of("A.vforge"), migratedFromOlderSchema = true)
+        assertTrue(s.backupOnNextSave)
+
+        // The backup is written on the first save, so it need not repeat afterward.
+        s.markSaved(Path.of("A.vforge"))
+        assertFalse(s.backupOnNextSave)
+
+        // File → New also clears any pending backup flag.
+        s.replaceDocument(opened, Path.of("A.vforge"), migratedFromOlderSchema = true)
+        s.newDocument()
+        assertFalse(s.backupOnNextSave)
+    }
+
+    @Test
     fun `replaceDocument swaps the document and resets the session`() {
         val s = state()
         s.select(NodeId("a"))

@@ -21,7 +21,13 @@ enum class LoadFailure {
 
 /** Outcome of [ProjectStore.load]. A load never throws for an expected failure and never writes. */
 sealed interface LoadResult {
-    data class Success(val project: Project) : LoadResult
+    /**
+     * A loaded project. [migratedFromVersion] is the on-disk `schemaVersion` when it was **older** than
+     * [SchemaMigrations.CURRENT] and therefore migrated on the way in, or null when the file was already
+     * current. The caller uses it to back up the original before the first save overwrites it with the
+     * migrated form (DATA_MODEL §10 rule 6 / FEATURES D9).
+     */
+    data class Success(val project: Project, val migratedFromVersion: Int? = null) : LoadResult
 
     data class Failure(val kind: LoadFailure, val detail: String) : LoadResult
 }
@@ -92,7 +98,8 @@ object ProjectStore {
 
         return try {
             ProjectValidator.validate(project, limits)
-            LoadResult.Success(project)
+            // Record the pre-migration version so a save can back up the original first (D9).
+            LoadResult.Success(project, migratedFromVersion = version.takeIf { it < SchemaMigrations.CURRENT })
         } catch (e: ProjectValidationException) {
             LoadResult.Failure(LoadFailure.VALIDATION_FAILED, e.message ?: "validation failed")
         }
