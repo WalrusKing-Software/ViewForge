@@ -66,7 +66,13 @@ internal class DocumentController(private val state: EditorState, private val pr
     private fun loadInto(path: Path) {
         when (val result = ProjectStore.load(path)) {
             is LoadResult.Success -> {
-                state.replaceDocument(result.project, path)
+                // A file loaded from an older schema was migrated in memory; the first save must back up
+                // the original before overwriting it with the migrated form (D9).
+                state.replaceDocument(
+                    result.project,
+                    path,
+                    migratedFromOlderSchema = result.migratedFromVersion != null,
+                )
                 prefs.recordRecent(path)
             }
             is LoadResult.Failure -> {
@@ -108,7 +114,10 @@ internal class DocumentController(private val state: EditorState, private val pr
     }
 
     private fun writeTo(path: Path) {
-        runCatching { ProjectStore.save(state.document, path) }.fold(
+        // Back up the file we're about to replace when the document was migrated from an older schema, so
+        // the original is never lost to the migrated overwrite (D9). GuardedWriter no-ops the backup when
+        // the target doesn't exist yet (a Save As to a fresh path).
+        runCatching { ProjectStore.save(state.document, path, backup = state.backupOnNextSave) }.fold(
             onSuccess = {
                 state.markSaved(path)
                 prefs.recordRecent(path)

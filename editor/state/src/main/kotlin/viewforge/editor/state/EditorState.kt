@@ -378,6 +378,16 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Whether the next save must back up the file it overwrites (D9, DATA_MODEL §10 rule 6). Set when a
+     * document is opened from an **older-schema** file and thus migrated in memory: saving it would replace
+     * the original on-disk file with the migrated form, so a `.bak` of the original is written first. Set
+     * by [replaceDocument]'s `migratedFromOlderSchema` flag and cleared by [markSaved] (the backup, once
+     * written, need not be rewritten on every subsequent save). Transient session state, not document data.
+     */
+    var backupOnNextSave: Boolean by mutableStateOf(false)
+        private set
+
+    /**
      * Recently opened/saved project paths, most-recent first (D8, #88). Transient view state: applied from
      * prefs at launch ([applyRecentProjects]) and updated on a successful open/save ([noteRecentProject]).
      * The File menu's Open Recent reads it; the shell persists it. Not document data — it is per-user
@@ -574,7 +584,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * the document starts clean. This is the *only* place the document is replaced wholesale; every
      * other edit goes through a command.
      */
-    fun replaceDocument(project: Project, path: Path?) {
+    fun replaceDocument(project: Project, path: Path?, migratedFromOlderSchema: Boolean = false) {
         document = project
         history.clear()
         selectedIds = emptyList()
@@ -588,6 +598,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         editingComponentId = null
         currentPath = path
         isDirty = false
+        backupOnNextSave = migratedFromOlderSchema
     }
 
     /**
@@ -611,6 +622,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun markSaved(path: Path) {
         currentPath = path
         isDirty = false
+        backupOnNextSave = false // the original was backed up on this save; no need to repeat it (D9)
     }
 
     /**
