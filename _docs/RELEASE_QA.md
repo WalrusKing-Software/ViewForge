@@ -116,10 +116,13 @@ These encode the `CLAUDE.md` correctness rules. **Any failure here blocks the re
 - **[Manual] spot-check:** hand-edit a copy of a `.vforge` to `"schemaVersion": 999`, Open it →
   clear error dialog, editor stays usable.
 
-> ⚠️ **Known gap affecting RC-1/D9:** the app never passes `backup=true` when saving, so an
-> **older-schema file that is migrated on load and then saved is overwritten without a `.bak`**
-> (`GuardedWriter`/`ProjectStore.save` support backups, but no caller requests one). FEATURES D9 says
-> "older files migrate with a backup written first" — currently unmet. See **Gap G-2** below.
+> ✅ **Resolved (was Gap G-2, issue #142):** opening an older-schema `.vforge` now flags the first save
+> to back up the original — `ProjectStore.load` reports the pre-migration version, `EditorState` carries
+> a `backupOnNextSave` flag, and `DocumentController` passes `backup=true` on that save, writing a
+> `<name>.bak` of the untouched original before the migrated form replaces it. FEATURES D9 is now met.
+> **[Auto]:** `MigrationTest` (version reporting + end-to-end `.bak`), `DocumentSessionTest`
+> (`backupOnNextSave` lifecycle). **[Manual] spot-check:** open the committed schema-1 `Demo.vforge`,
+> Save over it, confirm a `Demo.vforge.bak` holding the original appears.
 
 ---
 
@@ -153,7 +156,7 @@ These encode the `CLAUDE.md` correctness rules. **Any failure here blocks the re
 | PL-4 (P4a) | Insert via tree/selection | With a container selected, click a palette row → inserts into the selection. | [Manual]. |
 | PL-5 (P5a) | Favorites / recent | Clear the search → ★ Favorites + Recent sections show; star a row to pin. | Favorites persist across sessions; recents are session-only. [Auto] `FavoriteComponentsTest`, `PaletteFavoritesTest`; [Manual] gesture. |
 | PL-6 (P6a) | User components in palette | Extract a selection (Edit → Extract to Component) → it appears under "Components". | [Manual]; `EditorComponentsTest` [Auto]. |
-| PL-7 | **Image component usability** | Add an `Image` to a **new** project → open the inspector source dropdown. | ⚠️ **Known gap G-1:** the dropdown only lists **already-imported** assets and there is **no disk-import UI**; a fresh project has none, so Image cannot be pointed at a user file. Works only with the bundled Gallery sample's classpath assets. [Manual]. |
+| PL-7 | **Image component usability** | Add an `Image` to a **new** project → open the inspector source dropdown. | ⚠️ **Known gap G-1 (issue #141):** the dropdown only lists **already-imported** assets and there is **no disk-import UI**; a fresh project has none, so Image cannot be pointed at a user file. Works only with the bundled Gallery sample's classpath assets. [Manual]. |
 
 > **Component coverage:** the full Phase-1 set (FEATURES §2 — Layout/Content/Input + structural
 > TopAppBar/BottomAppBar) each has a renderer + emitter + golden triple; `NavigationBar` is
@@ -200,7 +203,7 @@ Covered largely by §1 (RC-1…RC-3, RC-6, RC-8). Additional area-specific items
 | DC-3 (D7) | Reusable components + edit-in-place | Extract → component; edit the definition (double-click to enter) → every instance updates; a cycle-forming insert is refused (greyed + tooltip). | [Manual]; `ComponentGraphTest`, `CycleGuardTest`, `EditInPlaceTest`, render/codegen goldens [Auto]. |
 | DC-4 (D7/params) | Component parameters | Promote a prop to a parameter; set per-instance args in the inspector → codegen emits typed fn params + call args, canvas resolves. | [Manual]; `ParameterCommandTest`, `ParameterTypeTest`, `ParameterEditTest`, `ParameterBindingTest`, `ParameterTypesTest` + goldens [Auto]. |
 | DC-5 (D8) | Recent projects | Open/Save a couple of projects → File → Open Recent lists them, most-recent-first; a stale path reports + drops. | [Manual]; `RecentProjectsTest`, `RecentProjectsStateTest` [Auto]. |
-| DC-6 (D9) | Migration on load | Open the committed schema-1 `Demo.vforge` → migrates to current and loads. | [Auto] (`MigrationTest` migrates the real committed fixture). ⚠️ backup-on-migrate gap: **G-2**. |
+| DC-6 (D9) | Migration on load + backup | Open the committed schema-1 `Demo.vforge` → migrates to current and loads; saving over it writes a `.bak` of the original first. | [Auto] (`MigrationTest` migrates the real committed fixture **and** asserts the backup-on-migrate save; `DocumentSessionTest` covers the flag lifecycle). Backup-on-migrate gap **G-2** fixed (#142). |
 
 ---
 
@@ -302,15 +305,20 @@ Run in `:app:run`. If any step fails, **no-go**.
 
 ### Gaps found during the audit (file as issues before release)
 
-| ID | Severity | Gap | Notes / recommendation |
+| ID | Severity | Gap | Status / recommendation |
 |---|---|---|---|
-| **G-1** | Medium (feature completeness) | **Image asset disk-import not implemented.** `AssetImageLoader` resolves assets from the **classpath only** (bundled sample); no UI copies a user file into the project, and the inspector source dropdown only lists already-imported assets. So `Image` is not usable in a user-created project. | Known ADR-021 follow-up, but FEATURES lists `Image` as shipped without this caveat. Either (a) ship with a documented limitation + FEATURES caveat, or (b) implement import (AS-1…AS-5 apply: size/pixel caps, type sniffing, EXIF strip, copy-into-project). Recommend at least (a) for this release. |
-| **G-2** | Medium (never-lose-work / D9) | **Migrate-with-backup not wired.** `GuardedWriter`/`ProjectStore.save`/`ProjectExporter` all support `backup=true`, but no editor/app caller ever passes it, so an older-schema file migrated on load and then saved is overwritten with **no `.bak`**. FEATURES D9 asserts "older files migrate with a backup written first." | Low-effort fix: have the save path request a backup when the loaded document's on-disk schema was older than current (or unconditionally on the first save after a migrating load). Add a test asserting a `.bak` is produced. |
-| **G-3** | Doc-hygiene (non-blocking) | `memory/MEMORY.md` and `catalog-props-progress.md` predate #118–#123 / #127 / #137 (now merged); FEATURES.md is current. | Not a code gap — reconcile memory when convenient. Audit was performed against code + FEATURES, not memory. |
+| **G-1** | Medium (feature completeness) | **Image asset disk-import not implemented.** `AssetImageLoader` resolves assets from the **classpath only** (bundled sample); no UI copies a user file into the project, and the inspector source dropdown only lists already-imported assets. So `Image` is not usable in a user-created project. | **Filed as issue #141.** Known ADR-021 follow-up; FEATURES already carries the v0.1.0 caveat and PL-7 documents it. Either (a) ship with the documented limitation, or (b) implement import (AS-1…AS-5: size/pixel caps, type sniffing, EXIF strip, copy-into-project). Recommend at least (a) for this release. |
+| **G-2** | Medium (never-lose-work / D9) | **Migrate-with-backup not wired.** No caller passed `backup=true`, so an older-schema file migrated on load and then saved was overwritten with **no `.bak`**, contradicting FEATURES D9. | ✅ **Fixed (issue #142).** `ProjectStore.load` now reports the pre-migration version; `EditorState.backupOnNextSave` carries it; `DocumentController` requests `backup=true` on the first save after a migrating open. Covered by `MigrationTest` + `DocumentSessionTest`. |
+| **G-3** | Doc-hygiene (non-blocking) | `memory/MEMORY.md` and `catalog-props-progress.md` predate #118–#123 / #127 / #137 (now merged); FEATURES.md is current. | Assistant-memory hygiene, **not** a project-tracker item (deliberately not filed in Forgejo). Reconciled this pass. Audit was performed against code + FEATURES, not memory. |
 
 ### Automatable coverage added this pass
 - `CodegenEscapingTest` + `HostileStrings.vforge` — compile-verified string escaping (SEC-4 / GC-2),
   a SECURITY §12 checklist item that had no dedicated test. Green.
+- **G-2 fix (#142):** `MigrationTest` now asserts `LoadResult.Success.migratedFromVersion` reporting
+  (older file → source version; current file → null) **and** the end-to-end backup — loading the
+  committed schema-1 `Demo.vforge` then saving writes a byte-identical `Demo.vforge.bak` of the original.
+  `DocumentSessionTest` covers the `EditorState.backupOnNextSave` lifecycle (set on migrated open, cleared
+  on save/new). Green.
 
 ### Automatable coverage confirmed already present (no work needed)
 Guarded-writer safety (reserved names/trailing dot/outside-root/atomic/backup), depth/node/asset/
@@ -329,8 +337,8 @@ round-trip, regeneration planning.
 - [ ] SEC-1…SEC-7 verified; SEC-8/SEC-9 handled by release engineering.
 
 **Go with documented limitations (not blockers, but decide explicitly):**
-- [ ] **G-1** Image import: ship with a documented limitation, or implement before release.
-- [ ] **G-2** migrate-with-backup: fix (low effort) or explicitly accept the risk for this release.
+- [ ] **G-1** (#141) Image import: ship with the documented limitation, or implement before release.
+- [x] **G-2** (#142) migrate-with-backup: **fixed** — migrated files now back up the original on first save.
 - [ ] `NavigationBar` is intentionally Phase-2 (not a gap).
 - [ ] P2/P3 features (I9 responsive, H6 theme import, F4–F6 dynamic packages) are out of scope for
       Phase 1.
