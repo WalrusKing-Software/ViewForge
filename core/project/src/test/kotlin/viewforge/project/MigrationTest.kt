@@ -6,6 +6,7 @@ import viewforge.model.SCHEMA_VERSION
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
@@ -90,6 +91,50 @@ class MigrationTest {
         val result = ProjectStore.load(Paths.get(samplesDir, "Demo.vforge"))
         assertTrue(result is LoadResult.Success, "expected Success but got $result")
         assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+    }
+
+    @Test
+    fun `a migrated older-schema load reports its on-disk version and a current file reports null`() {
+        val samplesDir = System.getProperty("viewforge.samplesDir")
+            ?: error("viewforge.samplesDir system property not set by the build")
+
+        // Demo.vforge is pinned at schema 1 → migrated on load, so the pre-migration version is reported.
+        val older = ProjectStore.load(Paths.get(samplesDir, "Demo.vforge"))
+        assertTrue(older is LoadResult.Success, "expected Success but got $older")
+        assertEquals(1, older.migratedFromVersion)
+
+        // Gallery.vforge is already at the current schema → nothing migrated, so no backup is needed.
+        val current = ProjectStore.load(Paths.get(samplesDir, "Gallery.vforge"))
+        assertTrue(current is LoadResult.Success, "expected Success but got $current")
+        assertNull(current.migratedFromVersion)
+    }
+
+    @Test
+    fun `saving a migrated older-schema file backs up the untouched original first (D9)`() {
+        val samplesDir = System.getProperty("viewforge.samplesDir")
+            ?: error("viewforge.samplesDir system property not set by the build")
+        val dir = Files.createTempDirectory("vforge-migrate-backup")
+        val target = dir.resolve("Demo.vforge")
+        Files.copy(Paths.get(samplesDir, "Demo.vforge"), target)
+        val originalBytes = Files.readAllBytes(target)
+
+        val loaded = ProjectStore.load(target)
+        assertTrue(loaded is LoadResult.Success && loaded.migratedFromVersion == 1, "got $loaded")
+
+        // Mirror the shell's save path: request a backup because the load migrated (DocumentController).
+        ProjectStore.save(loaded.project, target, backup = loaded.migratedFromVersion != null)
+
+        val backup = dir.resolve("Demo.vforge.bak")
+        assertTrue(Files.exists(backup), "a .bak of the pre-migration original must be written (D9)")
+        assertContentEquals(
+            originalBytes,
+            Files.readAllBytes(backup),
+            "the backup must be the original file, byte-for-byte",
+        )
+
+        // The saved file is now current-schema, so a subsequent load migrates nothing.
+        val reloaded = ProjectStore.load(target)
+        assertTrue(reloaded is LoadResult.Success && reloaded.migratedFromVersion == null, "got $reloaded")
     }
 
     @Test
