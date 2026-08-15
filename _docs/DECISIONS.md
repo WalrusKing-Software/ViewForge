@@ -1039,6 +1039,91 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ---
 
+## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
+
+**Status:** Accepted (to be implemented in Phase 2)
+
+**Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
+`horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
+placement open with a warning that it must be decided *before* Phase 2, because retrofitting touches
+every node. Two shapes were on the table: store overrides **on the node**, or in a **separate override
+layer** keyed by node id at the screen level. Whatever we pick has to preserve the invariants the rest
+of the system already depends on — ordered modifiers, typed `PropValue`s, stable node identity,
+structural sharing on edit, clean diffs, and a `core` that names no framework.
+
+**Decision.** Overrides live **on the `Node`** as one additive optional field:
+`responsive: Map<String, Map<String, PropValue>> = emptyMap()` — outer key a **breakpoint id**, inner
+map **prop-name → override `PropValue`**. The base `props` map remains the default value (the
+smallest/`compact` breakpoint); a breakpoint entry supplies *replacements* for named props, not a full
+re-declaration. Breakpoint ids are **opaque strings to `core`**; the set and its thresholds are owned by
+the framework package's `TargetDefinition` (the Android target uses Material **window size classes** —
+`compact` < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp). Render resolves the active breakpoint's
+overrides over the base props before dispatch (the same shape as `bindParameters`, ADR-028/#76); codegen
+emits the base value in Phase-2 M13, with window-size-class branching a later slice (M14). Introducing
+the field **bumps the schema 2 → 3** with an `M2to3` version stamp and a committed migration fixture
+(DATA_MODEL §10), even though the field itself is additive.
+
+**Rationale.** Keeping overrides on the node keeps a node's full state in one place: selection, undo,
+copy/paste, extract-to-component, and structural-sharing rebuilds all already operate on a node and its
+root-to-node path, so overrides ride along for free with no second structure to keep in sync with node
+identity. It also diffs cleanly (the overrides sit next to the props they modify) and needs no new
+cross-reference integrity rule. Opaque breakpoint strings keep `core` framework-agnostic — the same
+reason `Node.type` and theme tokens are strings — so a future non-Compose package can define its own
+breakpoint set. The 2 → 3 bump is deliberately conservative: a v2-only build silently ignoring a
+populated `responsive` field would render/emit only base props, a fidelity loss, so this is a *semantic*
+change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M2to3` as
+the marker that lets an older build hit the `NEWER_SCHEMA` gate cleanly.
+
+**Rejected.** **A separate screen-level override layer keyed by node id** — duplicates node identity into
+a parallel structure that every move/delete/reparent/extract must keep consistent, worsens diffs (a
+node's responsive behaviour lives far from the node), and breaks the locality that makes structural
+sharing cheap. **A distinct `PropValue.Responsive(...)` variant** (like `ParamRef`) — would force
+*every* prop reader to understand breakpoints and couples resolution into the value type; a node-level
+map resolves once, up front, leaving all existing value emitters/readers untouched. **Making it a purely
+additive field with no version bump** — technically allowed by the additive policy, but the silent
+data-loss on old builds makes it a semantic change; bumping is the honest, safe call.
+
+**Consequences.** Phase 2 gains responsive layouts without disturbing any existing prop reader — render
+and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 3 with a
+one-line `M2to3` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
+(the field holds ordinary `PropValue`s). Costs accepted: a third schema version to carry forward, and a
+node can now hold prop values that only apply at some widths — the inspector must make the active
+breakpoint obvious so an edit's scope is never ambiguous (a Phase-2 UX task, M13).
+
+---
+
+## ADR-031 — Editor chrome stays Material 3, not Jewel
+
+**Status:** Accepted
+
+**Context.** PROJECT_PLAN §3.2 / open question #2 flagged **Jewel** (JetBrains' Compose IDE-chrome
+library) as an option for a more IntelliJ-native editor look, to be evaluated before committing.
+Jewel's theming and components assume — and in practice require — the **JetBrains Runtime (JBR)** rather
+than a stock JDK, which is a real constraint on both the build toolchain and the packaged distribution
+(the app ships signed jpackage installers over a pinned JDK 21, ADR-022).
+
+**Decision.** Keep the editor chrome on **plain Material 3**. The shell already runs through its own
+`MaterialTheme` with an independent light/dark chrome toggle (S3 — `chromeDark`, distinct from the
+project's canvas theme H2). Do not adopt Jewel for v0.1.0, and treat open question #2 as closed.
+
+**Rationale.** The gain from Jewel is cosmetic (IDE-native styling); the cost is a JBR dependency that
+would complicate the toolchain and the distribution story just after packaging was settled (ADR-022).
+Material 3 is already wired, already themed light/dark, and shares the same widget vocabulary the canvas
+and inspector use, so there is no second styling system to maintain. "One implementation before one
+abstraction" applies to chrome as much as to the SPI.
+
+**Rejected.** **Adopt Jewel now** — pays a JBR/toolchain cost for a look-and-feel upgrade with no
+functional benefit, and right after distribution was finalised. **Abstract the chrome behind a
+theming seam so either could be swapped in** — speculative generality for a single app with no second
+consumer. Revisiting is cheap if a concrete need appears (the chrome is already funnelled through one
+`MaterialTheme`).
+
+**Consequences.** The build stays on a stock JDK 21 and the packaging path (ADR-022) is unchanged. The
+editor keeps a Material look rather than an IDE-native one — an accepted trade for a smaller, simpler
+toolchain. If Jewel is reconsidered later, it is a contained change at the single `MaterialTheme` seam.
+
+---
+
 ## Template
 
 ```markdown

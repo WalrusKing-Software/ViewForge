@@ -1,6 +1,6 @@
 # ViewForge — Data Model
 
-**Version:** 0.1 (planning)
+**Status:** Living — shipped in **v0.1.0** (Phase 1).
 **Schema version:** 2
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
@@ -434,8 +434,14 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    caller's first — `modifier.fillMaxSize().padding(24.dp)` — matching Compose convention.
 2. **Lists and repeaters.** Static children only in Phase 1. A `LazyColumn` bound to a data source
    needs a repeater concept — real design work, deferred.
-3. **Responsive variants.** Per-breakpoint prop overrides will be needed for Phase 2 (Android). Where
-   do they live — on the node, or as a separate override layer? Decide before Phase 2, because
-   retrofitting affects every node.
+3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
+   overrides live **on the node** as an additive optional field
+   `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
+   base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
+   strings to `core` and defined by the framework package's target (Material window size classes —
+   `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
+   Introducing the field will bump the schema **2 → 3** (an `M2to3` stamp) because it is a semantic
+   capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). A separate
+   node-id-keyed override layer was rejected — see ADR-030.
 4. **Interaction/navigation.** Out of scope for v1, but reserve `StateBinding` so it can arrive
    without a schema break.
