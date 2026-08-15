@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "id": "01J8XHOSTILE",
+  "name": "HostileStrings",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "targets": ["desktop"],
+  "theme": {},
+  "screens": [
+    {
+      "id": "scr_hostile",
+      "name": "HostileScreen",
+      "previewProfile": "desktop_1280x800",
+      "root": {
+        "id": "n_root",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_text",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "He said \"hi\" — cost $5, ${expr}, path C:\\tmp, 100% café\nsecond line\ttabbed" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

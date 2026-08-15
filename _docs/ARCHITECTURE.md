@@ -1,6 +1,7 @@
 # ViewForge — Architecture
 
-**Version:** 0.1 (planning)
+**Status:** Living — Phase 1 (Compose Desktop) shipped as **v0.1.0**. Phase 2 (Android) planned; see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md) §2.
 
 ---
 
