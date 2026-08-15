@@ -53,7 +53,6 @@ Full detail: [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md)
 | [`_docs/INSTALL.md`](_docs/INSTALL.md) | Installing the packaged app, per OS |
 | [`_docs/RELEASE_QA.md`](_docs/RELEASE_QA.md) | Manual acceptance-test checklist gating each release |
 | [`CHANGELOG.md`](CHANGELOG.md) | Notable changes per release (Keep a Changelog) |
-| [`CLAUDE.md`](CLAUDE.md) | Working agreement for Claude Code |
 
 ## Building
 

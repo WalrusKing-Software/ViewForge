@@ -2,7 +2,7 @@
 
 **Purpose.** A manual acceptance-test checklist to run before cutting a `release/x.y.z` branch, so we
 ship with confidence that Phase-1 functionality works end to end. Derived from `FEATURES.md`
-acceptance criteria, the `CLAUDE.md` correctness rules, and `SECURITY.md` §12.
+acceptance criteria, the project's correctness rules, and `SECURITY.md` §12.
 
 **Status of this document.** Living checklist; update it each release. Test IDs are stable
 (`RC-*` release-critical, then per-area). Each item maps to a `FEATURES.md` ID and/or issue #, is
@@ -45,7 +45,7 @@ covers cite the test; gaps that *could* be automated but aren't yet are tagged
 
 ## 1. Release-critical invariants (gate — these are no-go if they fail)
 
-These encode the `CLAUDE.md` correctness rules. **Any failure here blocks the release.**
+These encode the project's core correctness rules. **Any failure here blocks the release.**
 
 ### RC-1 — Never lose user work: New/Open/Save/Save As round-trip (D1, P0)
 - **Precondition:** app open on a fresh project.
