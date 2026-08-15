@@ -244,7 +244,7 @@ checklist rather than left to memory. Agents must be told to branch from `develo
 **Context.** ARCHITECTURE §6.2 sketches `ComponentRenderer` alongside the other SPI interfaces in
 `core/spi`. But a renderer that draws real Compose must be `@Composable`, and `@Composable` is a
 Compose type — putting it in `core/spi` would violate the non-negotiable rule that `core` never
-depends on Compose (CLAUDE.md rule 1, ADR-007), which an architecture test is meant to enforce. The
+depends on Compose (the core-never-depends-on-Compose rule, ADR-007), which an architecture test is meant to enforce. The
 docs already flag the split ("only the renderer half needs the framework"); M2 (the first UI code)
 forced the question of *where* that half lives.
 
@@ -473,7 +473,7 @@ it here), and where the write orchestration lives without breaking the module bo
   renderer/catalog wiring (ADR-013).
 - **Scaffold build scripts are flat templates.** `build.gradle.kts`/`settings.gradle.kts` are Kotlin
   DSL but carry **no user prop values** — the only user-derived datum is the project name, reduced to a
-  `[a-z0-9-]` slug — so KotlinPoet (CLAUDE.md rule 4, aimed at the generated *UI* Kotlin) is neither
+  `[a-z0-9-]` slug — so KotlinPoet (the structural-codegen rule, aimed at the generated *UI* Kotlin) is neither
   necessary nor practical for them, and GC-2's injection concern does not arise. The generated screens
   and `Main.kt`, which *do* derive identifiers from user input, are built structurally with KotlinPoet.
 - **Pinned scaffold versions are constants mirroring the catalog.** The version catalog is a
@@ -544,7 +544,7 @@ wrapper is produced and wired.
   (not a Material concept) generates as a simple `AppSpacing` object (DATA_MODEL §8).
 
 **Rationale.** Routing theme edits through commands gives undo/redo and live update for free and keeps
-CLAUDE.md rule 3 intact. Building the canvas scheme from the theme is what makes H1's "edits apply live
+the all-mutations-through-commands rule intact. Building the canvas scheme from the theme is what makes H1's "edits apply live
 across the canvas" literally true rather than "true only for token-referenced props". Keeping
 `generate()` screens-only avoids disturbing every existing golden while still delivering H4 through the
 exporter, which is already the home of target-level assembly. Sharing the Material-slot set and color
@@ -584,7 +584,7 @@ shared parser (`render/Values.kt`) the canvas uses (the ADR-018 render/codegen m
 resolves the same `ResourceRef` through a `RenderContext.imageLoader` seam that `:app` backs; a missing
 asset draws a loud placeholder (ARCHITECTURE §9), never a blank.
 
-**Rationale.** Phase 1 targets Compose Desktop only (CLAUDE.md). The desktop `painterResource(String)`
+**Rationale.** Phase 1 targets Compose Desktop only (see `PROJECT_PLAN.md`). The desktop `painterResource(String)`
 is self-contained: the generated file compiles against the existing classpath with no resource-plugin
 scaffolding, so the compile gate — the project's highest-value test — stays intact.
 
@@ -677,7 +677,7 @@ decision (ADR-011/DI-4), not a packaging afterthought. Install steps per OS live
 rest of S1 — resizable panels and cross-session persistence of the layout. Persisting layout forces a
 decision the visibility toggles could dodge: **where** does editor chrome live on disk? It must never
 enter the `.vforge` document (panel widths are not project data, and would pollute diffs and travel
-between machines), yet CLAUDE.md rule 6 requires every write to go through the one guarded writer.
+between machines), yet the project's file-safety rule requires every write to go through the one guarded writer.
 
 **Decision.**
 - **A new `core/prefs` module** owns editor-preferences persistence, separate from `core/project`'s
@@ -923,7 +923,7 @@ discriminated `EditTarget` type or retyping every command — the smallest chang
 editing, and a safe one: screen editing behavior is byte-identical (the full existing command/history
 suite, incl. the undo/redo property test, stays green), so the refactor lands with zero user-visible
 change and de-risks the slices that follow. Renaming `screenId`→`rootId` avoids the "stale name" trap
-(a `screenId` holding a component id) called out in CLAUDE.md's anti-patterns. **No `.vforge` schema
+(a `screenId` holding a component id) called out in the project's documented anti-patterns. **No `.vforge` schema
 change**: screens and components already exist.
 
 **Rejected.** **A discriminated `EditTarget = Screen(id) | Component(id)` on every command** — retypes the
