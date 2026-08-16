@@ -44,7 +44,12 @@ internal class DocumentController(private val state: EditorState, private val pr
         private set
 
     /** File → New: a blank document, guarding any unsaved edits first. */
-    fun newDocument() = guardUnsaved("Creating a new document") { state.newDocument() }
+    fun newDocument() = guardUnsaved("Creating a new document") {
+        state.newDocument()
+        // Clear the remembered last-open path (#156): a fresh, never-saved document means the next launch
+        // should open blank, not reopen whatever file was previously current.
+        prefs.persist()
+    }
 
     /** File → Open: pick a `.vforge` file and load it, guarding any unsaved edits first. */
     fun open() = guardUnsaved("Opening another document") {
