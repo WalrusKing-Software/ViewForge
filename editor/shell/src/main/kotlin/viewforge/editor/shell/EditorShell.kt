@@ -2,10 +2,12 @@ package viewforge.editor.shell
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -224,38 +226,50 @@ fun FrameWindowScope.EditorShell(
     }
 }
 
+// FlowRow lets the action buttons wrap to a second line at narrow widths instead of clipping off the
+// edge (#161). Stable layout in CMP 1.7.3, still annotated as experimental.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEditor: () -> Unit) {
+internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEditor: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            // Top-align so the title lines up with the first row of actions when they wrap.
+            verticalAlignment = Alignment.Top,
         ) {
             Text(
                 // A trailing • marks unsaved edits (D1), the same cue the window title conventions use.
                 text = "ViewForge — ${state.document.name}${if (state.isDirty) " •" else ""}",
                 style = MaterialTheme.typography.titleSmall,
+                // Keep vertical rhythm with the label-styled buttons beside it.
+                modifier = Modifier.padding(vertical = 4.dp),
             )
-            Spacer(Modifier.weight(1f))
-            ToolbarButton("Undo", enabled = state.canUndo, onClick = state::undo)
-            ToolbarButton("Redo", enabled = state.canRedo, onClick = state::redo)
-            ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
-            ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
-            ToolbarButton("Theme…", enabled = true, onClick = onOpenThemeEditor)
-            // Interactive preview / run mode (C13, #120): flip between editing and interacting with the live UI.
-            ToolbarButton(
-                if (state.interactivePreview) "◼ Exit preview" else "▶ Preview",
-                enabled = true,
-                onClick = state::toggleInteractivePreview,
-            )
-            DeviceProfileSelector(state)
-            // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
-            ToolbarButton(
-                if (state.canvasDark) "◐ Dark" else "◑ Light",
-                enabled = true,
-                onClick = state::toggleCanvasDark,
-            )
-            ExportBar(export)
+            // Actions take the remaining width and stay right-aligned; overflow wraps to a new line.
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                ToolbarButton("Undo", enabled = state.canUndo, onClick = state::undo)
+                ToolbarButton("Redo", enabled = state.canRedo, onClick = state::redo)
+                ToolbarButton("Duplicate", enabled = state.selectedNode != null, onClick = state::duplicateSelected)
+                ToolbarButton("Delete", enabled = state.selectedNode != null, onClick = state::deleteSelected)
+                ToolbarButton("Theme…", enabled = true, onClick = onOpenThemeEditor)
+                // Interactive preview / run mode (C13, #120): flip between editing and interacting with the live UI.
+                ToolbarButton(
+                    if (state.interactivePreview) "◼ Exit preview" else "▶ Preview",
+                    enabled = true,
+                    onClick = state::toggleInteractivePreview,
+                )
+                DeviceProfileSelector(state)
+                // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
+                ToolbarButton(
+                    if (state.canvasDark) "◐ Dark" else "◑ Light",
+                    enabled = true,
+                    onClick = state::toggleCanvasDark,
+                )
+                ExportBar(export)
+            }
         }
     }
 }
@@ -289,6 +303,9 @@ internal fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit)
     Text(
         text = label,
         style = MaterialTheme.typography.labelMedium,
+        // Keep each label whole on one line so wrapping happens at button boundaries, never mid-label (#161).
+        maxLines = 1,
+        softWrap = false,
         color = if (enabled) {
             MaterialTheme.colorScheme.onSurface
         } else {
