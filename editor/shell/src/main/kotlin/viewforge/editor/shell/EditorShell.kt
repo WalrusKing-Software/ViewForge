@@ -38,6 +38,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
@@ -170,9 +171,15 @@ fun FrameWindowScope.EditorShell(
                     .fillMaxSize()
                     .focusRequester(focus)
                     .focusable()
-                    // Root-level shortcuts use onKeyEvent (bubbling) so a focused text field — palette
-                    // search, inline rename — consumes its keys first and typing is never hijacked.
-                    // Editing shortcuts first, then the File-menu document shortcuts (New/Open/Save).
+                    // Undo/redo must win even over a focused text field, which otherwise swallows
+                    // Ctrl+Z / Ctrl+Y as its own text-undo before it reaches the root (#166). The
+                    // capture phase (onPreviewKeyEvent) sees these chords first, top-down; every other
+                    // key returns false and continues down to the field and on to the bubbling handler,
+                    // so in-field typing, clipboard (Ctrl+C/X/V) and select-all stay with the field.
+                    .onPreviewKeyEvent { handleUndoRedoShortcut(it, state) }
+                    // The remaining root shortcuts use onKeyEvent (bubbling) so a focused text field —
+                    // palette search, inline rename — consumes its keys first and typing is never
+                    // hijacked. Editing shortcuts first, then the File-menu document shortcuts.
                     .onKeyEvent {
                         handlePaletteShortcut(it) { showPalette = true } ||
                             handleShortcut(it, state) ||
@@ -294,11 +301,40 @@ internal fun ToolbarButton(label: String, enabled: Boolean, onClick: () -> Unit)
 }
 
 /**
+ * Undo/redo (S2), handled in the capture phase so it wins even when a text field is focused (#166): a
+ * focused [androidx.compose.foundation.text.BasicTextField] treats Ctrl+Z / Ctrl+Y as its own text-undo
+ * and would swallow the chord before the bubbling [handleShortcut] ever runs, leaving document undo dead
+ * while an inspector or rename field has focus. Kept to this narrow pair so the field still owns its own
+ * clipboard and select-all — only undo/redo is claimed root-wide. Ctrl and Meta both accepted (macOS);
+ * only on KeyDown; Ctrl+Shift+Z and Ctrl+Y are both redo.
+ */
+private fun handleUndoRedoShortcut(event: KeyEvent, state: EditorState): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val cmd = event.isCtrlPressed || event.isMetaPressed
+    if (!cmd) return false
+    return when {
+        event.key == Key.Z && event.isShiftPressed -> {
+            state.redo()
+            true
+        }
+        event.key == Key.Z -> {
+            state.undo()
+            true
+        }
+        event.key == Key.Y -> {
+            state.redo()
+            true
+        }
+        else -> false
+    }
+}
+
+/**
  * The standard editing shortcuts (S2). Returns true when handled so the event stops here. Ctrl and
  * Meta are both accepted so the same bindings work on macOS. Delete/Backspace remove the selection;
- * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo/redo;
- * Ctrl +/−/0 zoom the canvas (C5) and Ctrl+9 fits the device frame (C6). Holding the space bar puts
- * the canvas in pan mode (space-drag).
+ * Ctrl+D duplicates; Ctrl+C/X/V drive the clipboard; Ctrl +/−/0 zoom the canvas (C5) and Ctrl+9 fits
+ * the device frame (C6). Holding the space bar puts the canvas in pan mode (space-drag). Undo/redo is
+ * handled separately in [handleUndoRedoShortcut] (capture phase) so a focused text field can't swallow it.
  */
 private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
     // Space is the one shortcut that cares about key-up: it's a held modifier for pan mode, not an
@@ -348,18 +384,6 @@ private fun handleShortcut(event: KeyEvent, state: EditorState): Boolean {
         }
         cmd && event.key == Key.Nine -> {
             state.fitToFrame()
-            true
-        }
-        cmd && event.key == Key.Z && event.isShiftPressed -> {
-            state.redo()
-            true
-        }
-        cmd && event.key == Key.Z -> {
-            state.undo()
-            true
-        }
-        cmd && event.key == Key.Y -> {
-            state.redo()
             true
         }
         cmd && event.key == Key.D -> {
