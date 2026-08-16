@@ -44,8 +44,9 @@ import java.nio.file.Path
  * `packages/compose` (ARCHITECTURE §3): it binds the editor's Compose-free [CanvasRenderer] seam to
  * the Compose package's [ComposeRenderer]. Nothing else in the editor names the framework package.
  *
- * M2 loads a hardcoded document ([sampleProject]) and renders it in a real Compose Desktop window;
- * open/save, packaging, and the rest of the shell arrive in later milestones.
+ * On launch it seeds a document (the [sampleProject] on the first run, otherwise the last session or a
+ * blank canvas — [resolveStartupSeed], #156) and renders it in a real Compose Desktop window, hosting the
+ * full shell: open/save, packaging, autosave/recovery, and preferences.
  */
 fun main() {
     installCrashReporter()
@@ -68,11 +69,29 @@ private fun installCrashReporter() {
 }
 
 private fun runEditor() = application {
-    val state = EditorState(sampleProject(), ComposeCatalog)
     // Load persisted preferences once, before the first frame — a missing/corrupt file yields defaults,
     // so this never fails startup. Restore the panel layout (#43) now; the shell persists changes back on
     // toggle/resize. The autosave interval (#55) is handed to the shell's recovery timer below.
     val prefs = PreferencesStore.load()
+
+    // Seed the launch document (#156): the sample only on the very first run, otherwise the document open
+    // at last close, or a blank canvas. The sample also supplies the framework a blank document inherits,
+    // so it is always the base; the branch below reshapes it. Crash recovery (#54) still overlays this in
+    // the shell — its Restore prompt wins over whatever is seeded here.
+    val state = EditorState(sampleProject(), ComposeCatalog)
+    when (val seed = resolveStartupSeed(prefs)) {
+        StartupSeed.FirstRunSample -> Unit // keep the sample the state was constructed with
+        StartupSeed.Blank -> state.newDocument()
+        is StartupSeed.LastSession -> state.replaceDocument(
+            seed.project,
+            seed.path,
+            migratedFromOlderSchema = seed.migrated,
+        )
+    }
+    // Record that the app has now run, so the next launch restores instead of re-seeding the sample. Only
+    // writes on the first run; a best-effort save that must never fail startup (like the shell's persist).
+    if (!prefs.hasLaunched) runCatching { PreferencesStore.save(prefs.copy(hasLaunched = true)) }
+
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
     state.applyFavoriteComponents(prefs.favoriteComponents) // palette favorites (P5a, #121), before first frame

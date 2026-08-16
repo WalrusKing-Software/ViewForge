@@ -8,8 +8,9 @@ import kotlinx.serialization.Serializable
  * it must never travel in a project file and does not share the document's migration chain.
  *
  * Holds the [panelLayout] (S1), the [autosaveIntervalSeconds] (S5, #55), the [recentProjects] list
- * (D8, #88), the [chromeDark] editor-theme flag (S3, #104), and the S5 [historyDepth]/[defaultExportPath]
- * settings (#105); window geometry is the natural next tenant of this same file.
+ * (D8, #88), the [chromeDark] editor-theme flag (S3, #104), the S5 [historyDepth]/[defaultExportPath]
+ * settings (#105), and the launch/restore state [hasLaunched]/[lastProjectPath] (#156); window
+ * geometry is the natural next tenant of this same file.
  *
  * @property autosaveIntervalSeconds how often crash-recovery autosave writes its sidecar while there
  *   are unsaved edits (D4, #54). Clamped on load to a sane range so a hand-edited value can neither
@@ -30,6 +31,12 @@ import kotlinx.serialization.Serializable
  *   (`componentId ?: type`) in the order they were starred. Built-in keys are stable across projects; a
  *   user-component key only resolves in its own document and is otherwise ignored, so the raw list is safe
  *   to persist. De-duplicated and blank-dropped on load via [FavoriteComponents.sanitized].
+ * @property hasLaunched whether the editor has ever run on this machine (#156). Defaults to `false`, so a
+ *   fresh install (no prefs file → defaults) seeds the sample project the first time and records `true`;
+ *   every later launch instead restores the last session or opens blank. Never a `.vforge` concern.
+ * @property lastProjectPath the `.vforge` file open when the editor last closed, restored on the next
+ *   launch (#156); blank means there was none (a never-saved or File → New document), so the next launch
+ *   opens a blank canvas. An absolute per-user config path, never committed, like [recentProjects].
  */
 @Serializable
 data class EditorPreferences(
@@ -41,6 +48,8 @@ data class EditorPreferences(
     val historyDepth: Int = DEFAULT_HISTORY_DEPTH,
     val defaultExportPath: String = "",
     val favoriteComponents: List<String> = emptyList(),
+    val hasLaunched: Boolean = false,
+    val lastProjectPath: String = "",
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
