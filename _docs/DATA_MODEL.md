@@ -1,6 +1,6 @@
 # ViewForge — Data Model
 
-**Status:** Living — shipped in **v0.1.0** (Phase 1).
+**Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
 **Schema version:** 2
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
