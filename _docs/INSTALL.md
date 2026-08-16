@@ -28,8 +28,10 @@ Every artifact ships a `<file>.sha256` sidecar. Verify before installing:
   (stable `upgradeUuid`).
 - **`ViewForge-<version>.exe`** — the same installer as a self-contained executable, for contexts
   where an `.exe` is preferred over an `.msi`.
-- **Signing:** a real release is Authenticode-signed; Windows SmartScreen shows the verified publisher.
-  An unsigned build (see below) triggers a SmartScreen warning — expected for local/dev builds only.
+- **Signing:** a signed release is Authenticode-signed and Windows SmartScreen shows the verified
+  publisher. **The v0.1.0-alpha-1 build is unsigned.** SmartScreen fires only on a file carrying the
+  Mark-of-the-Web (i.e. one **downloaded** from the internet); a locally built and installed `.msi` has
+  no MOTW and shows no warning. So a *downloaded* unsigned alpha may warn, while a local build won't.
 
 ### Linux
 
@@ -103,8 +105,8 @@ pushed **`v*` tag** and:
 Cut a release by tagging on `main` after the `release/*` merge (BRANCHING §10):
 
 ```bash
-git tag -a v0.1.0 -m "M10: packaging"
-git push origin v0.1.0
+git tag -a v0.1.0-alpha-1 -m "First public alpha"
+git push origin v0.1.0-alpha-1
 ```
 
 ### Signing secrets

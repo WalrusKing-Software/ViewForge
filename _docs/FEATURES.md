@@ -58,13 +58,13 @@ into issues directly.
 > copies referenced assets so an exported project runs unmodified. The remaining
 > Content/Input/Navigation entries above join the set one triple at a time.
 >
-> ⚠️ **v0.1.0 limitation (Image asset import).** There is **no in-app way to import an image file into
+> ⚠️ **v0.1.0-alpha-1 limitation (Image asset import).** There is **no in-app way to import an image file into
 > a project yet**: the canvas asset loader resolves `ResourceRef`s from the classpath (the bundled
 > sample assets), and the inspector's source picker lists only assets already in the project. So `Image`
 > is currently usable with the bundled `Gallery` sample but **cannot be pointed at a user's own file** in
 > a new project. Disk import — a file picker that copies into the project's `assets/` under the SECURITY
 > §7 rules (size/pixel caps, type sniffing, EXIF strip) — is the tracked follow-up (ADR-021). Shipped as
-> a documented limitation for v0.1.0.
+> a documented limitation for v0.1.0-alpha-1.
 
 > **Post-Phase-1 catalog expansion (issue #16):** added as renderer + emitter + golden triples with an
 > in-process compile check; no pipeline or inspector change.
