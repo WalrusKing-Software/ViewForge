@@ -1084,6 +1084,17 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * The type of [nodeId]'s parent in the active edit root, or null when it is the root (or unknown). The
+     * inspector uses it to ask the catalog which modifiers are valid here — e.g. `weight` only under a
+     * Row/Column (#158).
+     */
+    fun parentType(nodeId: NodeId): String? {
+        val root = activeEditRoot ?: return null
+        val parentId = root.locate(nodeId)?.parentId ?: return null
+        return root.findById(parentId)?.type
+    }
+
+    /**
      * Append a modifier of [type] (with its schema defaults) to a node's chain. Ids are freshly
      * generated; order is preserved, new entry last (the user reorders via drag).
      */

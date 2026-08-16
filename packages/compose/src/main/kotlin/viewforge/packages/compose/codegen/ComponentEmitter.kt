@@ -47,8 +47,8 @@ internal class ComponentEmitter(
      * `emit` is only ever embedded as a statement (a body line, a lazy `item { }`, a slot lambda), the
      * markers always land on their own lines, covering nodes inside slots and lazy lists too.
      */
-    fun emit(node: Node, isRoot: Boolean): CodeBlock {
-        val core = emitCore(node, isRoot)
+    fun emit(node: Node, isRoot: Boolean, parentAllowsWeight: Boolean = false): CodeBlock {
+        val core = emitCore(node, isRoot, parentAllowsWeight)
         return if (!recordSpans) {
             core
         } else {
@@ -60,15 +60,18 @@ internal class ComponentEmitter(
         }
     }
 
-    private fun emitCore(node: Node, isRoot: Boolean): CodeBlock {
+    private fun emitCore(node: Node, isRoot: Boolean, parentAllowsWeight: Boolean): CodeBlock {
         val mod = if (isRoot) {
             ModifierEmitter.rootChain(node.modifiers, theme)
         } else {
-            ModifierEmitter.nodeChain(node.modifiers, theme)
+            ModifierEmitter.nodeChain(node.modifiers, theme, allowWeight = parentAllowsWeight)
         }
         return when (node.type) {
-            "compose.foundation.layout.Column" -> layout(ComposeNames.Column, node, mod, columnArgs(node))
-            "compose.foundation.layout.Row" -> layout(ComposeNames.Row, node, mod, rowArgs(node))
+            // Row/Column establish the RowScope/ColumnScope their direct children may `weight` into (#158).
+            "compose.foundation.layout.Column" ->
+                layout(ComposeNames.Column, node, mod, columnArgs(node), childrenGetWeight = true)
+            "compose.foundation.layout.Row" ->
+                layout(ComposeNames.Row, node, mod, rowArgs(node), childrenGetWeight = true)
             "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, boxArgs(node))
             "compose.foundation.layout.Spacer" -> call(ComposeNames.Spacer, modifierArg(mod), content = null)
             "compose.foundation.lazy.LazyColumn" -> lazyList(ComposeNames.LazyColumn, node, mod, columnArgs(node))
@@ -229,9 +232,17 @@ internal class ComponentEmitter(
 
     // --- shape helpers ---------------------------------------------------------------------------
 
-    /** A layout container: its own args, then children (hidden dropped) as the trailing lambda. */
-    private fun layout(callee: MemberName, node: Node, mod: CodeBlock?, extra: List<CodeBlock>): CodeBlock =
-        call(callee, modifierArg(mod) + extra, content = body(node.children))
+    /**
+     * A layout container: its own args, then children (hidden dropped) as the trailing lambda.
+     * [childrenGetWeight] is true only for Row/Column, whose direct children may carry a `weight` (#158).
+     */
+    private fun layout(
+        callee: MemberName,
+        node: Node,
+        mod: CodeBlock?,
+        extra: List<CodeBlock>,
+        childrenGetWeight: Boolean = false,
+    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = body(node.children, childrenGetWeight))
 
     /**
      * A lazy list (`LazyColumn`/`LazyRow`): same args as its eager twin, but each static child is
@@ -314,10 +325,14 @@ internal class ComponentEmitter(
 
     private fun named(name: String, value: CodeBlock): CodeBlock = CodeBlock.of("%L = %L", name, value)
 
-    /** Children as a trailing-lambda body; hidden nodes excluded from codegen (DATA_MODEL §5). */
-    private fun body(children: List<Node>): CodeBlock {
+    /**
+     * Children as a trailing-lambda body; hidden nodes excluded from codegen (DATA_MODEL §5). [allowWeight]
+     * (true only for a Row/Column parent) lets each direct child emit a `weight` modifier (#158).
+     */
+    private fun body(children: List<Node>, allowWeight: Boolean = false): CodeBlock {
         val b = CodeBlock.builder()
-        children.filterNot { it.hidden }.forEach { b.add("%L\n", emit(it, isRoot = false)) }
+        children.filterNot { it.hidden }
+            .forEach { b.add("%L\n", emit(it, isRoot = false, parentAllowsWeight = allowWeight)) }
         return b.build()
     }
 
