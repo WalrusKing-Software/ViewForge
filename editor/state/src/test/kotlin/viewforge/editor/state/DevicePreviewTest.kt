@@ -53,6 +53,51 @@ class DevicePreviewTest {
     }
 
     @Test
+    fun `forId parses a custom id back into its dimensions`() {
+        val id = DeviceProfiles.customProfileId(1000, 1400)
+        assertEquals("custom_1000x1400", id)
+        val profile = DeviceProfiles.forId(id)
+        assertEquals(id, profile.id)
+        assertEquals(1000f, profile.width)
+        assertEquals(1400f, profile.height)
+    }
+
+    @Test
+    fun `forId resolves any dimension-encoding id, e_g_ a newer build's preset`() {
+        val profile = DeviceProfiles.forId("tablet_800x1280")
+        assertEquals(800f, profile.width)
+        assertEquals(1280f, profile.height)
+    }
+
+    @Test
+    fun `forId clamps out-of-range custom dimensions`() {
+        val tooSmall = DeviceProfiles.forId("custom_1x1")
+        assertEquals(DeviceProfiles.MIN_DIMENSION.toFloat(), tooSmall.width)
+        assertEquals(DeviceProfiles.MIN_DIMENSION.toFloat(), tooSmall.height)
+
+        val tooBig = DeviceProfiles.forId("custom_99999x99999")
+        assertEquals(DeviceProfiles.MAX_DIMENSION.toFloat(), tooBig.width)
+        assertEquals(DeviceProfiles.MAX_DIMENSION.toFloat(), tooBig.height)
+    }
+
+    @Test
+    fun `a named preset wins over dimension parsing`() {
+        // desktop_1280x800 is a registry entry, so it resolves to that exact profile, not a synthesized one.
+        assertEquals(DeviceProfiles.ALL.first { it.id == "desktop_1280x800" }, DeviceProfiles.forId("desktop_1280x800"))
+    }
+
+    @Test
+    fun `setPreviewProfile accepts a custom size and undoes back`() {
+        val s = state(null)
+        s.setPreviewProfile(DeviceProfiles.customProfileId(1000, 1400))
+        assertEquals(1000f, s.activeDeviceProfile.width)
+        assertEquals(1400f, s.activeDeviceProfile.height)
+
+        s.undo()
+        assertEquals(DeviceProfiles.DEFAULT, s.activeDeviceProfile)
+    }
+
+    @Test
     fun `activeDeviceProfile resolves the active screen's profile and defaults otherwise`() {
         assertEquals("desktop_1920x1080", state("desktop_1920x1080").activeDeviceProfile.id)
         assertEquals(DeviceProfiles.DEFAULT, state(null).activeDeviceProfile)

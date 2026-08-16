@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -55,6 +58,7 @@ import viewforge.editor.panels.Palette
 import viewforge.editor.panels.ThemeEditor
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.CodePreviewService
+import viewforge.editor.state.DeviceProfile
 import viewforge.editor.state.DeviceProfiles
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
@@ -285,6 +289,7 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
 @Composable
 private fun DeviceProfileSelector(state: EditorState) {
     var expanded by remember { mutableStateOf(false) }
+    var customOpen by remember { mutableStateOf(false) }
     Box {
         ToolbarButton("◱ ${state.activeDeviceProfile.label}", enabled = true, onClick = { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -297,8 +302,80 @@ private fun DeviceProfileSelector(state: EditorState) {
                     },
                 )
             }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Custom size…") },
+                onClick = {
+                    expanded = false
+                    customOpen = true
+                },
+            )
         }
     }
+    if (customOpen) {
+        CustomSizeDialog(
+            initial = state.activeDeviceProfile,
+            onDismiss = { customOpen = false },
+            onConfirm = { w, h ->
+                customOpen = false
+                state.setPreviewProfile(DeviceProfiles.customProfileId(w, h))
+            },
+        )
+    }
+}
+
+/**
+ * A small dialog for an arbitrary canvas frame size (#163). Width/height are entered in dp and must be
+ * whole numbers within [DeviceProfiles.MIN_DIMENSION]..[DeviceProfiles.MAX_DIMENSION]; OK is disabled
+ * until both are valid, so an invalid size never reaches [DeviceProfiles.customProfileId]. Seeded from the
+ * currently active profile so "custom" starts from what's on screen.
+ */
+@Composable
+private fun CustomSizeDialog(
+    initial: DeviceProfile,
+    onDismiss: () -> Unit,
+    onConfirm: (width: Int, height: Int) -> Unit,
+) {
+    var widthText by remember { mutableStateOf(initial.width.toInt().toString()) }
+    var heightText by remember { mutableStateOf(initial.height.toInt().toString()) }
+    val width = widthText.toIntOrNull()
+    val height = heightText.toIntOrNull()
+    val range = DeviceProfiles.MIN_DIMENSION..DeviceProfiles.MAX_DIMENSION
+    val valid = width != null && height != null && width in range && height in range
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom canvas size") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = widthText,
+                        onValueChange = { widthText = it.filter(Char::isDigit).take(5) },
+                        label = { Text("Width") },
+                        singleLine = true,
+                        modifier = Modifier.width(120.dp),
+                    )
+                    OutlinedTextField(
+                        value = heightText,
+                        onValueChange = { heightText = it.filter(Char::isDigit).take(5) },
+                        label = { Text("Height") },
+                        singleLine = true,
+                        modifier = Modifier.width(120.dp),
+                    )
+                }
+                Text(
+                    "In dp, ${DeviceProfiles.MIN_DIMENSION}–${DeviceProfiles.MAX_DIMENSION}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(width!!, height!!) }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
