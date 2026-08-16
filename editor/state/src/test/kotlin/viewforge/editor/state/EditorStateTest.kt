@@ -162,6 +162,44 @@ class EditorStateTest {
     }
 
     @Test
+    fun `dropPaletteDrag uses the tree-resolved address when the Layers panel published one (#164)`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.updatePaletteDrag(10f, 20f)
+        // The tree publishes an insert at index 0; the canvas (pointer over the tree) publishes nothing.
+        s.resolveTreePaletteDrop(ChildAddress(NodeId("root"), null, 0))
+        s.dropPaletteDrag()
+
+        val children = s.activeScreen!!.root.children
+        assertEquals(3, children.size)
+        assertEquals("compose.material3.Text", children[0].type) // landed at the tree-resolved index
+        assertEquals(children[0].id, s.selectedId)
+        assertNull(s.paletteDragType)
+    }
+
+    @Test
+    fun `dropPaletteDrag prefers the tree address over the canvas address (#164)`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.resolvePaletteDrop(ChildAddress(NodeId("root"), null, 2)) // stale canvas value
+        s.resolveTreePaletteDrop(ChildAddress(NodeId("root"), null, 0)) // tree wins
+        s.dropPaletteDrag()
+
+        assertEquals("compose.material3.Text", s.activeScreen!!.root.children[0].type)
+    }
+
+    @Test
+    fun `dropPaletteDrag falls back to the canvas address when the tree published null (#164)`() {
+        val s = state()
+        s.beginPaletteDrag("compose.material3.Text")
+        s.resolvePaletteDrop(ChildAddress(NodeId("root"), null, 1))
+        s.resolveTreePaletteDrop(null) // pointer not over a tree row
+        s.dropPaletteDrag()
+
+        assertEquals("compose.material3.Text", s.activeScreen!!.root.children[1].type)
+    }
+
+    @Test
     fun `deleteSelected removes the node and selects its parent`() {
         val s = state()
         s.select(NodeId("a"))

@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -124,6 +125,20 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
             val nodeItems = rows.filterIsInstance<NodeRowItem>()
             // Keep the drag controller's view of node addresses in sync with what's on screen.
             drag.items = nodeItems.associate { it.node.id.value to NodeItemInfo(it.node, it.ownAddress) }
+
+            // Palette→tree drop (#164): while a palette drag is live, resolve the window-space pointer the
+            // palette streams against the row bounds and publish the address, so the palette's release
+            // commits an AddNode here (the same flow the canvas uses). Runs after layout via SideEffect, so
+            // the row bounds recorded by onGloballyPositioned are current. Clearing when the drag leaves the
+            // tree lets the canvas' resolution take over.
+            val paletteType = state.paletteDragType
+            val pointerX = state.paletteDragX
+            val pointerY = state.paletteDragY
+            if (paletteType != null && pointerX != null && pointerY != null) {
+                SideEffect { drag.resolvePalette(pointerX, pointerY) }
+            } else if (drag.paletteActive) {
+                SideEffect { drag.clearPalette() }
+            }
             // The visible top-to-bottom order a shift-click range extends along (C10).
             val visibleOrder = remember(nodeItems) { nodeItems.map { it.node.id } }
 
@@ -238,6 +253,10 @@ private class TreeDragState(private val state: EditorState) {
     var dropValid by mutableStateOf(false)
         private set
 
+    /** A palette→tree drop is in flight (#164): drives the drop indicator when no *row* is being dragged. */
+    var paletteActive by mutableStateOf(false)
+        private set
+
     private var dropAddress: ChildAddress? = null
     val bounds = mutableStateMapOf<String, Rect>()
     val coords = HashMap<String, LayoutCoordinates>()
@@ -251,26 +270,66 @@ private class TreeDragState(private val state: EditorState) {
         val root = state.activeEditRoot
         val dragged = draggingId
         if (root == null || dragged == null) return clearTarget()
+        // A row drag stays inside the panel, so a y-only scan suffices (unlike the palette drag below).
         val hit = bounds.entries.firstOrNull { windowY >= it.value.top && windowY < it.value.bottom }
         val info = hit?.let { items[it.key] }
         if (hit == null || info == null || info.node.id == dragged) return clearTarget()
 
-        val rect = hit.value
-        val rel = ((windowY - rect.top) / rect.height).coerceIn(0f, 1f)
-        val container = state.catalog.isContainer(info.node.type)
-        val zone = when {
-            rel < BEFORE_ZONE -> DropZone.Before
-            rel > AFTER_ZONE -> DropZone.After
-            container -> DropZone.Into
-            rel < 0.5f -> DropZone.Before
-            else -> DropZone.After
-        }
+        val zone = zoneFor(hit.value, windowY, info.node)
         val address = resolve(root, dragged, info, zone)
         val valid = address != null && state.canDrop(dragged, address)
         dropTargetKey = hit.key
         dropZone = zone
         dropValid = valid
         dropAddress = if (valid) address else null
+    }
+
+    /**
+     * Resolve a live palette drag (#164) at the window-space pointer and publish the address so the
+     * palette's release commits an `AddNode` here. Unlike [update] this hit-tests **both** axes — the
+     * pointer may be over the canvas at the same y as a row — and excludes no node (the dragged node
+     * doesn't exist yet). Validity is just "a legal address"; a cycle-forming component can't start a
+     * drag (#70) and [EditorState.dropPaletteDrag] guards it again, so there is nothing more to check.
+     */
+    fun resolvePalette(windowX: Float, windowY: Float) {
+        paletteActive = true
+        val root = state.activeEditRoot
+        val hit = root?.let {
+            bounds.entries.firstOrNull { e ->
+                windowX >= e.value.left && windowX < e.value.right && windowY >= e.value.top && windowY < e.value.bottom
+            }
+        }
+        val info = hit?.let { items[it.key] }
+        if (root == null || hit == null || info == null) {
+            clearTarget()
+            state.resolveTreePaletteDrop(null)
+            return
+        }
+        val zone = zoneFor(hit.value, windowY, info.node)
+        val address = resolve(root, null, info, zone)
+        dropTargetKey = hit.key
+        dropZone = zone
+        dropValid = address != null
+        dropAddress = address
+        state.resolveTreePaletteDrop(address)
+    }
+
+    /** End the palette-drop visuals when the drag leaves the tree or finishes. */
+    fun clearPalette() {
+        paletteActive = false
+        clearTarget()
+    }
+
+    /** Split a row into a before/into/after drop zone by where [windowY] falls within its [rect]. */
+    private fun zoneFor(rect: Rect, windowY: Float, node: Node): DropZone {
+        val rel = ((windowY - rect.top) / rect.height).coerceIn(0f, 1f)
+        return when {
+            rel < BEFORE_ZONE -> DropZone.Before
+            rel > AFTER_ZONE -> DropZone.After
+            state.catalog.isContainer(node.type) -> DropZone.Into
+            rel < 0.5f -> DropZone.Before
+            else -> DropZone.After
+        }
     }
 
     fun commit() {
@@ -292,7 +351,8 @@ private class TreeDragState(private val state: EditorState) {
         dropAddress = null
     }
 
-    private fun resolve(root: Node, draggedId: NodeId, info: NodeItemInfo, zone: DropZone): ChildAddress? {
+    // [draggedId] is null for a palette drag (nothing to exclude); non-null for a row reorder/reparent.
+    private fun resolve(root: Node, draggedId: NodeId?, info: NodeItemInfo, zone: DropZone): ChildAddress? {
         if (zone == DropZone.Into) return appendInto(info.node, draggedId)
         val own = info.ownAddress ?: return null // root has no before/after
         val parent = root.findById(own.parentId) ?: return null
@@ -303,7 +363,7 @@ private class TreeDragState(private val state: EditorState) {
         return ChildAddress(own.parentId, own.slot, if (zone == DropZone.Before) idx else idx + 1)
     }
 
-    private fun appendInto(target: Node, draggedId: NodeId): ChildAddress? {
+    private fun appendInto(target: Node, draggedId: NodeId?): ChildAddress? {
         if (state.catalog.acceptsChildren(target.type)) {
             return ChildAddress(target.id, null, target.children.count { it.id != draggedId })
         }
@@ -621,7 +681,8 @@ private fun SlotHeader(name: String, depth: Int) {
 
 /** Draw the before/after line or into-outline for the active drop target, green if valid else red. */
 private fun DrawScope.drawDropIndicator(drag: TreeDragState, key: String) {
-    if (drag.dropTargetKey != key || drag.draggingId == null) return
+    // Draw for a row drag (draggingId set) or a palette→tree drag (#164, paletteActive) — never when idle.
+    if (drag.dropTargetKey != key || (drag.draggingId == null && !drag.paletteActive)) return
     val color = if (drag.dropValid) DROP_OK else DROP_BAD
     val bottom = size.height
     when (drag.dropZone) {

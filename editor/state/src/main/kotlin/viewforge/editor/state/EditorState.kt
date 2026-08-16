@@ -358,6 +358,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private var paletteDropAddress: ChildAddress? = null
 
     /**
+     * The **tree**-resolved drop for the live palette drag (#164), published by the Layers panel. Kept
+     * separate from [paletteDropAddress] so the two drop surfaces never race on one field: the canvas and
+     * the tree occupy disjoint regions, so at most one resolves a target for a given pointer, and
+     * [dropPaletteDrag] prefers this one when set. A plain field — only [dropPaletteDrag] reads it.
+     */
+    private var treePaletteDropAddress: ChildAddress? = null
+
+    /**
      * Where the right-click context menu should open, in window space (#160), or null when it is closed.
      * Transient view state spanning both the tree and the canvas: each surface's secondary-click handler
      * selects the node under the pointer (via [requestContextMenu]) and records the point here; the shell —
@@ -788,6 +796,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
+        treePaletteDropAddress = null
     }
 
     /** Convenience for dragging a framework built-in identified by [type] alone. */
@@ -804,13 +813,20 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteDropAddress = address
     }
 
+    /** The Layers tree publishes the drop it resolved (#164); takes precedence in [dropPaletteDrag]. */
+    fun resolveTreePaletteDrop(address: ChildAddress?) {
+        treePaletteDropAddress = address
+    }
+
     /**
      * Commit the in-flight palette drag: insert a fresh node of the dragged type at the canvas-resolved
      * address and select it. A no-op when the pointer isn't over a legal target. Always clears the drag.
      */
     fun dropPaletteDrag() {
         val type = paletteDragType
-        val address = paletteDropAddress
+        // Prefer the tree's resolution when the pointer is over the Layers panel (#164); the canvas
+        // resolves null there, and vice versa, so the two never both hold a target for one pointer.
+        val address = treePaletteDropAddress ?: paletteDropAddress
         val rootId = activeEditRootId
         if (type != null && address != null && rootId != null) {
             val node = paletteNode(type, paletteDragComponentId)
@@ -830,6 +846,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
+        treePaletteDropAddress = null
     }
 
     // --- right-click context menu (#160) ----------------------------------------------------------
