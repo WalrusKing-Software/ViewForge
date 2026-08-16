@@ -223,6 +223,9 @@ fun FrameWindowScope.EditorShell(
                 }
             }
         }
+        // The right-click context menu (#160), positioned at the window-space point the tree/canvas
+        // recorded. A sibling of the content above so its anchor shares the same origin as those coords.
+        ContextMenuOverlay(state)
     }
 }
 
