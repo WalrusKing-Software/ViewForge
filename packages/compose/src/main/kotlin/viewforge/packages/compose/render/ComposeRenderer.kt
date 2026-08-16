@@ -1,8 +1,11 @@
 package viewforge.packages.compose.render
 
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import viewforge.model.ComponentDef
 import viewforge.model.Node
@@ -53,13 +56,20 @@ object ComposeRenderer {
      * (H1/H2, ADR-020), so it is the code twin of the generated `AppTheme` wrapper. Exposed so a
      * fidelity check can render a hand-written composable under the *identical* theme context the canvas
      * uses, making an interpreter-vs-compiled pixel comparison fair (M9, exit criterion #3).
+     *
+     * Content color is pinned to [Color.Black] — the `LocalContentColor` value a compiled screen sees
+     * under the generated `AppTheme` (a bare `MaterialTheme` with no `Surface`, so nothing overrides the
+     * CompositionLocal default). Without this, canvas text and icons with no explicit color would inherit
+     * the *editor chrome's* content color and render faint, diverging from codegen (#155). Nested
+     * `Surface` nodes still set their own content color for their children, as they do in generated code.
      */
     @Composable
     fun ProjectTheme(theme: Theme, dark: Boolean, content: @Composable () -> Unit) {
         MaterialTheme(
             colorScheme = projectColorScheme(theme, dark),
             shapes = projectShapes(theme),
-            content = content,
-        )
+        ) {
+            CompositionLocalProvider(LocalContentColor provides Color.Black, content = content)
+        }
     }
 }
