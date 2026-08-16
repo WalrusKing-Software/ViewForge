@@ -11,17 +11,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.Node
+import viewforge.model.NodeId
+import viewforge.model.PropValue
+import viewforge.model.Theme
 import viewforge.packages.compose.render.ComposeRenderer
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -62,6 +70,49 @@ class FidelityTest {
         assertTrue(
             interpreted.contentEquals(twin),
             "interpreter render diverged from the idiomatic composable (${interpreted.size} vs ${twin.size} bytes)",
+        )
+    }
+
+    /**
+     * A `Text` with no explicit `color` must render the same on the canvas as in generated code, even
+     * when the editor chrome hosting the canvas sets an ambient `LocalContentColor` (#155). Codegen omits
+     * the `color` arg, so a compiled screen resolves it through `LocalContentColor` — which defaults to
+     * black under the generated `AppTheme` (a bare `MaterialTheme`, no `Surface`). The canvas must not
+     * instead inherit the surrounding editor's faint content color: [ComposeRenderer.ProjectTheme] pins
+     * content color to black at the canvas root, insulating it from whatever ambient the host provides.
+     */
+    @Test
+    fun `unset text color is insulated from the host's ambient content color`() {
+        val theme = Theme()
+        val root = Node(
+            id = NodeId("n_root"),
+            type = "compose.foundation.layout.Column",
+            children = listOf(
+                Node(
+                    id = NodeId("n_text"),
+                    type = "compose.material3.Text",
+                    props = mapOf("text" to PropValue.Literal(JsonPrimitive("Hello"))),
+                ),
+            ),
+        )
+
+        // The canvas as the editor hosts it: an intentionally-wrong ambient content color wraps the render,
+        // mimicking the editor chrome's onSurface bleeding in. The fix must override it back to black.
+        val interpreted = renderToPng {
+            CompositionLocalProvider(LocalContentColor provides Color.Red) {
+                ComposeRenderer.RenderScreen(root = root, theme = theme, dark = false)
+            }
+        }
+        // The compiled twin: the same screen under the project theme with no hostile ambient — black text.
+        val twin = renderToPng {
+            ComposeRenderer.ProjectTheme(theme, dark = false) {
+                Column { Text(text = "Hello") }
+            }
+        }
+
+        assertTrue(
+            interpreted.contentEquals(twin),
+            "canvas text bled the host's content color instead of codegen's black default (#155)",
         )
     }
 
