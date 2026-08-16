@@ -126,7 +126,7 @@ data class Node(
     val modifiers: List<ModifierEntry> = emptyList(),   // ORDERED — semantic
     val children: List<Node> = emptyList(),
     val slots: Map<String, List<Node>> = emptyMap(),
-    val locked: Boolean = false,                 // editor-only: prevents selection/mutation
+    val locked: Boolean = false,                 // editor-only: protects this node (per-node, not its subtree)
     val hidden: Boolean = false                  // editor-only: excluded from render AND codegen
 )
 ```
@@ -146,6 +146,15 @@ Keeping them separate avoids encoding slot identity into child ordering, which w
 
 **`hidden`** — deliberately excludes the node from *both* render and codegen. A "visible in editor
 but not in output" state would be a fidelity lie.
+
+**`locked`** — editor-only protection (T4), scoped **per-node, not to the subtree**: a locked node is
+non-selectable (canvas click, marquee, tree click), non-draggable, cannot receive dropped children (a
+container *nested inside* it still can — its own child list changes, not the locked node's), and cannot
+be renamed; it is also skipped by tree keyboard navigation. Because selection is the gateway to prop,
+modifier, delete, duplicate, cut, and copy operations, a locked node is protected from those too. It
+has **no effect on render or codegen** — a locked node is emitted exactly like an unlocked one. The
+canvas draws a padlock badge and a faint outline on locked nodes, and the tree marks locked rows, so
+the protection is visible rather than looking inert.
 
 ---
 
