@@ -1,6 +1,6 @@
 # ViewForge — Security
 
-**Status:** Living — reviewed for the **v0.1.0** (Phase 1) release. Pre-release checklist in §12; the
+**Status:** Living — reviewed for the **v0.1.0-alpha-1** (Phase 1) release. Pre-release checklist in §12; the
 release QA run is tracked in [`RELEASE_QA.md`](RELEASE_QA.md).
 
 ---

@@ -1,6 +1,6 @@
 # ViewForge — Project Plan
 
-**Status:** Phase 1 (Compose Desktop) **shipped as v0.1.0**; Phase 2 (Android) planned next.
+**Status:** Phase 1 (Compose Desktop) **shipping as v0.1.0-alpha-1**; Phase 2 (Android) planned next.
 **Last updated:** August 2026
 
 ---
@@ -48,7 +48,7 @@ assumption justifies prioritizing code quality of the output over hand-holding i
 Each phase must be **end-to-end complete and dogfooded** before the next begins. Do not start
 Phase N+1 to escape a hard problem in Phase N.
 
-### Phase 1 — Compose Desktop (JVM) — ✅ **complete (v0.1.0)**
+### Phase 1 — Compose Desktop (JVM) — ✅ **feature-complete (v0.1.0-alpha-1)**
 
 **Goal:** Build a non-trivial desktop screen in the editor, export it, compile and run it outside
 the editor, and have it look the same.
@@ -75,7 +75,7 @@ Scope:
 **Shipped beyond the exit bar** (see `FEATURES.md` for IDs): multi-select + marquee, reusable
 components with parameters, edit-in-place, device preview frames, live code preview with node↔code
 mapping, command palette, preferences dialog, crash recovery + reporter, safe regeneration, and signed
-installers (M10). **Known v0.1.0 limitation:** no in-app image *import* — `Image` works with bundled
+installers (M10). **Known v0.1.0-alpha-1 limitation:** no in-app image *import* — `Image` works with bundled
 assets only (ADR-021; `FEATURES.md` §2 caveat). The acceptance run is gated by
 [`RELEASE_QA.md`](RELEASE_QA.md).
 
@@ -323,7 +323,7 @@ tests that encode intent so context survives gaps between work sessions.
 | M8 | Theming | Theme editor for colors/typography/shapes; props can reference theme tokens. |
 | M9 | **Phase 1 complete** ✅ | All Phase 1 exit criteria met; editor used to build something real. Added `Image` + `LazyColumn`/`LazyRow`, the `Gallery` sample (`samples/Gallery.vforge`), an interpreter-vs-composable pixel fidelity test (exit #3), and a lossless round-trip of the sample (exit #4). Codegen goldens + compile gate cover every component (exit #6). The Gradle export ships referenced assets so an exported project *runs* with images unmodified. Remaining follow-up: importing asset files from disk into a project (an "Assets" surface), see ADR-021. |
 | M10 | Packaging ✅ | Signed installers for Windows + Linux via vanilla jpackage (`nativeDistributions` in `:app`; ADR-022, resolving open question #3 against Conveyor). Windows Msi/Exe + Linux Deb/Rpm; version single-sourced in `gradle.properties`. The Windows MSI is verified locally; Deb/Rpm build on a Linux runner. A tag-triggered `release.yml` builds per-OS, signs (Authenticode / detached GPG, gated on CI secrets — DI-1), publishes SHA-256 sums (DI-2) from the tag (DI-3), and attaches everything to a GitHub Release. Install path per OS in `_docs/INSTALL.md`. Follow-ups: branded `.ico`/`.icns` icons, runtime-module trimming (installer size), and macOS (Dmg) packaging. |
-| — | **v0.1.0 release** | Cut `release/0.1.0`, run `RELEASE_QA.md`, tag, publish signed installers + checksums, back-merge to `main`. |
+| — | **v0.1.0-alpha-1 release** | Cut `release/v0.1.0-alpha-1`, run `RELEASE_QA.md`, tag, publish the (unsigned, for the alpha) installer + checksums, back-merge to `main`. |
 | M11 | Android target scaffold | Compose package gains an Android `TargetDefinition`; exporter routes `commonMain` vs `androidMain` (G9) and emits an Android Gradle + manifest scaffold; Android compile gate green in CI. |
 | M12 | Android device preview | `DeviceProfiles` gains Android profiles with density + safe-area/system-bar insets; the framed canvas scales by density and draws inset chrome. |
 | M13 | Responsive overrides | Schema **2 → 3** (`M2to3` + fixture); node `responsive` field (ADR-030); canvas renders the active breakpoint; inspector edits per-breakpoint values. |
