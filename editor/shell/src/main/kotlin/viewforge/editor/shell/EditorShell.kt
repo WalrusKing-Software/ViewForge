@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -38,9 +39,11 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.CodePreview
@@ -128,7 +131,18 @@ fun FrameWindowScope.EditorShell(
     // toggle flips it and prefs persist it. Defaults dark, matching the previously hardcoded scheme.
     MaterialTheme(colorScheme = if (state.chromeDark) darkColorScheme() else lightColorScheme()) {
         val focus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { focus.requestFocus() }
+        // The root Column owns the global keyboard shortcuts (S2/D1). requestFocus() is a no-op while
+        // the window is not yet focusable, so a bare LaunchedEffect(Unit) at first composition silently
+        // fails and the shortcuts stay dead until the user clicks a focusable child (#157). Re-request
+        // each time the window gains focus so the root reliably reclaims key input — on launch and after
+        // alt-tabbing back. snapshotFlow keeps the focus read out of composition so it never re-runs the
+        // shell subtree.
+        val windowInfo = LocalWindowInfo.current
+        LaunchedEffect(windowInfo, focus) {
+            snapshotFlow { windowInfo.isWindowFocused }
+                .filter { it }
+                .collect { focus.requestFocus() }
+        }
 
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
         if (showPreferences) PreferencesDialog(state, prefs) { showPreferences = false }
