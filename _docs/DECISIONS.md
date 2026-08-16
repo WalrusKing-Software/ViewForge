@@ -1115,7 +1115,7 @@ than a stock JDK, which is a real constraint on both the build toolchain and the
 
 **Decision.** Keep the editor chrome on **plain Material 3**. The shell already runs through its own
 `MaterialTheme` with an independent light/dark chrome toggle (S3 — `chromeDark`, distinct from the
-project's canvas theme H2). Do not adopt Jewel for v0.1.0, and treat open question #2 as closed.
+project's canvas theme H2). Do not adopt Jewel for v0.1.0-alpha-1, and treat open question #2 as closed.
 
 **Rationale.** The gain from Jewel is cosmetic (IDE-native styling); the cost is a JBR dependency that
 would complicate the toolchain and the distribution story just after packaging was settled (ADR-022).

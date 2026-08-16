@@ -11,14 +11,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Post-0.1.0 work. Nothing released yet._
+_Nothing after the first alpha yet._
 
-## [0.1.0] - 2026-08-14
+## [0.1.0-alpha-1] - unreleased
 
-First release — **Phase 1: Compose Desktop target.** ViewForge is a local-first, offline desktop
-WYSIWYG editor that renders a UI tree with the real Compose runtime and generates idiomatic,
-hand-editable Kotlin/Compose source. This release builds, edits, themes, and exports a non-trivial
-Compose Desktop screen end to end.
+> Release date is stamped when the tag is cut (see the release process). Until then this is the
+> pending first-alpha entry.
+
+First public release — an **ALPHA** of **Phase 1: Compose Desktop target.** ViewForge is a
+local-first, offline desktop WYSIWYG editor that renders a UI tree with the real Compose runtime and
+generates idiomatic, hand-editable Kotlin/Compose source. This alpha builds, edits, themes, and
+exports a non-trivial Compose Desktop screen end to end. Early software — expect rough edges, and the
+`.vforge` schema (v2) may still evolve behind migrations.
 
 ### Added
 
@@ -133,10 +137,10 @@ Compose Desktop screen end to end.
 - **No in-app image import.** `Image` resolves assets from the classpath (the bundled sample) and the
   inspector picker lists only assets already in the project, so `Image` cannot yet be pointed at a user's
   own file in a new project (`ADR-021`; see [`_docs/FEATURES.md`](_docs/FEATURES.md) §2).
-- **Migration backup not yet wired.** Opening an older-schema file and saving does not currently write a
-  `.bak` of the original, though the guarded writer supports it (tracked follow-up).
+- **Unsigned alpha.** The installer is not code-signed; a downloaded build may show a Windows SmartScreen
+  prompt (signing is a later release-engineering step).
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
   phases — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
-[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0
+[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...HEAD
+[0.1.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0-alpha-1

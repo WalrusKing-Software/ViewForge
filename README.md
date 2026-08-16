@@ -10,10 +10,11 @@ simulation — and export clean, idiomatic Kotlin source you own and can hand-ed
 
 ## Status
 
-**v0.1.0 — Phase 1 (Compose Desktop) complete.** The editor builds, edits, themes, and exports a
-non-trivial Compose Desktop screen, and ships signed installers for Windows and Linux. Early software:
-expect rough edges, and the `.vforge` schema (v2) may still evolve behind migrations. Phase 2 (Android)
-is planned — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
+**v0.1.0-alpha-1 — first public alpha (Phase 1, Compose Desktop).** The editor builds, edits, themes,
+and exports a non-trivial Compose Desktop screen, and ships an **unsigned** Windows installer
+(`.msi`/`.exe`) — a downloaded build may show a SmartScreen prompt. Early software: expect rough edges,
+and the `.vforge` schema (v2) may still evolve behind migrations. Phase 2 (Android) is planned — see
+[`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
 ## Why this exists
 
@@ -30,7 +31,7 @@ open without over-designing for it.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| 1 | Compose Desktop (JVM) | **Complete (v0.1.0)** |
+| 1 | Compose Desktop (JVM) | **Feature-complete (v0.1.0-alpha-1)** |
 | 2 | + Android | Planned (next) |
 | 3 | + iOS | Blocked on macOS hardware |
 | 4 | + Web (Kotlin/Wasm) | Planned, experimental |
