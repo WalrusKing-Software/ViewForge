@@ -48,8 +48,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -430,6 +432,20 @@ private fun NodeRow(
                     onDragEnd = { drag.commit() },
                     onDragCancel = { drag.reset() },
                 )
+            }
+            // Right-click opens the node context menu (#160). Reuses the per-row window-space coordinates
+            // the drag capture already records, so the shell can position the menu under the pointer.
+            .pointerInput(node.id) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            onFocusTree()
+                            val w = drag.coords[key]?.localToWindow(event.changes.first().position)
+                            if (w != null) state.requestContextMenu(node.id, w.x, w.y)
+                        }
+                    }
+                }
             }
             .combinedClickable(
                 onClick = {

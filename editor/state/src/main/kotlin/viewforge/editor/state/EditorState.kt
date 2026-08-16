@@ -358,6 +358,18 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private var paletteDropAddress: ChildAddress? = null
 
     /**
+     * Where the right-click context menu should open, in window space (#160), or null when it is closed.
+     * Transient view state spanning both the tree and the canvas: each surface's secondary-click handler
+     * selects the node under the pointer (via [requestContextMenu]) and records the point here; the shell —
+     * the one module with a material3 menu — observes it and renders the menu at that point. Coordinates are
+     * plain [Float]s, like the palette-drag pointer, so this module stays free of Compose-ui geometry types.
+     */
+    var contextMenuX: Float? by mutableStateOf(null)
+        private set
+    var contextMenuY: Float? by mutableStateOf(null)
+        private set
+
+    /**
      * The file this document is saved to, or null when it has never been saved (a fresh [newDocument]).
      * Drives Save vs Save As and is set on open/save (D1). Transient session state, not part of the
      * document.
@@ -596,6 +608,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         interactivePreview = false // a fresh document opens in edit mode, not run mode (C13, #120)
         activeScreenId = project.screens.firstOrNull()?.id
         editingComponentId = null
+        contextMenuX = null
+        contextMenuY = null
         currentPath = path
         isDirty = false
         backupOnNextSave = migratedFromOlderSchema
@@ -816,6 +830,34 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
+    }
+
+    // --- right-click context menu (#160) ----------------------------------------------------------
+
+    /** Whether the right-click context menu is currently open. */
+    val contextMenuOpen: Boolean get() = contextMenuX != null && contextMenuY != null
+
+    /**
+     * Open the right-click context menu at window-space ([x], [y]) for [target] (the node under the
+     * pointer, or null for an empty-canvas click). The target is selected first so the menu's actions
+     * apply to it — unless it is already part of the selection, which is left intact so right-clicking
+     * within a multi-selection keeps it. A **locked** node is protected (#159): it can't be selected, so
+     * it opens no menu (returning early leaves any current menu closed). The shell reads the point and
+     * renders the menu; [dismissContextMenu] closes it.
+     */
+    fun requestContextMenu(target: NodeId?, x: Float, y: Float) {
+        if (target != null) {
+            if (activeEditRoot?.findById(target)?.locked == true) return
+            if (!isSelected(target)) select(target)
+        }
+        contextMenuX = x
+        contextMenuY = y
+    }
+
+    /** Close the right-click context menu (an action was chosen, or the user dismissed it). */
+    fun dismissContextMenu() {
+        contextMenuX = null
+        contextMenuY = null
     }
 
     /** Delete every selected node (never the root) as one undoable step, leaving the primary's parent selected. */

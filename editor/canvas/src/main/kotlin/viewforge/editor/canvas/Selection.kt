@@ -23,6 +23,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -560,6 +561,24 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                         null
                     } else {
                         hit?.let { it to now }
+                    }
+                }
+            }
+            // Right-click opens the node context menu (#160): the deepest node under the pointer becomes
+            // the target (the frame-filling root on empty canvas), and the shell renders the menu at the
+            // window-space point. Ignored while space-panning, matching the tap/drag handlers.
+            .pointerInput(root) {
+                val scope = this
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val secondary = event.type == PointerEventType.Press && event.buttons.isSecondaryPressed
+                        if (secondary && !state.isSpaceHeld) {
+                            val local = event.changes.first().position
+                            val hit = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
+                            val window = overlayCoords?.localToWindow(local) ?: local
+                            state.requestContextMenu(hit, window.x, window.y)
+                        }
                     }
                 }
             }

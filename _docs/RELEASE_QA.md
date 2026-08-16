@@ -175,6 +175,7 @@ These encode the project's core correctness rules. **Any failure here blocks the
 | TR-4 (T4) | Lock / hide | Toggle `locked` → node shows a padlock badge on the canvas + a tree marker and can't be selected, dragged, dropped-into, or renamed (per-node; a container nested inside it still accepts drops); render/codegen unaffected. Toggle `hidden` → removed from render **and** codegen. | [Manual] for the canvas/tree gestures; `canDrop`/`renameNode`/`canvasDropTarget`/`lockedNodes` logic is [Auto]; hidden-drops-from-codegen is [Auto] via goldens. |
 | TR-5 (T5) | Keyboard nav | Focus the tree → ↑/↓ move selection (skipping locked), ←/→ collapse/expand/step, Enter rename, Del remove. | [Auto] decisions (`TreeKeyNavTest`); [Manual] focus/key wiring. |
 | TR-6 (T6) | Search within tree | Type in the layers search → filters to matching nodes keeping ancestor path; no-match message. | [Auto] `TreeSearchTest`; [Manual] gesture. |
+| TR-7 (#160) | Right-click context menu | Right-click a node in the tree or on the canvas → selects it and opens a menu (Cut/Copy/Paste/Duplicate/Delete/Rename/Extract to Component/Enter Component) with correct enablement; a locked node opens none. | [Auto] enablement (`ContextMenuTest`); [Manual] the right-click gesture + menu positioning. |
 
 ---
 
