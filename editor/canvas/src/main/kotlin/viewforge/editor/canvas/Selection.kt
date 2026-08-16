@@ -134,6 +134,24 @@ private fun collectContainers(node: Node, isContainer: (String) -> Boolean, out:
     node.allChildren().forEach { collectContainers(it, isContainer, out) }
 }
 
+/**
+ * Every **locked** node in [root]'s subtree (T4), for the canvas lock indicator. Lock is per-node, so a
+ * locked ancestor does not stop the walk — a locked node nested under another is still collected. Hidden
+ * subtrees are skipped: they are not rendered, so there is nothing to badge. Pure and Compose-free, so it
+ * is unit-tested without a UI harness.
+ */
+fun lockedNodes(root: Node): List<Node> {
+    val out = mutableListOf<Node>()
+    collectLocked(root, out)
+    return out
+}
+
+private fun collectLocked(node: Node, out: MutableList<Node>) {
+    if (node.hidden) return
+    if (node.locked) out += node
+    node.allChildren().forEach { collectLocked(it, out) }
+}
+
 /** Whether a [MeasureSegment] runs horizontally (a left/right gap) or vertically (a top/bottom gap). */
 enum class MeasureAxis { Horizontal, Vertical }
 
@@ -632,6 +650,18 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             }
         }
 
+        // Locked-node indicator (T4): every locked node gets a faint amber dashed outline and a small
+        // padlock badge at its top-right corner. Drawn before the drag/marquee/palette early-returns so a
+        // protected node stays visible mid-interaction (you can see what won't accept a drop), and so a
+        // click that "does nothing" is explained rather than looking inert.
+        lockedNodes(root).forEach { node ->
+            bounds.boundsOf(node.id)?.let { content ->
+                val screen = rectToScreen(content)
+                drawOutline(screen, LOCK_COLOR, LOCK_STROKE, LOCK_DASH)
+                drawLockBadge(screen.topRight)
+            }
+        }
+
         // Palette drag wins the overlay while it's live: show its drop feedback and nothing else.
         paletteFeedback?.let { fb ->
             val color = if (fb.valid) DROP_OK else DROP_BAD
@@ -659,8 +689,9 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             drawOutline(screen, MARQUEE_STROKE_COLOR, MARQUEE_STROKE)
             return@Canvas
         }
-        // Hover first, selection on top: when a node is both, the selection outline wins visually.
-        hovered?.takeIf { !state.isSelected(it) }?.let { id ->
+        // Hover first, selection on top: when a node is both, the selection outline wins visually. A locked
+        // node draws no hover outline — it isn't selectable, so a "clickable" cue would mislead (T4).
+        hovered?.takeIf { !state.isSelected(it) && root.findById(it)?.locked != true }?.let { id ->
             bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), HOVER_COLOR, HOVER_STROKE) }
         }
         // Every selected node is outlined (C10); the secondary selections draw faded, the primary solid
@@ -749,6 +780,30 @@ private fun DrawScope.drawMeasureLabel(measurer: TextMeasurer, text: String, at:
     drawText(layout, topLeft = topLeft + Offset(MEASURE_LABEL_PADDING, MEASURE_LABEL_PADDING))
 }
 
+/**
+ * A small padlock badge just inside a locked node's [topRight] corner (T4). Drawn from primitives (an
+ * arc shackle over a rectangular body) rather than a glyph so it never depends on an emoji font being
+ * present in the draw layer.
+ */
+private fun DrawScope.drawLockBadge(topRight: Offset) {
+    val s = LOCK_BADGE
+    val left = topRight.x - s - 2f
+    val top = topRight.y + 2f
+    // Shackle: a half-circle arc sitting above the body.
+    val shackle = s * 0.6f
+    drawArc(
+        color = LOCK_COLOR,
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(left + (s - shackle) / 2f, top),
+        size = Size(shackle, shackle),
+        style = Stroke(width = 2f),
+    )
+    // Body: a small filled rectangle beneath the shackle.
+    drawRect(color = LOCK_COLOR, topLeft = Offset(left, top + s * 0.4f), size = Size(s, s * 0.55f))
+}
+
 /** A small type-name tag at a container's top-left corner for the debug border overlay (#117). */
 private fun DrawScope.drawContainerLabel(measurer: TextMeasurer, text: String, at: Offset) {
     val layout = measurer.measure(text, BORDER_LABEL_STYLE)
@@ -777,6 +832,13 @@ private const val MARQUEE_STROKE = 1f
 private val DROP_OK = Color(0xFF43A047)
 private val DROP_BAD = Color(0xFFB00020)
 private const val DROP_STROKE = 2f
+
+// Locked-node indicator (T4): a faint amber dashed outline + padlock badge, deliberately unlike the blue
+// selection/hover, green/red drop, blue marquee, and purple debug border, so "protected" reads on its own.
+private val LOCK_COLOR = Color(0xCCF9A825)
+private const val LOCK_STROKE = 1f
+private const val LOCK_BADGE = 12f
+private val LOCK_DASH by lazy { PathEffect.dashPathEffect(floatArrayOf(3f, 3f)) }
 
 // Debug container-border overlay (#117): a dashed purple outline + type tag, deliberately unlike the
 // solid blue selection/hover, the green/red drop, and the blue marquee, so structure reads as its own layer.

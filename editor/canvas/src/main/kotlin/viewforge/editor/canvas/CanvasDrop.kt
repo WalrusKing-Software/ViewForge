@@ -26,8 +26,10 @@ import viewforge.model.findById
 /**
  * The deepest node under [point] (window space) that accepts default children, excluding the dragged
  * node and everything in its subtree (the cycle guard — you cannot drop a node into itself or a
- * descendant). Children are tested before the node itself so the *innermost* accepting container wins,
- * matching [hitTest]'s deepest-first rule: hovering inside a nested container drops **into** it.
+ * descendant) and any **locked** node (per-node T4 — a locked node can't receive children, though a
+ * container nested inside it still can). Children are tested before the node itself so the *innermost*
+ * accepting container wins, matching [hitTest]'s deepest-first rule: hovering inside a nested container
+ * drops **into** it.
  *
  * [draggedId] is null for a palette drag (P2a) — a brand-new node with no existing position — in which
  * case nothing is excluded.
@@ -44,6 +46,10 @@ fun canvasDropTarget(
     root.allChildren().forEach { child ->
         canvasDropTarget(rects, child, draggedId, point, acceptsChildren)?.let { return it }
     }
+    // A locked node is protected (per-node T4): it can't receive children itself. We still descend into it
+    // above, so a container *nested inside* a locked node stays a valid target (its own child list, not the
+    // locked node's, is what changes); only the locked node is refused as the target here.
+    if (root.locked) return null
     if (!acceptsChildren(root.type)) return null
     val rect = rects[root.id.value] ?: return null
     return if (rect.contains(point)) root.id else null

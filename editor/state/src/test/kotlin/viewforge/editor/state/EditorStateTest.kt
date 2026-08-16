@@ -254,6 +254,27 @@ class EditorStateTest {
         assertEquals(listOf(NodeId("a"), NodeId("b")), s.activeScreen!!.root.children.map { it.id })
     }
 
+    @Test
+    fun `canDrop refuses a locked parent (T4)`() {
+        val s = state()
+        // Legal before locking: move "a" into b's content slot.
+        assertTrue(s.canDrop(NodeId("a"), ChildAddress(NodeId("b"), "content", 0)))
+        s.toggleLocked(NodeId("b"))
+        // A locked node can't receive children — the same drop is now refused.
+        assertFalse(s.canDrop(NodeId("a"), ChildAddress(NodeId("b"), "content", 0)))
+    }
+
+    @Test
+    fun `renameNode is a no-op on a locked node (T4)`() {
+        val s = state()
+        s.renameNode(NodeId("a"), "Before")
+        assertEquals("Before", s.activeScreen!!.root.findById(NodeId("a"))!!.name)
+        s.toggleLocked(NodeId("a"))
+        s.renameNode(NodeId("a"), "After")
+        // The lock protects it: the name stays as it was.
+        assertEquals("Before", s.activeScreen!!.root.findById(NodeId("a"))!!.name)
+    }
+
     // --- M5: property & modifier editing ----------------------------------------------------------
 
     @Test

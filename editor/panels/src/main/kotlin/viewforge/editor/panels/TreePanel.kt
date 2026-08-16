@@ -444,8 +444,9 @@ private fun NodeRow(
                         else -> state.select(node.id)
                     }
                 },
-                // Double-clicking an instance enters its component (#68); any other node starts a rename.
-                onDoubleClick = { if (!state.openInstanceComponent(node)) onStartRename() },
+                // Double-clicking an instance enters its component (#68); any other node starts a rename —
+                // except a locked node, which is protected (T4) and can't be renamed.
+                onDoubleClick = { if (!state.openInstanceComponent(node) && !node.locked) onStartRename() },
             )
             .padding(start = (8 + item.depth * INDENT).dp, top = 3.dp, bottom = 3.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -471,17 +472,27 @@ private fun NodeRow(
                     onCancel = onEndRename,
                 )
             } else {
-                Text(
-                    text = displayLabel(node),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = when {
-                        selected -> MaterialTheme.colorScheme.onPrimaryContainer
-                        node.hidden -> MaterialTheme.colorScheme.onSurfaceVariant
-                        else -> MaterialTheme.colorScheme.onSurface
-                    },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // A leading lock glyph marks a locked row at a glance (T4), beyond the "L" toggle's tint.
+                    if (node.locked) {
+                        Text(
+                            text = "🔒",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                    Text(
+                        text = displayLabel(node),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = when {
+                            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+                            node.hidden -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
             }
         }
 
