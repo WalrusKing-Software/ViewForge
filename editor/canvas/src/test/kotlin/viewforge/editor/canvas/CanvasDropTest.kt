@@ -61,6 +61,23 @@ class CanvasDropTest {
         assertEquals(NodeId("col"), canvasDropTarget(rects, root, NodeId("box"), Offset(50f, 150f), accepts))
     }
 
+    @Test
+    fun `a locked container is refused as a drop target (T4)`() {
+        val lockedCol = col.copy(locked = true)
+        // The point is inside the locked Column over its leaves, but a locked node can't receive children.
+        assertNull(canvasDropTarget(colRects, lockedCol, NodeId("none"), Offset(50f, 150f), accepts))
+    }
+
+    @Test
+    fun `a container nested inside a locked node is still a valid target (per-node lock)`() {
+        val box = Node(NodeId("box"), "compose.foundation.layout.Box", children = listOf(t2))
+        val root = col.copy(locked = true, children = listOf(t1, box, t3))
+        val rects = colRects + mapOf("box" to Rect(0f, 100f, 100f, 200f))
+        // The outer Column is locked, but the drop descends into the unlocked Box: its own child list
+        // changes, not the locked Column's, so per-node lock still allows it.
+        assertEquals(NodeId("box"), canvasDropTarget(rects, root, NodeId("none"), Offset(50f, 150f), accepts))
+    }
+
     // --- insertionIndex ---------------------------------------------------------------------------
 
     private val vertical = listOf(colRects["t1"]!!, colRects["t2"]!!, colRects["t3"]!!)

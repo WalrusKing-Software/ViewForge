@@ -172,7 +172,7 @@ These encode the project's core correctness rules. **Any failure here blocks the
 | TR-1 (T1) | Hierarchical tree | Tree mirrors the IR; expand/collapse; selecting in the tree selects on the canvas and vice-versa. | [Manual]. |
 | TR-2 (T2) | Drag reparent/reorder | Same drop rules as the canvas (reject cycles/non-containers). | [Manual]; `CanvasDropTest` shares the logic [Auto]. |
 | TR-3 (T3) | Rename | Double-click / F2 → edit `Node.name`; shown in tree; codegen structure unaffected. | [Manual]. |
-| TR-4 (T4) | Lock / hide | Toggle `locked` → node can't be selected; toggle `hidden` → removed from render **and** codegen. | [Manual]; hidden-drops-from-codegen is [Auto] via goldens. |
+| TR-4 (T4) | Lock / hide | Toggle `locked` → node shows a padlock badge on the canvas + a tree marker and can't be selected, dragged, dropped-into, or renamed (per-node; a container nested inside it still accepts drops); render/codegen unaffected. Toggle `hidden` → removed from render **and** codegen. | [Manual] for the canvas/tree gestures; `canDrop`/`renameNode`/`canvasDropTarget`/`lockedNodes` logic is [Auto]; hidden-drops-from-codegen is [Auto] via goldens. |
 | TR-5 (T5) | Keyboard nav | Focus the tree → ↑/↓ move selection (skipping locked), ←/→ collapse/expand/step, Enter rename, Del remove. | [Auto] decisions (`TreeKeyNavTest`); [Manual] focus/key wiring. |
 | TR-6 (T6) | Search within tree | Type in the layers search → filters to matching nodes keeping ancestor path; no-match message. | [Auto] `TreeSearchTest`; [Manual] gesture. |
 

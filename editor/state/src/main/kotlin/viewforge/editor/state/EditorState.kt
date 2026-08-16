@@ -961,9 +961,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         return "$base$n"
     }
 
-    /** Set (or clear) a node's name (T3). */
+    /** Set (or clear) a node's name (T3). A **locked** node is protected (T4) and cannot be renamed. */
     fun renameNode(id: NodeId, name: String?) {
         val rootId = activeEditRootId ?: return
+        if (activeEditRoot?.findById(id)?.locked == true) return
         execute(RenameNode(rootId, id, name), selectAfter = selectedId)
     }
 
@@ -1451,14 +1452,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /**
      * Whether dragging [dragId] onto [target] is a legal drop (C7/T2 rules): the target parent must
-     * accept that region (default children or the named slot, per [catalog]), and the target parent
-     * must not be inside the dragged node's own subtree — you cannot reparent a node into itself or a
-     * descendant.
+     * accept that region (default children or the named slot, per [catalog]), must not be **locked**
+     * (per-node T4 — a locked node can't receive children), and must not be inside the dragged node's
+     * own subtree — you cannot reparent a node into itself or a descendant.
      */
     fun canDrop(dragId: NodeId, target: ChildAddress): Boolean {
         val root = activeEditRoot ?: return false
         val dragged = root.findById(dragId) ?: return false
         val parent = root.findById(target.parentId) ?: return false
+        if (parent.locked) return false
         if (dragged.subtreeContains(target.parentId)) return false
         return if (target.slot == null) {
             catalog.acceptsChildren(parent.type)
