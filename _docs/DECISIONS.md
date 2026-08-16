@@ -889,6 +889,17 @@ viewport shows clipped until the user zooms out — **auto-fit-to-viewport** is 
 covered by unit tests, the rest by running the app). Phase 2 device profiles (mobile/tablet) slot into
 the same registry.
 
+**Amendment (#163) — more presets and a custom size.** The desktop preset list was expanded, and an
+arbitrary w×h frame is supported *without* a registry entry or schema change by making the profile id
+**self-describing**: `DeviceProfiles.customProfileId(w, h)` produces `custom_<w>x<h>`, and `forId` parses
+any `<prefix>_<w>x<h>` id it doesn't recognize as a preset back into clamped dimensions (falling to the
+default only for a truly unresolvable string). Because `Screen.previewProfile` already stores just the id
+string, a custom size round-trips through save/load/undo for free, per screen. A named preset still wins
+over parsing, and parsing an unknown *dimension-encoding* id (e.g. a newer build's `tablet_800x1280`) now
+resolves to the real size rather than snapping to the default — a small forward-compat win. The
+custom-size entry dialog is shell-owned (material3), and remembering custom sizes as reusable presets is a
+noted follow-up (a `core/prefs` concern).
+
 ---
 
 ## ADR-027 — Root-agnostic node editing: one command family edits screens and components alike
