@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8WEIGHT01",
+  "name": "Weight",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_wt",
+      "name": "WeightScreen",
+      "root": {
+        "id": "wc_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "wt_txt",
+            "type": "compose.material3.Text",
+            "props": { "text": { "kind": "literal", "value": "A" } },
+            "modifiers": [
+              { "id": "wm_01", "type": "compose.weight", "args": { "weight": { "kind": "literal", "value": 1 } } }
+            ]
+          },
+          {
+            "id": "wr_row",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              { "id": "wm_02", "type": "compose.weight", "args": { "weight": { "kind": "literal", "value": 2 } } },
+              { "id": "wm_03", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 8 } } }
+            ],
+            "children": [
+              {
+                "id": "wb_inner",
+                "type": "compose.foundation.layout.Box",
+                "modifiers": [
+                  { "id": "wm_04", "type": "compose.weight", "args": { "weight": { "kind": "literal", "value": 1 } } }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "wb_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              { "id": "wm_05", "type": "compose.weight", "args": { "weight": { "kind": "literal", "value": 3 } } }
+            ],
+            "children": [
+              {
+                "id": "wt_dropped",
+                "type": "compose.material3.Text",
+                "props": { "text": { "kind": "literal", "value": "B" } },
+                "modifiers": [
+                  { "id": "wm_06", "type": "compose.weight", "args": { "weight": { "kind": "literal", "value": 1 } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

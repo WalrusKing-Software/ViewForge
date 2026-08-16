@@ -2,7 +2,9 @@ package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.joinToCode
+import kotlinx.serialization.json.floatOrNull
 import viewforge.model.ModifierEntry
+import viewforge.model.PropValue
 import viewforge.model.Theme
 import viewforge.packages.compose.render.paddingSpec
 import viewforge.packages.compose.render.singleDimen
@@ -18,27 +20,34 @@ import viewforge.packages.compose.render.sizeSpec
  * modifier applies first, DATA_MODEL §12.1), every other node onto a fresh `Modifier`.
  */
 internal object ModifierEmitter {
-    /** The root node's chain: `modifier` (the composable's param) plus its own ordered chain. */
+    /**
+     * The root node's chain: `modifier` (the composable's param) plus its own ordered chain. The root has
+     * no Row/Column parent, so `weight` is never allowed here (#158).
+     */
     fun rootChain(entries: List<ModifierEntry>, theme: Theme): CodeBlock {
         val b = CodeBlock.builder().add("modifier")
-        fragments(entries, theme).forEach { b.add(it) }
+        fragments(entries, theme, allowWeight = false).forEach { b.add(it) }
         return b.build()
     }
 
-    /** A non-root node's chain onto a fresh `Modifier`, or null when it has no enabled modifiers. */
-    fun nodeChain(entries: List<ModifierEntry>, theme: Theme): CodeBlock? {
-        val frags = fragments(entries, theme)
+    /**
+     * A non-root node's chain onto a fresh `Modifier`, or null when it has no enabled modifiers.
+     * [allowWeight] is set only when the node's parent is a Row/Column, so a `weight` outside such a scope
+     * is dropped rather than emitted as code that wouldn't compile (#158) — mirroring the renderer's no-op.
+     */
+    fun nodeChain(entries: List<ModifierEntry>, theme: Theme, allowWeight: Boolean): CodeBlock? {
+        val frags = fragments(entries, theme, allowWeight)
         if (frags.isEmpty()) return null
         val b = CodeBlock.builder().add("%T", ComposeNames.Modifier)
         frags.forEach { b.add(it) }
         return b.build()
     }
 
-    private fun fragments(entries: List<ModifierEntry>, theme: Theme): List<CodeBlock> =
-        entries.filter { it.enabled }.mapNotNull { fragment(it, theme) }
+    private fun fragments(entries: List<ModifierEntry>, theme: Theme, allowWeight: Boolean): List<CodeBlock> =
+        entries.filter { it.enabled }.mapNotNull { fragment(it, theme, allowWeight) }
 
     /** One `.call(...)` fragment, or null for a modifier that resolves to no-op (mirrors the renderer). */
-    private fun fragment(entry: ModifierEntry, theme: Theme): CodeBlock? = when (entry.type) {
+    private fun fragment(entry: ModifierEntry, theme: Theme, allowWeight: Boolean): CodeBlock? = when (entry.type) {
         "compose.fillMaxSize" -> CodeBlock.of(".%M()", ComposeNames.fillMaxSize)
         "compose.fillMaxWidth" -> CodeBlock.of(".%M()", ComposeNames.fillMaxWidth)
         "compose.fillMaxHeight" -> CodeBlock.of(".%M()", ComposeNames.fillMaxHeight)
@@ -50,7 +59,17 @@ internal object ModifierEmitter {
             entry.args["color"]?.let {
                 CodeBlock.of(".%M(%L)", ComposeNames.background, CodegenValues.color(it, theme))
             }
+        // A scope member (RowScope/ColumnScope.weight), so it is emitted only inside a Row/Column and as a
+        // bare `.weight(..)` call (no import). Dropped when out of scope or non-positive, matching render.
+        "compose.weight" -> if (allowWeight) weightFragment(entry) else null
         else -> throw CodegenException("Unsupported modifier '${entry.type}' (outside the Phase-1 allowlist)")
+    }
+
+    private fun weightFragment(entry: ModifierEntry): CodeBlock? {
+        val value = entry.args["weight"] ?: return null
+        val weight = (value as? PropValue.Literal)?.value?.floatOrNull
+        if (weight == null || weight <= 0f) return null
+        return CodeBlock.of(".weight(%L)", CodegenValues.float(value))
     }
 
     private fun dimenFragment(member: com.squareup.kotlinpoet.MemberName, value: Int): CodeBlock =
