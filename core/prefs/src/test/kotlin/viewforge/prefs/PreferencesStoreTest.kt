@@ -162,6 +162,26 @@ class PreferencesStoreTest {
     }
 
     @Test
+    fun `launch state round-trips and defaults to first-run with no remembered path`() {
+        val dir = tempDir()
+        // Absent file -> a fresh install: never launched, no last project (so #156 seeds the sample once).
+        val defaults = PreferencesStore.load(dir)
+        assertFalse(defaults.hasLaunched)
+        assertEquals("", defaults.lastProjectPath)
+
+        // Both survive a save/load round-trip once the app has run and opened a document.
+        val prefs = EditorPreferences(hasLaunched = true, lastProjectPath = "/home/me/app.vforge")
+        PreferencesStore.save(prefs, dir)
+        assertEquals(prefs, PreferencesStore.load(dir))
+
+        // A pre-156 file omitting the keys falls back to the first-run defaults (forward tolerance).
+        dir.resolve(PreferencesStore.FILE_NAME).writeText("""{ "prefsVersion": 1, "autosaveIntervalSeconds": 10 }""")
+        val loaded = PreferencesStore.load(dir)
+        assertFalse(loaded.hasLaunched)
+        assertEquals("", loaded.lastProjectPath)
+    }
+
+    @Test
     fun `save writes preferences_json inside the config dir`() {
         val dir = tempDir()
         PreferencesStore.save(EditorPreferences(), dir)
