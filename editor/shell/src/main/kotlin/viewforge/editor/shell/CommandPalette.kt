@@ -225,7 +225,6 @@ internal fun CommandPalette(commands: List<PaletteCommand>, onDismiss: () -> Uni
     // Keep the selection on an enabled row as the results change under typing.
     LaunchedEffect(query) { selected = results.firstEnabledIndexFrom(0, +1) }
     LaunchedEffect(selected) { if (selected in results.indices) listState.animateScrollToItem(selected) }
-    LaunchedEffect(Unit) { focus.requestFocus() }
 
     fun move(direction: Int) {
         val next = results.firstEnabledIndexFrom(selected + direction, direction)
@@ -252,6 +251,11 @@ internal fun CommandPalette(commands: List<PaletteCommand>, onDismiss: () -> Uni
             shadowElevation = 8.dp,
         ) {
             Column(Modifier.padding(6.dp)) {
+                // Focus the search field on open. This must live inside the Popup content: the requester
+                // is attached to the field below (.focusRequester(focus)), and the Popup composes as a
+                // separate sub-composition — requesting from the outer body runs before that node is
+                // attached and throws "FocusRequester is not initialized" (#168).
+                LaunchedEffect(Unit) { focus.requestFocus() }
                 BasicTextField(
                     value = query,
                     onValueChange = { query = it },
