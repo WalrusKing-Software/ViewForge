@@ -27,7 +27,7 @@ import kotlin.test.assertEquals
 class CompilationTest {
     private val fixtures =
         listOf(
-            "Demo", "RowBox", "Modifiers", "ModifierOrder", "Lazy", "Image",
+            "Demo", "RowBox", "Modifiers", "ModifierOrder", "Weight", "Lazy", "Image",
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
             "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling",
             "ButtonShape", "Gallery",

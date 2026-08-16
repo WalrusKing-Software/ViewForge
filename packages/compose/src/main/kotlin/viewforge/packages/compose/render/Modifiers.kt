@@ -56,5 +56,12 @@ private fun applyModifier(base: Modifier, entry: ModifierEntry, ctx: RenderConte
     "compose.background" ->
         colorArgb(entry.args["color"], ctx.theme, ctx.dark)?.let { base.background(Color(it)) } ?: base
 
+    // weight needs the parent's RowScope/ColumnScope, carried in ctx.weightApplier (#158). Absent (any
+    // other parent) or non-positive → no-op, matching codegen which drops weight outside a Row/Column.
+    "compose.weight" -> {
+        val w = entry.args["weight"].literalFloat()
+        if (ctx.weightApplier != null && w != null && w > 0f) ctx.weightApplier.invoke(base, w) else base
+    }
+
     else -> base // outside the M2 allowlist — passed through untouched, not fatal
 }

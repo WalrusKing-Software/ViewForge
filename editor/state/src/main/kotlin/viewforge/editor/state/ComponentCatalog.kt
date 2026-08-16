@@ -55,6 +55,16 @@ interface ComponentCatalog {
     /** Every modifier the inspector may add, with its arg schema (the renderer-supported set). */
     val modifierCatalog: List<ModifierDefinition>
 
+    /**
+     * The modifiers the inspector may add to a node whose parent is [parentType] (null at the root). Some
+     * modifiers are only valid in a particular parent scope — e.g. Compose's `weight` is a
+     * `RowScope`/`ColumnScope` extension, so it applies only to a direct child of a Row/Column. Keeping
+     * this rule on the seam (not hardcoded in the inspector) preserves the data-driven inspector: adding a
+     * scope-gated modifier needs no UI code (CLAUDE.md anti-patterns). Defaults to the whole
+     * [modifierCatalog] so non-gating test doubles need no override; the concrete package narrows it.
+     */
+    fun availableModifiers(parentType: String?): List<ModifierDefinition> = modifierCatalog
+
     /** The schema for one modifier [type] (for editing its args), or null if not in the catalog. */
     fun modifierDef(type: String): ModifierDefinition?
 

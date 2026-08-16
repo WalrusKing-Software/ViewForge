@@ -41,6 +41,10 @@ class GoldenCodegenTest {
 
     @Test fun modifierOrder() = assertGolden("ModifierOrder")
 
+    // weight (#158): a RowScope/ColumnScope-only modifier — emitted for Row/Column direct children (order
+    // preserved with padding), and dropped for a child of a Box where the scope isn't present.
+    @Test fun weight() = assertGolden("Weight")
+
     @Test fun lazy() = assertGolden("Lazy")
 
     @Test fun image() = assertGolden("Image")

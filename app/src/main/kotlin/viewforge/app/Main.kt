@@ -226,6 +226,11 @@ private object ComposeCatalog : ComponentCatalog {
 
     override val modifierCatalog: List<ModifierDefinition> = ComposeModifiers.definitions
 
+    // Scope-aware offering: `weight` is only valid on a direct child of a Row/Column, so the package
+    // narrows the list by parent type (#158) — the inspector stays framework-agnostic.
+    override fun availableModifiers(parentType: String?): List<ModifierDefinition> =
+        ComposeModifiers.offeredFor(parentType)
+
     override fun modifierDef(type: String): ModifierDefinition? = ComposeModifiers.definitionFor(type)
 
     // A screen name must be a legal Kotlin identifier to become a composable/file name (GC-3);
