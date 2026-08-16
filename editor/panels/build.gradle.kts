@@ -11,4 +11,9 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+
+    // currentOs puts the OS-specific skiko native library on the *test* classpath so
+    // ThemeEditorLayoutTest can rasterize the dialog body via ImageComposeScene (#162); without it the
+    // render fails with a skiko LibraryLoadException. Test-only, mirroring :app's fidelity-test setup.
+    testImplementation(compose.desktop.currentOs)
 }
