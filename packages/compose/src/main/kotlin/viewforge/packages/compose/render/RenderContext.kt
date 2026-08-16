@@ -36,6 +36,11 @@ import viewforge.model.Theme
  * stateful inputs instead carry their own local `remember` state and live callbacks, so the user can click,
  * type, and toggle to feel the real UI. It defaults false, so codegen and the fidelity tests — which never
  * set it — are untouched; only the editor's live canvas opts in.
+ *
+ * [weightApplier] carries the current `RowScope`/`ColumnScope` so a `weight` modifier — a scope extension,
+ * not a plain [Modifier] — can be applied to a direct child of a Row/Column (#158). It is non-null only
+ * while rendering those direct children (set in `RenderRow`/`RenderColumn`, cleared for every other
+ * parent), so a `weight` on a node outside such a scope no-ops, exactly as codegen drops it there.
  */
 data class RenderContext(
     val theme: Theme,
@@ -45,4 +50,5 @@ data class RenderContext(
     val components: Map<String, ComponentDef> = emptyMap(),
     val expanding: Set<String> = emptySet(),
     val interactive: Boolean = false,
+    val weightApplier: ((Modifier, Float) -> Modifier)? = null,
 )

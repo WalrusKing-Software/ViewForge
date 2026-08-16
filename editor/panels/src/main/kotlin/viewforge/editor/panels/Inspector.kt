@@ -311,7 +311,9 @@ private fun AddModifierMenu(state: EditorState, node: Node) {
     Box(Modifier.padding(vertical = 2.dp)) {
         ActionText("+ add modifier") { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            state.catalog.modifierCatalog.forEach { def ->
+            // Scope-aware: the catalog withholds modifiers this node's parent can't host (e.g. weight
+            // outside a Row/Column, #158), so the menu never offers one the canvas would ignore.
+            state.catalog.availableModifiers(state.parentType(node.id)).forEach { def ->
                 DropdownMenuItem(
                     text = { Text(def.label, style = MaterialTheme.typography.bodySmall) },
                     onClick = {

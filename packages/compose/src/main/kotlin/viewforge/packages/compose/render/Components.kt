@@ -98,34 +98,38 @@ fun RenderNode(node: Node, ctx: RenderContext) {
 
     // Fold the node's own (semantic, ordered) chain, then append the editor's instrumentation last so
     // it observes the fully-modified node without altering its layout (ARCHITECTURE §4.2, ADR-009).
+    // buildModifier may consume ctx.weightApplier for *this* node (a direct Row/Column child, #158).
     val modifier = buildModifier(node.modifiers, ctx).then(ctx.instrument(node.id))
+    // Children never inherit this node's parent scope; a Row/Column re-establishes its own below, and
+    // every other container must not leak the grandparent's applier to its grandchildren.
+    val childCtx = if (ctx.weightApplier == null) ctx else ctx.copy(weightApplier = null)
     when (node.type) {
-        "compose.foundation.layout.Column" -> RenderColumn(node, modifier, ctx)
-        "compose.foundation.layout.Row" -> RenderRow(node, modifier, ctx)
-        "compose.foundation.layout.Box" -> RenderBox(node, modifier, ctx)
+        "compose.foundation.layout.Column" -> RenderColumn(node, modifier, childCtx)
+        "compose.foundation.layout.Row" -> RenderRow(node, modifier, childCtx)
+        "compose.foundation.layout.Box" -> RenderBox(node, modifier, childCtx)
         "compose.foundation.layout.Spacer" -> Spacer(modifier)
-        "compose.foundation.lazy.LazyColumn" -> RenderLazyColumn(node, modifier, ctx)
-        "compose.foundation.lazy.LazyRow" -> RenderLazyRow(node, modifier, ctx)
-        "compose.material3.Text" -> RenderText(node, modifier, ctx)
-        "compose.material3.Button" -> RenderButton(node, modifier, ctx)
-        "compose.material3.OutlinedButton" -> RenderOutlinedButton(node, modifier, ctx)
-        "compose.material3.TextButton" -> RenderTextButton(node, modifier, ctx)
-        "compose.material3.Slider" -> RenderSlider(node, modifier, ctx)
-        "compose.material3.TextField" -> RenderTextField(node, modifier, ctx)
-        "compose.material3.OutlinedTextField" -> RenderOutlinedTextField(node, modifier, ctx)
+        "compose.foundation.lazy.LazyColumn" -> RenderLazyColumn(node, modifier, childCtx)
+        "compose.foundation.lazy.LazyRow" -> RenderLazyRow(node, modifier, childCtx)
+        "compose.material3.Text" -> RenderText(node, modifier, childCtx)
+        "compose.material3.Button" -> RenderButton(node, modifier, childCtx)
+        "compose.material3.OutlinedButton" -> RenderOutlinedButton(node, modifier, childCtx)
+        "compose.material3.TextButton" -> RenderTextButton(node, modifier, childCtx)
+        "compose.material3.Slider" -> RenderSlider(node, modifier, childCtx)
+        "compose.material3.TextField" -> RenderTextField(node, modifier, childCtx)
+        "compose.material3.OutlinedTextField" -> RenderOutlinedTextField(node, modifier, childCtx)
         "compose.material3.CircularProgressIndicator" -> RenderCircularProgress(modifier)
         "compose.material3.LinearProgressIndicator" -> RenderLinearProgress(modifier)
-        "compose.material3.Card" -> RenderCard(node, modifier, ctx)
-        "compose.material3.Surface" -> RenderSurface(node, modifier, ctx)
+        "compose.material3.Card" -> RenderCard(node, modifier, childCtx)
+        "compose.material3.Surface" -> RenderSurface(node, modifier, childCtx)
         "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
-        "compose.material3.Checkbox" -> RenderCheckbox(node, modifier, ctx)
-        "compose.material3.Switch" -> RenderSwitch(node, modifier, ctx)
-        "compose.foundation.Image" -> RenderImage(node, modifier, ctx)
+        "compose.material3.Checkbox" -> RenderCheckbox(node, modifier, childCtx)
+        "compose.material3.Switch" -> RenderSwitch(node, modifier, childCtx)
+        "compose.foundation.Image" -> RenderImage(node, modifier, childCtx)
         "compose.material3.Icon" -> RenderIcon(node, modifier)
-        "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, ctx)
-        "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, ctx)
-        "compose.material3.Scaffold" -> RenderScaffold(node, modifier, ctx)
-        UserComponent.TYPE -> RenderUserComponent(node, modifier, ctx)
+        "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, childCtx)
+        "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, childCtx)
+        "compose.material3.Scaffold" -> RenderScaffold(node, modifier, childCtx)
+        UserComponent.TYPE -> RenderUserComponent(node, modifier, childCtx)
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -197,7 +201,8 @@ private fun RenderColumn(node: Node, modifier: Modifier, ctx: RenderContext) {
         verticalArrangement = vArrange(node.props["verticalArrangement"].literalString()).toCompose(),
         horizontalAlignment = hAlign(node.props["horizontalAlignment"].literalString()).toCompose(),
     ) {
-        RenderChildren(node.children, ctx)
+        // Expose this ColumnScope so a direct child's `weight` modifier can apply (#158).
+        RenderChildren(node.children, ctx.copy(weightApplier = { m, w -> m.weight(w) }))
     }
 }
 
@@ -208,7 +213,8 @@ private fun RenderRow(node: Node, modifier: Modifier, ctx: RenderContext) {
         horizontalArrangement = hArrange(node.props["horizontalArrangement"].literalString()).toCompose(),
         verticalAlignment = vAlign(node.props["verticalAlignment"].literalString()).toCompose(),
     ) {
-        RenderChildren(node.children, ctx)
+        // Expose this RowScope so a direct child's `weight` modifier can apply (#158).
+        RenderChildren(node.children, ctx.copy(weightApplier = { m, w -> m.weight(w) }))
     }
 }
 

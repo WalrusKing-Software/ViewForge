@@ -281,6 +281,17 @@ class EditorStateTest {
     }
 
     @Test
+    fun `parentType reports the container hosting a node, or null at the root`() {
+        val s = state()
+        // "a" is a default-region child of the Column root; the inspector uses this to scope-gate `weight`.
+        assertEquals("compose.foundation.layout.Column", s.parentType(NodeId("a")))
+        // A slotted child reports its slot owner (Button), not the slot name.
+        assertEquals("compose.material3.Button", s.parentType(NodeId("leaf")))
+        // The root has no parent.
+        assertNull(s.parentType(NodeId("root")))
+    }
+
+    @Test
     fun `toggleModifier flips enabled without deleting`() {
         val s = state()
         s.addModifier(NodeId("a"), "compose.fillMaxSize")
