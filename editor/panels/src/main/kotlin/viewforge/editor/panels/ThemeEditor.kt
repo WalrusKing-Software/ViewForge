@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +30,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindow
@@ -49,16 +51,38 @@ fun ThemeEditor(state: EditorState, onClose: () -> Unit) {
     DialogWindow(
         onCloseRequest = onClose,
         title = "Theme — ${state.document.name}",
-        state = rememberDialogState(size = DpSize(560.dp, 680.dp)),
+        // Unspecified size makes the window pack to its content (#162): a fixed height left the dark
+        // chrome shorter than the window, exposing the native (white) background below it. The content
+        // fixes its own width and caps its height (see [ThemeEditorContent]), so the packed window is
+        // exactly as tall as it needs to be, scrolling only when a token-heavy theme exceeds the cap.
+        state = rememberDialogState(size = DpSize(Dp.Unspecified, Dp.Unspecified)),
     ) {
-        MaterialTheme(colorScheme = darkColorScheme()) {
-            Surface {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                    ColorsSection(state)
-                    TypographySection(state)
-                    ShapesSection(state)
-                    SpacingSection(state)
-                }
+        ThemeEditorContent(state)
+    }
+}
+
+/**
+ * The dialog's body, split out so it can be rendered in a test without spawning a real window. Fixes its
+ * own width and caps its height with a scroll fallback, so the enclosing packed window sizes to it exactly
+ * — no oversized window, no uncovered white gap (#162).
+ */
+@Composable
+internal fun ThemeEditorContent(state: EditorState) {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface {
+            Column(
+                Modifier
+                    .width(560.dp)
+                    // Cap the height so a token-heavy theme scrolls instead of growing a giant window;
+                    // shorter themes wrap below this and the window packs to them.
+                    .heightIn(max = 680.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            ) {
+                ColorsSection(state)
+                TypographySection(state)
+                ShapesSection(state)
+                SpacingSection(state)
             }
         }
     }
