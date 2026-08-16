@@ -17,4 +17,11 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+
+    // currentOs (not the bare desktop coordinate) puts the OS-specific skiko native library on the
+    // *test* classpath so ToolbarLayoutTest can rasterize the toolbar via ImageComposeScene (#161);
+    // without it the render fails with a skiko LibraryLoadException. Test-only — the shell ships no
+    // desktop entry point of its own (that is :app's role). The compose DSL is used directly here as
+    // the version catalog can't express currentOs, mirroring :app's fidelity-test setup.
+    testImplementation(compose.desktop.currentOs)
 }
