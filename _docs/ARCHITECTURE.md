@@ -1,6 +1,7 @@
 # ViewForge — Architecture
 
-**Version:** 0.1 (planning)
+**Status:** Living — Phase 1 (Compose Desktop) shipping as **v0.1.0-alpha-1**. Phase 2 (Android) planned; see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md) §2.
 
 ---
 
@@ -69,6 +70,12 @@ should compile for any KMP target.
 ### `core/project`
 `.vforge` reading/writing, schema versioning, migration chain, validation. Owns backward
 compatibility.
+
+### `core/prefs`
+Per-user **editor preferences** — chrome, not document data: panel layout (visibility + widths)
+today; window size, recent files, and the S5 preferences later. Persisted to a config file in the
+platform config dir, written through the same guarded writer as `core/project`, and kept strictly
+separate from the `.vforge` document (its own `prefsVersion`). Compose-free. See ADR-023.
 
 ### `core/command`
 Command pattern implementation. Every mutation is a `Command` with `apply`/`invert`. Owns the undo

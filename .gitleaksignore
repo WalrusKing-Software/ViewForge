@@ -1,0 +1,6 @@
+# gitleaks fingerprints to ignore. One per line.
+# Format: <commit>:<path>:<ruleID>:<startLine>
+# gitleaks reads this file automatically from the scan root.
+#
+# Only add fingerprints for findings that are confirmed non-issues. Keep each entry commented with
+# WHY — never silence a live secret here.

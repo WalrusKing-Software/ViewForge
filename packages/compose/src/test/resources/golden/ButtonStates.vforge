@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8BUTTONSTATES",
+  "name": "ButtonStates",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_bs",
+      "name": "ButtonStatesScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "b_01",
+            "type": "compose.material3.Button",
+            "props": {
+              "enabled": { "kind": "literal", "value": false },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_01", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Primary" } } }
+              ]
+            }
+          },
+          {
+            "id": "ob_01",
+            "type": "compose.material3.OutlinedButton",
+            "props": {
+              "enabled": { "kind": "literal", "value": false },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_02", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Secondary" } } }
+              ]
+            }
+          },
+          {
+            "id": "tb_01",
+            "type": "compose.material3.TextButton",
+            "props": {
+              "enabled": { "kind": "literal", "value": true },
+              "onClick": { "kind": "expression", "code": "{ /* TODO */ }" }
+            },
+            "slots": {
+              "content": [
+                { "id": "t_03", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Tertiary" } } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": []
+}

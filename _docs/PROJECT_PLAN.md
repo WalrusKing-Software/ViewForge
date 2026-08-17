@@ -1,6 +1,6 @@
 # ViewForge — Project Plan
 
-**Version:** 0.1 (planning)
+**Status:** Phase 1 (Compose Desktop) **shipping as v0.1.0-alpha-1**; Phase 2 (Android) planned next.
 **Last updated:** August 2026
 
 ---
@@ -48,7 +48,7 @@ assumption justifies prioritizing code quality of the output over hand-holding i
 Each phase must be **end-to-end complete and dogfooded** before the next begins. Do not start
 Phase N+1 to escape a hard problem in Phase N.
 
-### Phase 1 — Compose Desktop (JVM)
+### Phase 1 — Compose Desktop (JVM) — ✅ **feature-complete (v0.1.0-alpha-1)**
 
 **Goal:** Build a non-trivial desktop screen in the editor, export it, compile and run it outside
 the editor, and have it look the same.
@@ -62,24 +62,68 @@ Scope:
 - Kotlin/Compose codegen via KotlinPoet, emitting `commonMain`-compatible composables.
 - Export as either loose `.kt` files or a full runnable Gradle project scaffold.
 
+**Exit criteria (all met):**
+1. ✅ A screen with nested `Column`/`Row`/`Box`, text, buttons, images, and a scrollable list can be
+   built entirely in the editor (the `Gallery` sample).
+2. ✅ Exported code compiles with zero manual fixes (CI compile gate, `CompilationTest`).
+3. ✅ Rendered canvas and compiled output are visually identical (interpreter-vs-composable fidelity
+   test, `FidelityTest`).
+4. ✅ Save → close → reopen restores the project losslessly (`RoundTripTest`).
+5. ✅ Undo/redo is correct across ≥50 mixed operations (property-based `UndoRedoPropertyTest`).
+6. ✅ Golden-file codegen tests cover every supported component and modifier (`GoldenCodegenTest`).
+
+**Shipped beyond the exit bar** (see `FEATURES.md` for IDs): multi-select + marquee, reusable
+components with parameters, edit-in-place, device preview frames, live code preview with node↔code
+mapping, command palette, preferences dialog, crash recovery + reporter, safe regeneration, disk image
+import into the project (#141), and native installers (M10; unsigned for the alpha — see the release
+milestone below). The acceptance run is gated by [`RELEASE_QA.md`](RELEASE_QA.md).
+
+### Phase 2 — Android target — **planned (next)**
+
+**Goal:** the *same* `.vforge` project that exports a Desktop app also exports a runnable Android app,
+and the canvas can preview it in an Android device frame that matches the real device within tolerance.
+
+**Scope:**
+- **Source-set-aware export (G9).** The Compose package gains an Android `TargetDefinition` and the
+  exporter routes generated files to `commonMain` vs `androidMain` (and emits an Android
+  `build.gradle.kts` + manifest scaffold). Most UI is `commonMain`; only platform entry points and
+  Android-only affordances land in `androidMain`. `sourceSetFor(file)` (SPI, ARCHITECTURE §6.2) becomes
+  real for the first time.
+- **Android device preview frames.** Extend the `DeviceProfiles` registry (ADR-026) with Android
+  profiles carrying **density** and **safe-area/system-bar insets** (status bar, navigation bar,
+  cutout). The framed canvas already clips/centres to a profile; Phase 2 adds density scaling and inset
+  chrome so the preview reflects a real device, not just a desktop rectangle.
+- **Responsive overrides (I9).** Per-breakpoint prop values, modelled per **ADR-030**: an additive
+  node field `responsive` keyed by breakpoint id (Material window size classes for Android), resolved at
+  render (canvas shows the active breakpoint) and codegen (emit the base value; a later slice may emit
+  `BoxWithConstraints`/window-size-class branching). This is the one **schema-affecting** item —
+  bump **2 → 3** with an `M2to3` migration and a committed fixture (DATA_MODEL §10).
+- **Android-specific validation warnings.** Non-blocking inspector/validation hints, e.g. touch-target
+  minimum sizes (48dp), and unset `contentDescription` on interactive/image nodes (accessibility). Fail
+  loud in the inspector (I8), never at codegen.
+- **Verification.** An Android compile gate in CI (the `androidMain` output compiles against the
+  Android Compose artifacts), mirroring the Phase-1 desktop compile gate. Visual parity is checked
+  against an emulator/device.
+
+**Out of scope for Phase 2** (still deferred): iOS/Web targets (Phases 3/4), dynamic framework
+packages (Phase 5), navigation-graph editing, state/data binding, image *import* (a Phase-1 follow-up,
+ADR-021, independent of the target work).
+
 **Exit criteria (all must pass):**
-1. A screen with nested `Column`/`Row`/`Box`, text, buttons, images, and a scrollable list can be
-   built entirely in the editor.
-2. Exported code compiles with zero manual fixes.
-3. Rendered canvas and compiled output are visually identical (verified by screenshot diff).
-4. Save → close → reopen restores the project losslessly.
-5. Undo/redo is correct across at least 50 mixed operations.
-6. Golden-file codegen tests cover every supported component and modifier.
+1. The same `.vforge` used for Desktop exports a Gradle project that builds and runs a runnable Android
+   app (`./gradlew installDebug` or Android Studio) with **zero manual fixes**.
+2. Generated files are routed correctly to `commonMain` vs `androidMain`, and the Android output
+   compiles in CI.
+3. The canvas Android device frame (density + insets) matches the app on a real device/emulator within
+   tolerance (screenshot diff, mirroring Phase-1 exit #3).
+4. A screen with at least one responsive override renders correctly per breakpoint on the canvas and
+   round-trips losslessly through the schema-3 format (with a passing `M2to3` migration fixture).
+5. Golden codegen tests cover the Android target output and the responsive-override emission.
 
-### Phase 2 — Android target
-
-Scope:
-- Android target exporter (source-set-aware output: `commonMain` vs `androidMain`).
-- Device preview frames: viewport sizing, density scaling, safe-area/system-bar insets.
-- Android-specific validation warnings (e.g. touch target minimum sizes).
-
-**Exit criteria:** Same project exports to a runnable Android app; canvas preview in "Android
-device" mode matches the app on a real device/emulator within tolerance.
+**Prerequisite design decisions (record before coding):** ADR-030 (responsive data model — decided);
+still to decide at Phase-2 kickoff — the responsive *codegen* strategy (window-size-class branching vs
+`commonMain` base only), and the exact Android scaffold (min/target SDK, AGP/Compose-Android versions,
+pinned in the catalog per DS-1).
 
 ### Phase 3 — iOS target *(blocked: requires macOS hardware)*
 
@@ -116,7 +160,7 @@ behind a stable SPI so non-Compose packages become possible. See `_docs/ARCHITEC
 | Language | Kotlin (JVM) | Same language as the output; enables sharing the component model between editor and codegen. |
 | UI framework | Compose Multiplatform (desktop/JVM) | The editor renders real Compose — dogfooding gives free WYSIWYG fidelity. |
 | Build | Gradle (Kotlin DSL), multi-module | Standard for KMP; required for the output projects anyway. |
-| JDK | **17+** | Compose Desktop requires JDK 11 minimum due to Skia binding memory management; **17+ is required to package native distributions.** Standardize on 17 to avoid a split. |
+| JDK | **21** (LTS ≥ 17) | Compose Desktop requires JDK 11 minimum due to Skia binding memory management; **17+ is required to package native distributions.** Standardized on 21 (installed toolchain) to avoid a split; pinned in the version catalog. |
 | Serialization | `kotlinx.serialization` (JSON) | Multiplatform-ready, schema-friendly, good default-value handling for forward compat. |
 | Codegen | **KotlinPoet 2.x** (`com.squareup:kotlinpoet`) | The mature, actively maintained Kotlin source generator. Produces structurally valid code rather than string-concatenated guesses. |
 | Concurrency | Kotlin Coroutines + `StateFlow` | Standard; integrates cleanly with Compose state. |
@@ -133,7 +177,7 @@ formatting. Budget time for formatting tuning and lock it down with golden-file 
 | Widget toolkit | Compose Multiplatform | — |
 | IDE-style chrome | **Jewel** (JetBrains) — *optional, evaluate first* | Gives an IntelliJ-native look, but **requires the JetBrains Runtime (JBR)** rather than a stock JDK. That's a real constraint on your build and distribution. Do not adopt it without deciding you accept the JBR dependency. Default to plain Material 3 if unsure. |
 | Icons | Compose Material Icons + custom | — |
-| Packaging | Compose Desktop `packageDistributionForCurrentOS`, or **Conveyor** for cross-OS builds + auto-update | Conveyor is what ComposeFlow uses; it solves cross-OS packaging and updates but is a paid product above certain usage. Evaluate before Phase 1 exit. |
+| Packaging | Compose Desktop `nativeDistributions` / jpackage (**chosen**, ADR-022). Conveyor evaluated and rejected. | Vanilla jpackage: offline, no paid product, no auto-update (ADR-011). Conveyor's cross-OS packaging + auto-update was rejected because auto-update is a network channel ADR-011 excludes. See `_docs/INSTALL.md`. |
 
 ### 3.3 Testing
 
@@ -276,8 +320,14 @@ tests that encode intent so context survives gaps between work sessions.
 | M6 | Codegen v1 | Full component/modifier set emits compiling Kotlin; golden tests green; CI compiles output. |
 | M7 | Project export | Export loose files and a runnable Gradle desktop project scaffold. |
 | M8 | Theming | Theme editor for colors/typography/shapes; props can reference theme tokens. |
-| M9 | **Phase 1 complete** | All Phase 1 exit criteria met; editor used to build something real. |
-| M10 | Packaging | Signed installers for at least Windows + Linux; documented install path. |
+| M9 | **Phase 1 complete** ✅ | All Phase 1 exit criteria met; editor used to build something real. Added `Image` + `LazyColumn`/`LazyRow`, the `Gallery` sample (`samples/Gallery.vforge`), an interpreter-vs-composable pixel fidelity test (exit #3), and a lossless round-trip of the sample (exit #4). Codegen goldens + compile gate cover every component (exit #6). The Gradle export ships referenced assets so an exported project *runs* with images unmodified. Remaining follow-up: importing asset files from disk into a project (an "Assets" surface), see ADR-021. |
+| M10 | Packaging ✅ | Signed installers for Windows + Linux via vanilla jpackage (`nativeDistributions` in `:app`; ADR-022, resolving open question #3 against Conveyor). Windows Msi/Exe + Linux Deb/Rpm; version single-sourced in `gradle.properties`. The Windows MSI is verified locally; Deb/Rpm build on a Linux runner. A tag-triggered `release.yml` builds per-OS, signs (Authenticode / detached GPG, gated on CI secrets — DI-1), publishes SHA-256 sums (DI-2) from the tag (DI-3), and attaches everything to a GitHub Release. Install path per OS in `_docs/INSTALL.md`. Follow-ups: branded `.ico`/`.icns` icons, runtime-module trimming (installer size), and macOS (Dmg) packaging. |
+| — | **v0.1.0-alpha-1 release** | Cut `release/v0.1.0-alpha-1`, run `RELEASE_QA.md`, tag, publish the (unsigned, for the alpha) installer + checksums, back-merge to `main`. |
+| M11 | Android target scaffold | Compose package gains an Android `TargetDefinition`; exporter routes `commonMain` vs `androidMain` (G9) and emits an Android Gradle + manifest scaffold; Android compile gate green in CI. |
+| M12 | Android device preview | `DeviceProfiles` gains Android profiles with density + safe-area/system-bar insets; the framed canvas scales by density and draws inset chrome. |
+| M13 | Responsive overrides | Schema **2 → 3** (`M2to3` + fixture); node `responsive` field (ADR-030); canvas renders the active breakpoint; inspector edits per-breakpoint values. |
+| M14 | Android validation + codegen | Android-specific validation warnings (touch targets, missing `contentDescription`); responsive-override codegen with golden coverage. |
+| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. |
 
 ---
 
@@ -285,11 +335,14 @@ tests that encode intent so context survives gaps between work sessions.
 
 Decide these before or during M0; record outcomes in [`DECISIONS.md`](DECISIONS.md).
 
-1. **License.** Open source (and which — Apache-2.0 vs MIT vs a source-available license) or private?
-   This affects whether third-party framework packages are realistic, and it is easier to decide now
-   than after code exists.
-2. **Jewel vs plain Material 3** for editor chrome — accept the JBR dependency or not?
-3. **Conveyor vs vanilla Compose packaging** — evaluate cost/benefit at M10.
+1. ~~**License.**~~ **Resolved: Apache-2.0** (permissive + explicit patent grant, the best fit for a
+   future third-party package ecosystem). Root [`LICENSE`](../LICENSE); © 2026 WalrusKing Software.
+2. ~~**Jewel vs plain Material 3** for editor chrome.~~ **Resolved (ADR-031): stay on Material 3.**
+   Jewel would force a JetBrains Runtime dependency (a build/distribution constraint) for a cosmetic
+   gain; the editor chrome already runs through its own `MaterialTheme` (S3, ADR — light/dark chrome).
+3. ~~**Conveyor vs vanilla Compose packaging** — evaluate cost/benefit at M10.~~ **Resolved (ADR-022):
+   vanilla jpackage.** Conveyor's auto-update is a network channel excluded by ADR-011; jpackage is
+   already in the Compose plugin, offline, and needs no paid product.
 4. **Export model:** does ViewForge own a directory it regenerates wholesale, or write individual
    files into a user-managed project? (Recommendation: own a dedicated generated directory. It
    sidesteps merge conflicts and makes regeneration safe.)

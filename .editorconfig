@@ -1,0 +1,21 @@
+# Shared editor + ktlint configuration. Spotless runs ktlint using these rules (build-logic
+# convention), so keep this authoritative for Kotlin style.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,toml,json}]
+indent_size = 2
+
+[*.{kt,kts}]
+ktlint_code_style = intellij_idea
+max_line_length = 120
+
+[*.md]
+trim_trailing_whitespace = false

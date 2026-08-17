@@ -45,7 +45,7 @@ feature/*     ●──●      ●──●         ●────●         
 | Type | Use | Branches from | Merges to |
 |---|---|---|---|
 | `feature/` | New capability | `develop` | `develop` |
-| `bugfix/` | Bug fix in unreleased work | `develop` | `develop` |
+| `bugfix/` (or `fix/`) | Bug fix in unreleased work | `develop` | `develop` |
 | `hotfix/` | Fix to released code | `main` | `main` + `develop` |
 | `refactor/` | Behavior-preserving restructure | `develop` | `develop` |
 | `docs/` | Documentation only | `develop` | `develop` |
@@ -59,8 +59,9 @@ Examples:
 `hotfix/0.3.1` · `spike/jewel-evaluation`
 
 **Distinguish `bugfix/` from `hotfix/` strictly.** `bugfix/` fixes something not yet released and
-goes through `develop` normally. `hotfix/` branches from `main` because the bug is in released code
-and cannot wait for the next release train.
+goes through `develop` normally (`fix/` is accepted as a synonym for `bugfix/`). `hotfix/` branches
+from `main` because the bug is in released code and cannot wait for the next release train; it merges
+to `main` **and** back to `develop`.
 
 **Spikes matter here.** When exploring whether an approach works, branch as a spike, learn, throw it
 away, then implement cleanly. Merging exploratory code is how prototypes quietly become permanent.
@@ -281,8 +282,8 @@ Conventions that keep agent-assisted work reviewable under this model:
    Tell Claude Code the base branch explicitly at the start of a session.
 2. **One branch per feature, one session per branch** where practical. Mixing unrelated work
    produces diffs that are hard to review and hard to revert.
-3. **Start each session by pointing at the relevant docs.** `CLAUDE.md` carries standing context;
-   name the specific feature and its acceptance criteria for the task at hand.
+3. **Start each session by pointing at the relevant docs.** Name the specific feature and its
+   acceptance criteria for the task at hand.
 4. **Ask for a plan before implementation** on anything non-trivial. Correcting a plan is far
    cheaper than correcting a thousand-line diff.
 5. **Never merge a diff you haven't read**, however good the tests look. Tests written by the same

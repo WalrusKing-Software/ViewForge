@@ -10,7 +10,11 @@ simulation — and export clean, idiomatic Kotlin source you own and can hand-ed
 
 ## Status
 
-**Pre-alpha. Phase 1 (Desktop target) in progress.** Nothing here is stable yet.
+**v0.1.0-alpha-1 — first public alpha (Phase 1, Compose Desktop).** The editor builds, edits, themes,
+and exports a non-trivial Compose Desktop screen, and ships an **unsigned** Windows installer
+(`.msi`/`.exe`) — a downloaded build may show a SmartScreen prompt. Early software: expect rough edges,
+and the `.vforge` schema (v2) may still evolve behind migrations. Phase 2 (Android) is planned — see
+[`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
 ## Why this exists
 
@@ -27,8 +31,8 @@ open without over-designing for it.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| 1 | Compose Desktop (JVM) | In progress |
-| 2 | + Android | Planned |
+| 1 | Compose Desktop (JVM) | **Feature-complete (v0.1.0-alpha-1)** |
+| 2 | + Android | Planned (next) |
 | 3 | + iOS | Blocked on macOS hardware |
 | 4 | + Web (Kotlin/Wasm) | Planned, experimental |
 | 5 | Framework package SDK (non-Compose frameworks) | Future |
@@ -47,11 +51,14 @@ Full detail: [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md)
 | [`_docs/SECURITY.md`](_docs/SECURITY.md) | Threat model and security requirements |
 | [`_docs/TECHNICAL_NOTES.md`](_docs/TECHNICAL_NOTES.md) | Known hard problems and decided approaches |
 | [`_docs/DECISIONS.md`](_docs/DECISIONS.md) | Architecture Decision Record log |
-| [`CLAUDE.md`](CLAUDE.md) | Working agreement for Claude Code |
+| [`_docs/INSTALL.md`](_docs/INSTALL.md) | Installing the packaged app, per OS |
+| [`_docs/RELEASE_QA.md`](_docs/RELEASE_QA.md) | Manual acceptance-test checklist gating each release |
+| [`CHANGELOG.md`](CHANGELOG.md) | Notable changes per release (Keep a Changelog) |
 
 ## Building
 
-Requires **JDK 17+** (see `_docs/PROJECT_PLAN.md` for exact toolchain constraints).
+Requires **JDK 21** (Compose Desktop needs 11+; native packaging needs 17+ — the toolchain is pinned
+to 21 in `gradle/libs.versions.toml`; see `_docs/PROJECT_PLAN.md`).
 
 ```bash
 ./gradlew :app:run          # run the editor
@@ -59,6 +66,8 @@ Requires **JDK 17+** (see `_docs/PROJECT_PLAN.md` for exact toolchain constraint
 ./gradlew :app:packageDistributionForCurrentOS   # produce a native installer
 ```
 
+Installing a released build: [`_docs/INSTALL.md`](_docs/INSTALL.md).
+
 ## License
 
-TBD before first public release. See [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md) § Open Questions.
+[Apache License 2.0](LICENSE). © 2026 WalrusKing Software.

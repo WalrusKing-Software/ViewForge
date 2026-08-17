@@ -1,0 +1,86 @@
+# ViewForge — single source of truth for dependency versions.
+#
+# CLAUDE.md rule 9: pin every version. No dynamic versions (no "+", no "latest.release").
+# PROJECT_PLAN §3 note: these reflect the ecosystem as of Aug 2026 and move fast — verify
+# before bumping, and upgrade deliberately on a schedule (risk 7.5), never float.
+
+[versions]
+# Toolchain
+jdk = "21"                      # PROJECT_PLAN §3.1 / TECHNICAL_NOTES §12: 17+ required for native
+                                # packaging; standardized on 21 (installed toolchain).
+
+# Kotlin / Compose
+kotlin = "2.1.20"
+compose = "1.7.3"               # Compose Multiplatform (desktop/JVM target in Phase 1)
+
+# Core libraries
+kotlinpoet = "2.1.0"            # ADR-010: 2.x structural API only
+kotlinxSerialization = "1.8.0"
+coroutines = "1.10.1"
+
+# Codegen verification (test-only): compile generated Kotlin in-process (G2/GC-6). kctfork is the
+# maintained kotlin-compile-testing fork; 0.7.0 tracks the Kotlin 2.1 line. The Kotlin
+# compiler/compose-compiler embeddables are forced to the pinned `kotlin` version so the Compose
+# compiler plugin registrar matches the compiler it runs in.
+kctfork = "0.7.0"
+
+# Logging (diagnosing codegen/package failures — PROJECT_PLAN §3.1)
+slf4j = "2.0.16"
+logback = "1.5.13"
+
+# Architecture / quality gates
+konsist = "0.17.3"             # core <-> packages/compose boundary test (ADR-007), wired at M1
+
+# Build tooling
+spotless = "6.25.0"
+ktlint = "1.5.0"
+
+[libraries]
+# --- Serialization (allowed in core/*; the ONLY non-stdlib dep core/model may use) ---
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# --- Coroutines ---
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
+
+# --- Compose Multiplatform (editor/*, packages/compose, app) ---
+# Referenced by explicit coordinates rather than the `compose { }` DSL: the DSL's type-safe
+# accessors are only generated for plugins in a script's own plugins block, and our Compose
+# plugin is applied via a convention plugin. Coordinates keep resolution catalog-pinned.
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
+compose-desktop = { module = "org.jetbrains.compose.desktop:desktop", version.ref = "compose" }
+
+# --- Codegen (packages/compose only) ---
+kotlinpoet = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
+
+# --- Logging ---
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+
+# --- Architecture test ---
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
+
+# --- Testing ---
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# --- Codegen compile gate (test-only, packages/compose) ---
+kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
+kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
+kotlin-compose-compiler-plugin-embeddable = { module = "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable", version.ref = "kotlin" }
+
+# --- Plugin artifacts consumed by build-logic convention plugins ---
+plugin-kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+plugin-compose-gradle = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "compose" }
+plugin-compose-compiler = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+plugin-spotless-gradle = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

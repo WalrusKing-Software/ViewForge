@@ -1,0 +1,3 @@
+[submodule "wiki"]
+	path = wiki
+	url = ssh://git@forgejo.thortower.net:2222/WalrusKing-Software/ViewForge.wiki.git

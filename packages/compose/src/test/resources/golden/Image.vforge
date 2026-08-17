@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "01J8IMAGE",
+  "name": "Image",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_im",
+      "name": "ImageScreen",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [ { "id": "cm_01", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 16 } } } ],
+        "children": [
+          {
+            "id": "img_01",
+            "type": "compose.foundation.Image",
+            "props": {
+              "source": { "kind": "resource", "assetId": "asset_hero" },
+              "contentDescription": { "kind": "literal", "value": "Hero banner" },
+              "contentScale": { "kind": "literal", "value": "Crop" }
+            },
+            "modifiers": [ { "id": "im_01", "type": "compose.size", "args": { "all": { "kind": "literal", "value": 120 } } } ]
+          },
+          {
+            "id": "img_02",
+            "type": "compose.foundation.Image",
+            "props": {
+              "source": { "kind": "resource", "assetId": "asset_icon" }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [],
+  "assets": [
+    { "id": "asset_hero", "type": "image/png", "path": "assets/hero.png", "originalName": "hero.png" },
+    { "id": "asset_icon", "type": "image/png", "path": "assets/icon.png", "originalName": "icon.png" }
+  ]
+}

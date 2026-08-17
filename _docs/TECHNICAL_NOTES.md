@@ -43,6 +43,14 @@ but nothing structurally guarantees it. Any bug in either path shows up as "the 
 - Font rendering differs slightly across OSes.
 - `RawExpression` props can't be evaluated on the canvas.
 - Platform-specific behavior (Android insets) can only be approximated in a desktop preview.
+- **Interactive preview (C13, #120) is a deliberate divergence, gated off by default.** Normally the
+  canvas draws inert inputs (a `Checkbox`'s `onCheckedChange` is a no-op, a `TextField` reflects its
+  `value` prop but isn't editable) so it mirrors the generated code. When the user turns on interactive
+  preview, the renderer's stateful inputs carry their own local `remember` state and live callbacks so the
+  UI can be clicked/typed/toggled. This flows through `CanvasRenderer.Render(interactive)` →
+  `RenderContext.interactive`, which **defaults false** — codegen and the fidelity screenshot tests never
+  set it, so the "what you see is what you get" guarantee for *generated output* is unaffected; only the
+  editor's live run-mode canvas opts in.
 
 ---
 
@@ -85,6 +93,31 @@ works perfectly at 100% zoom and silently breaks everywhere else.
 - Test hit-testing explicitly at multiple zoom levels and pan offsets.
 - Bounds must be invalidated on recomposition — a stale index selects the wrong node after a layout
   change.
+
+**Implemented (C5, issue #38):** the transform is a single `graphicsLayer` on the rendered frame,
+driven by the pure `CanvasViewport(zoom, panX, panY)` view state (`editor/state`). Because
+`graphicsLayer` participates in Compose's layout-coordinate chain, `boundsInWindow` returns node
+bounds already scaled/panned, and the `SelectionOverlay` — left *unscaled* on top so its outlines
+keep constant thickness — reconciles pointer events against them in **window space**. That is why
+`hitTest` needed no change: window space is the common frame both sides already agree in. The pure
+`CanvasViewport` math (clamp/step/pan) is unit-tested (`CanvasViewportTest`); end-to-end zoom
+hit-testing rests on Compose's layer-aware coordinates and is best confirmed with a UI/screenshot
+test (not yet added). Gestures live only in the overlay (scroll → zoom, space-drag → pan); the shell's
+`handleShortcut` tracks the space bar and binds Ctrl +/−/0.
+
+**Refinement (#116):** node bounds are now stored in the frame's **unscaled content space** (captured
+against a reference box *below* the `graphicsLayer`), and the overlay applies the transform explicitly
+through the pure `contentToScreen`/`screenToContent`/`contentRectToScreen` helpers (`Selection.kt`,
+unit-tested in `CanvasTransformTest`) when it draws and when it maps a pointer. This is the single
+canonical transform; any new overlay that draws per-node chrome reuses it rather than re-deriving
+coordinate math. The debug container-border overlay (**#117**, a View-menu toggle outlining every layout
+container via `containerNodes` + `contentRectToScreen`) is the first such reuse; the measure/spacing
+overlay (**#119**, hold **M** to show the pure `measureGaps` distances from the selection to its
+container edges, held-key-tracked like space-pan) is the second; the static alignment guides (**#118**, a
+View toggle drawing the pure `alignmentGuides` lines where the selection's edges/centre meet a sibling or
+the parent) are the third. Note #118 is C11 **reinterpreted** for the container-layout model: free-move
+snapping-during-drag presumes absolute positioning the canvas doesn't have (drag is reparent-only), so
+that part is split to the blocked #129 rather than forcing a positioning model the layout doesn't use.
 
 ---
 
@@ -178,7 +211,9 @@ conflate the two.
 
 - Compose Desktop requires **JDK 11+** due to memory management in the Skia bindings.
 - **JDK 17+ is required to package native distributions.**
-- Standardize on **JDK 17** for both development and CI to avoid a split-toolchain situation.
+- Standardize on **JDK 21** (an LTS ≥ 17) for both development and CI to avoid a split-toolchain
+  situation. Pinned in `gradle/libs.versions.toml` (`jdk = "21"`) and applied via `jvmToolchain`
+  in the `viewforge.kotlin-library` convention plugin (M0).
 - If Jewel is adopted for IDE-style chrome, it requires the **JetBrains Runtime (JBR)** specifically
   rather than a stock JDK — a real constraint on the build and distribution pipeline. Decide before
   adopting, not after.

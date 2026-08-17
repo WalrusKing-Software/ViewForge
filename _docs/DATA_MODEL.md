@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
-**Version:** 0.1 (planning)
-**Schema version:** 1
+**Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
+**Schema version:** 2
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -91,10 +91,26 @@ A user-defined composable, reusable across screens.
 ```
 
 Instances reference these via a node whose `type` is `"vforge.userComponent"` and whose props carry
-the component ID plus argument values.
+the referenced component ID under the `componentId` key (a `literal` string) plus argument values.
+These two conventions are pinned as constants on `model.UserComponent` (`TYPE` / `COMPONENT_ID_PROP`)
+and shared by the validator, renderer, and generator so there is one source of the contract.
+
+An instance is a **reference, resolved at render and codegen time — never inlined into the IR**
+(ADR-024). This is what makes instances "update on edit": codegen emits each component as its own
+`@Composable fun` and an instance as a *call* to it; the canvas renders the definition's tree in the
+instance's place. Editing a definition therefore updates every instance without touching the instances.
+**Parameters (schema 2, ADR-028).** A node inside the component's `root` references a parameter with
+`PropValue.ParamRef(param)` (see §6). An *instance* supplies argument values as ordinary `PropValue`s
+in its own `props` map, keyed by parameter name (alongside the reserved `componentId` key) — the
+instance-`props` side needs no schema change, only `ParamRef` does. Codegen emits each component as a
+`@Composable fun` with typed parameters and each instance as a call passing the argument values;
+render resolves each `ParamRef` against the instance's args, falling back to `Parameter.default`.
+*(Codegen — typed fn params + call args — ships in slice 2; render-time resolution and inspector arg
+editing land in later slices of the parameters epic.)*
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
-itself. Validate on every mutation, not just on save — a cycle will hang the renderer.
+itself. It is validated on load (`ProjectValidator`) and guarded again at render time
+(`RenderContext.expanding`), because the canvas renders mid-edit before load validation runs.
 
 ---
 
@@ -110,7 +126,7 @@ data class Node(
     val modifiers: List<ModifierEntry> = emptyList(),   // ORDERED — semantic
     val children: List<Node> = emptyList(),
     val slots: Map<String, List<Node>> = emptyMap(),
-    val locked: Boolean = false,                 // editor-only: prevents selection/mutation
+    val locked: Boolean = false,                 // editor-only: protects this node (per-node, not its subtree)
     val hidden: Boolean = false                  // editor-only: excluded from render AND codegen
 )
 ```
@@ -130,6 +146,15 @@ Keeping them separate avoids encoding slot identity into child ordering, which w
 
 **`hidden`** — deliberately excludes the node from *both* render and codegen. A "visible in editor
 but not in output" state would be a fidelity lie.
+
+**`locked`** — editor-only protection (T4), scoped **per-node, not to the subtree**: a locked node is
+non-selectable (canvas click, marquee, tree click), non-draggable, cannot receive dropped children (a
+container *nested inside* it still can — its own child list changes, not the locked node's), and cannot
+be renamed; it is also skipped by tree keyboard navigation. Because selection is the gateway to prop,
+modifier, delete, duplicate, cut, and copy operations, a locked node is protected from those too. It
+has **no effect on render or codegen** — a locked node is emitted exactly like an unlocked one. The
+canvas draws a padlock badge and a faint outline on locked nodes, and the tree marks locked rows, so
+the protection is visible rather than looking inert.
 
 ---
 
@@ -154,8 +179,20 @@ sealed interface PropValue {
 
     @Serializable @SerialName("binding")
     data class StateBinding(val path: String) : PropValue     // RESERVED, Phase 2+
+
+    @Serializable @SerialName("param")
+    data class ParamRef(val param: String) : PropValue        // component parameter, §4 / ADR-028
 }
 ```
+
+### `ParamRef` — component parameters (schema 2)
+
+Only meaningful inside a `ComponentDef.root`: it names one of the component's `parameters`. At render
+and codegen time it resolves against the argument value the *instance* supplies (falling back to the
+parameter's `default`); it is never evaluated. Adding it is what took the schema to **version 2** — a
+new member of the *closed* `PropValue` hierarchy cannot be deserialized by a v1-only build, so unlike
+an additive optional field it is forward-incompatible and needs a version bump (§10, ADR-028). The
+1→2 migration only stamps the version (`M1to2`).
 
 ### `RawExpression` — the escape hatch
 
@@ -351,21 +388,38 @@ A screen with a centered column containing a title and a button:
 
 ### Expected generated output
 
+This is the actual M6 output (`packages/compose/src/test/resources/golden/Demo.kt`). Two things worth
+noting versus a hand-written version: KotlinPoet manages the import block and emits an explicit
+`public` (it has no toggle; the G7 formatting pass at export can strip it), and argument order mirrors
+each renderer's Composable call (ADR-018) — e.g. `Column`'s `verticalArrangement` before
+`horizontalAlignment`, matching `render/Components.kt`.
+
 ```kotlin
 // Generated by ViewForge — do not edit.
-// Source: Demo.vforge · schema 1
+// Source: Demo.vforge (schema 1)
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+public fun HomeScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = "Welcome",
-            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.titleLarge,
         )
         Button(
             onClick = { /* TODO */ },
@@ -377,20 +431,26 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 }
 ```
 
-**This example is the first golden-file test.** Commit both files to `samples/` and assert the
-transformation exactly.
+**This example is the first golden-file test** (`Demo.vforge` → `Demo.kt`), asserted exactly by
+`GoldenCodegenTest` and compiled by `CompilationTest`.
 
 ---
 
 ## 12. Open modeling questions
 
-1. **Root modifier parameter.** Generated composables take `modifier: Modifier = Modifier` by
-   convention. Should the root node's own modifiers merge with the caller's, and in which order?
-   (Recommendation: caller's modifier first, then the node's — matching Compose convention.)
+1. **Root modifier parameter.** *Resolved (M6, ADR-018).* Generated composables take
+   `modifier: Modifier = Modifier`; the root node chains its own modifiers onto that parameter,
+   caller's first — `modifier.fillMaxSize().padding(24.dp)` — matching Compose convention.
 2. **Lists and repeaters.** Static children only in Phase 1. A `LazyColumn` bound to a data source
    needs a repeater concept — real design work, deferred.
-3. **Responsive variants.** Per-breakpoint prop overrides will be needed for Phase 2 (Android). Where
-   do they live — on the node, or as a separate override layer? Decide before Phase 2, because
-   retrofitting affects every node.
+3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
+   overrides live **on the node** as an additive optional field
+   `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
+   base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
+   strings to `core` and defined by the framework package's target (Material window size classes —
+   `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
+   Introducing the field will bump the schema **2 → 3** (an `M2to3` stamp) because it is a semantic
+   capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). A separate
+   node-id-keyed override layer was rejected — see ADR-030.
 4. **Interaction/navigation.** Out of scope for v1, but reserve `StateBinding` so it can arrive
    without a schema break.
