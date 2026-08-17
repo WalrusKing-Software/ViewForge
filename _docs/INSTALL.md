@@ -52,8 +52,8 @@ Requires **JDK 21** (jpackage; TECHNICAL_NOTES §12). The Compose Gradle plugin 
 Windows, so no separate WiX install is needed.
 
 ```bash
-# Whatever the current OS supports:
-./gradlew :app:packageDistributionForCurrentOS
+# Whatever the current OS supports (add `clean` when building an installer to test or ship):
+./gradlew clean :app:packageDistributionForCurrentOS
 
 # Or a specific format:
 ./gradlew :app:packageMsi     # Windows installer (.msi)   — verified locally
@@ -73,6 +73,11 @@ Output lands under `app/build/compose/binaries/main/<format>/`.
   installers build on Windows; `.deb`/`.rpm` build on Linux.
 - On Linux, jpackage shells out to distro tools: `.deb` needs `fakeroot`, `.rpm` needs `rpmbuild`
   (`sudo apt-get install fakeroot rpm`).
+- **Build installers from a clean state.** Run `clean` before any `package*` / `createDistributable`
+  you intend to install or ship. An incremental package can bundle a runtime image missing
+  freshly-generated synthetic (lambda) classes, which surfaces at runtime as a `NoClassDefFoundError`
+  in a draw/paint pass (observed once as #183, not reproducible from a clean build). CI releases are
+  already clean — a fresh checkout per run.
 - **Local builds are unsigned by design.** Signing happens only in the tagged CI release
   (SECURITY DI-3) — a laptop build is for testing the package, not for distribution.
 
