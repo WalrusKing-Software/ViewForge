@@ -22,7 +22,7 @@ coroutines = "1.10.1"
 # maintained kotlin-compile-testing fork; 0.7.0 tracks the Kotlin 2.1 line. The Kotlin
 # compiler/compose-compiler embeddables are forced to the pinned `kotlin` version so the Compose
 # compiler plugin registrar matches the compiler it runs in.
-kctfork = "0.7.0"
+kctfork = "0.13.0"
 
 # Logging (diagnosing codegen/package failures — PROJECT_PLAN §3.1)
 slf4j = "2.0.16"
