@@ -14,21 +14,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -231,14 +236,24 @@ private fun TokenRow(
     }
 }
 
-/** An editable token name that commits a rename only when it loses focus with a changed, non-blank value. */
+/**
+ * An editable token name. It commits a rename on any of the three ways a user finishes an edit — pressing
+ * Enter, moving focus away, or closing the dialog — through one guarded [commit] (changed + non-blank; the
+ * rename command itself no-ops if the source token is gone or the target name is taken). Committing only on
+ * focus loss dropped Enter and dialog-close edits and made the adjacent ✕ look like it discarded the
+ * rename (#182).
+ */
 @Composable
 private fun NameField(current: String, modifier: Modifier, onRename: (String) -> Unit) {
     var text by remember(current) { mutableStateOf(current) }
+    val commit = { if (text != current && text.isNotBlank()) onRename(text.trim()) }
+    // Commit pending text when the field leaves composition (e.g. the dialog closes). Held via
+    // rememberUpdatedState so onDispose reads the latest text/callback, and safe because the rename no-ops
+    // when nothing changed — a removed token (source gone) commits to nothing.
+    val latestCommit by rememberUpdatedState(commit)
+    DisposableEffect(Unit) { onDispose { latestCommit() } }
     FieldFrame(
-        modifier = modifier.onFocusChanged { focus ->
-            if (!focus.isFocused && text != current && text.isNotBlank()) onRename(text.trim())
-        },
+        modifier = modifier.onFocusChanged { focus -> if (!focus.isFocused) commit() },
     ) {
         BasicTextField(
             value = text,
@@ -246,6 +261,8 @@ private fun NameField(current: String, modifier: Modifier, onRename: (String) ->
             singleLine = true,
             textStyle = fieldTextStyle(),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { commit() }),
             modifier = Modifier.fillMaxWidth(),
         )
     }
