@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -38,6 +40,7 @@ import viewforge.project.ExportFile
 import viewforge.project.ProjectExporter
 import viewforge.project.RegenerationOutcome
 import java.nio.file.Path
+import org.jetbrains.skia.Image as SkiaImage
 
 /**
  * Desktop entry point and the single bootstrapping site allowed a compile-time dependency on
@@ -133,6 +136,13 @@ private fun runEditor() {
 
     application {
         val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))
+        // App/taskbar icon, decoded once from the packaged asset. jpackage's iconFile only skins the
+        // installer and launcher .exe; the on-screen window icon must be set here from the same source.
+        val appIcon =
+            remember {
+                val bytes = {}.javaClass.getResourceAsStream("/packaging/icon.png")!!.readBytes()
+                BitmapPainter(SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap())
+            }
         // Save-on-close guard (#56): closing with unsaved edits raises this flag so the shell can prompt
         // Save/Discard/Cancel instead of quitting outright; a clean document exits immediately. Recovery
         // (#54) still protects a hard kill — this is only the clean-exit UX.
@@ -141,6 +151,7 @@ private fun runEditor() {
             onCloseRequest = { if (state.isDirty) closeRequested = true else exitApplication() },
             state = windowState,
             title = "ViewForge",
+            icon = appIcon,
         ) {
             EditorShell(
                 state,
