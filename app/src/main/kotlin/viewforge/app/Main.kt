@@ -121,6 +121,9 @@ private fun runEditor() {
                 imageLoader = images::load,
                 components = state.document.components,
                 interactive = interactive,
+                // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
+                // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
+                editorAffordances = true,
             )
         }
 
