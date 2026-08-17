@@ -16,7 +16,7 @@ compose = "1.7.3"               # Compose Multiplatform (desktop/JVM target in P
 # Core libraries
 kotlinpoet = "2.1.0"            # ADR-010: 2.x structural API only
 kotlinxSerialization = "1.8.0"
-coroutines = "1.10.1"
+coroutines = "1.11.0"
 
 # Codegen verification (test-only): compile generated Kotlin in-process (G2/GC-6). kctfork is the
 # maintained kotlin-compile-testing fork; 0.7.0 tracks the Kotlin 2.1 line. The Kotlin
