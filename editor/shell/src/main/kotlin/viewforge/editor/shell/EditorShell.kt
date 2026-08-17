@@ -156,7 +156,14 @@ fun FrameWindowScope.EditorShell(
         ExportDialogs(export)
         DocumentDialogs(document)
         RecoveryDialog(recovery)
-        ExitConfirmation(closeRequested, state, document, onExit = onExit, onCancel = onCloseHandled)
+        ExitConfirmation(
+            closeRequested,
+            state,
+            document,
+            onExit = onExit,
+            onCancel = onCloseHandled,
+            onSavedClean = recovery::clearIfClean,
+        )
         // The command palette (S4, #123). Built from the live wiring so enablement is current when opened.
         if (showPalette) {
             CommandPalette(
