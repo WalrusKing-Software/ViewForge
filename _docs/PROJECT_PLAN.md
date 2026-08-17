@@ -74,10 +74,9 @@ Scope:
 
 **Shipped beyond the exit bar** (see `FEATURES.md` for IDs): multi-select + marquee, reusable
 components with parameters, edit-in-place, device preview frames, live code preview with node↔code
-mapping, command palette, preferences dialog, crash recovery + reporter, safe regeneration, and signed
-installers (M10). **Known v0.1.0-alpha-1 limitation:** no in-app image *import* — `Image` works with bundled
-assets only (ADR-021; `FEATURES.md` §2 caveat). The acceptance run is gated by
-[`RELEASE_QA.md`](RELEASE_QA.md).
+mapping, command palette, preferences dialog, crash recovery + reporter, safe regeneration, disk image
+import into the project (#141), and native installers (M10; unsigned for the alpha — see the release
+milestone below). The acceptance run is gated by [`RELEASE_QA.md`](RELEASE_QA.md).
 
 ### Phase 2 — Android target — **planned (next)**
 
