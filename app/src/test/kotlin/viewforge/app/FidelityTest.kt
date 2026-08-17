@@ -52,7 +52,8 @@ class FidelityTest {
     @Test
     fun `interpreter render matches the idiomatic composable pixel-for-pixel`() {
         val project = sampleProject()
-        val loader = AssetImageLoader { project.assets }
+        // The sample's assets are bundled on the classpath, so no project dir is needed (classpath fallback).
+        val loader = AssetImageLoader(projectDir = { null }, assets = { project.assets })
         val root = project.screens.single().root
 
         val interpreted = renderToPng {
