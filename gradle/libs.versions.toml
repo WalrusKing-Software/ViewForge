@@ -11,7 +11,7 @@ jdk = "21"                      # PROJECT_PLAN §3.1 / TECHNICAL_NOTES §12: 17+
 
 # Kotlin / Compose
 kotlin = "2.1.20"
-compose = "1.7.3"               # Compose Multiplatform (desktop/JVM target in Phase 1)
+compose = "1.9.0"               # Compose Multiplatform (desktop/JVM target in Phase 1)
 
 # Core libraries
 kotlinpoet = "2.1.0"            # ADR-010: 2.x structural API only
