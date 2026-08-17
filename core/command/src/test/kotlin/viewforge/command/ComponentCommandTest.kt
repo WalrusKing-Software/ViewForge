@@ -7,6 +7,7 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.PropValue
 import viewforge.model.findById
+import viewforge.model.withFreshIds
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -130,5 +131,42 @@ class ComponentCommandTest {
         val restored = cmd.invert(before).apply(after)
         assertEquals(before.components, restored.components)
         assertEquals(before.rootOf(), restored.rootOf())
+    }
+
+    @Test
+    fun `promoteScreenToComponent publishes a fresh-id copy and leaves the screen intact, undoing exactly`() {
+        val before = Fixtures.project()
+        val screenRoot = before.rootOf()
+        // Built exactly as EditorState.saveScreenAsComponent does: a fresh-id copy of the screen's root,
+        // so the screen is untouched (copy, not move) and the two roots never share node ids.
+        val def = ComponentDef(id = "cmp1", name = "HomeCard", root = screenRoot.withFreshIds())
+        val cmd = promoteScreenToComponent(def)
+        val after = cmd.apply(before)
+
+        // The component is published, appended to the list; the source screen is byte-identical.
+        assertEquals(listOf("cmp1"), after.components.map { it.id })
+        assertEquals(before.screens, after.screens)
+
+        // The correctness crux: the copy's node ids are disjoint from the screen's (no duplicate ULIDs)…
+        assertTrue(collectIds(screenRoot).intersect(collectIds(after.components.single().root)).isEmpty())
+        // …while the tree structure is preserved.
+        assertEquals(types(screenRoot), types(after.components.single().root))
+
+        // One undo removes the definition; the screen was never modified.
+        val restored = cmd.invert(before).apply(after)
+        assertEquals(before.components, restored.components)
+        assertEquals(before.screens, restored.screens)
+    }
+
+    private fun collectIds(node: Node): Set<NodeId> = buildSet {
+        add(node.id)
+        node.children.forEach { addAll(collectIds(it)) }
+        node.slots.values.forEach { list -> list.forEach { addAll(collectIds(it)) } }
+    }
+
+    private fun types(node: Node): List<String> = buildList {
+        add(node.type)
+        node.children.forEach { addAll(types(it)) }
+        node.slots.values.forEach { list -> list.forEach { addAll(types(it)) } }
     }
 }
