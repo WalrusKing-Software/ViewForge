@@ -58,13 +58,16 @@ into issues directly.
 > copies referenced assets so an exported project runs unmodified. The remaining
 > Content/Input/Navigation entries above join the set one triple at a time.
 >
-> ⚠️ **v0.1.0-alpha-1 limitation (Image asset import).** There is **no in-app way to import an image file into
-> a project yet**: the canvas asset loader resolves `ResourceRef`s from the classpath (the bundled
-> sample assets), and the inspector's source picker lists only assets already in the project. So `Image`
-> is currently usable with the bundled `Gallery` sample but **cannot be pointed at a user's own file** in
-> a new project. Disk import — a file picker that copies into the project's `assets/` under the SECURITY
-> §7 rules (size/pixel caps, type sniffing, EXIF strip) — is the tracked follow-up (ADR-021). Shipped as
-> a documented limitation for v0.1.0-alpha-1.
+> **Image asset import (#141).** The inspector's `Image` source picker offers **Import image…**, which
+> pulls a file off disk into the project's sidecar `assets/` directory and points the node at it in one
+> undoable step. It **requires a saved project** (assets are copied *beside* the `.vforge` file, so there
+> must be a file to sit beside; an unsaved document is refused with a prompt to save first). The import is
+> hardened per SECURITY §7: a file-size cap and a header-only dimension read reject oversized files and
+> decompression bombs before the raster is decoded (AS-1); the format is sniffed from content, not the
+> extension (AS-2); and the image is re-encoded on import, stripping EXIF/other metadata (AS-5). The
+> canvas asset loader resolves `ResourceRef`s from the project's `assets/` dir first, falling back to the
+> classpath for the bundled sample; the Gradle export copies referenced assets from the same source so an
+> exported project runs unmodified (ADR-021).
 
 > **Post-Phase-1 catalog expansion (issue #16):** added as renderer + emitter + golden triples with an
 > in-process compile check; no pipeline or inspector change.

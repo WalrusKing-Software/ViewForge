@@ -41,6 +41,7 @@ import viewforge.model.Node
 import viewforge.model.Parameter
 import viewforge.model.ParameterType
 import viewforge.model.PropDefinition
+import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Theme
 import viewforge.model.UserComponent
@@ -150,6 +151,13 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             range = def.range,
             themeable = def.themeable,
             assets = state.document.assets,
+            // A resource prop can pull an image off disk into the project; the shell does the file work
+            // (import is primary-only — the picked file binds to this node, not the whole selection).
+            onImport = if (def.type == PropType.Resource) {
+                { state.requestImageImport(node.id, def.name) }
+            } else {
+                null
+            },
         )
     }
 }
