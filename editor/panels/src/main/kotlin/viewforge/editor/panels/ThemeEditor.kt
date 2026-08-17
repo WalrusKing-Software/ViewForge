@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -117,8 +118,17 @@ private fun ColorsSection(state: EditorState) {
 private fun HexField(current: String, modifier: Modifier, onCommit: (String) -> Unit) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Swatch(hexToArgb(current))
-        var text by remember(current) { mutableStateOf(current) }
-        var invalid by remember(current) { mutableStateOf(false) }
+        var text by remember { mutableStateOf(current) }
+        var invalid by remember { mutableStateOf(false) }
+        var focused by remember { mutableStateOf(false) }
+        // Reflect an external change to the value only while NOT editing, so our own committed echo doesn't
+        // rewrite a valid shorthand (00F) into its expansion (#0000FF) mid-typing (#188).
+        LaunchedEffect(current, focused) {
+            if (!focused && text != current) {
+                text = current
+                invalid = false
+            }
+        }
         FieldFrame(error = invalid, modifier = Modifier.weight(1f).padding(start = 4.dp)) {
             BasicTextField(
                 value = text,
@@ -131,7 +141,7 @@ private fun HexField(current: String, modifier: Modifier, onCommit: (String) -> 
                 singleLine = true,
                 textStyle = fieldTextStyle(),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             )
         }
     }
