@@ -326,14 +326,18 @@ These encode the project's core correctness rules. **Any failure here blocks the
   tree for the new instance.
 - **Automated:** `EditorComponentsTest`.
 
-### PL-7 — Image component usability  [Manual]
-- **Steps:** add an `Image` to a **new** project; open the inspector's source dropdown.
-- **Pass (with the known limitation):** in the bundled **Gallery sample** the dropdown lists the
-  sample's classpath assets and the image renders.
-- **If it fails (expected in a fresh project):** ⚠️ **Known gap G-1 (issue #141)** — the dropdown only
-  lists **already-imported** assets and there is **no disk-import UI**, so a fresh project has no image
-  to choose. This is a documented limitation, not a regression; ship-with-caveat or implement import
-  (AS-1…AS-5).
+### PL-7 (#141) — Image import from disk  [Manual]
+- **Steps:** create a project and **save it**; add an `Image`; in the inspector's source dropdown pick
+  **Import image…** and choose a `.png`/`.jpg` from disk.
+- **Pass:** the file is copied into `<project-dir>/assets/`, the node points at it, the image renders on
+  the canvas, and it survives **save → close → reopen**. Importing into an **unsaved** project is refused
+  with a save-first prompt (assets must sit beside a `.vforge` file).
+- **If it fails:** an oversized file or one whose header declares huge dimensions is rejected before
+  decode (AS-1 size/dimension caps); the format is sniffed from content, not the extension (AS-2); the
+  image is re-encoded on import, stripping EXIF/metadata (AS-5) — a re-encode is expected, not a bug. If
+  the image doesn't render after reopen, check that `assets/` was committed next to the `.vforge` file.
+- **Automated:** `AssetCommandTest`, `AssetImportTest` (sanitize/dedupe/guarded-copy + §7 validation),
+  `AssetBytesTest`.
 
 ---
 
@@ -705,7 +709,7 @@ fails, **no-go**.
 
 | ID | Severity | Gap | Status / recommendation |
 |---|---|---|---|
-| **G-1** | Medium (feature completeness) | **Image asset disk-import not implemented.** `AssetImageLoader` resolves assets from the **classpath only** (bundled sample); no UI copies a user file into the project, and the inspector source dropdown only lists already-imported assets. So `Image` is not usable in a user-created project. | **Filed as issue #141.** Known ADR-021 follow-up; FEATURES already carries the v0.1.0-alpha-1 caveat and PL-7 documents it. Either (a) ship with the documented limitation, or (b) implement import (AS-1…AS-5: size/pixel caps, type sniffing, EXIF strip, copy-into-project). Recommend at least (a) for this release. |
+| **G-1** | Medium (feature completeness) | **Image asset disk-import not implemented.** `AssetImageLoader` resolved assets from the **classpath only** (bundled sample); no UI copied a user file into the project, and the inspector source dropdown only listed already-imported assets. So `Image` was not usable in a user-created project. | ✅ **Fixed (issue #141, option (b)).** The inspector's `Image` source picker now offers **Import image…**, which copies a picked file into `<project-dir>/assets/` via the guarded writer and points the node at it in one undoable step (`AddAsset`/`importAsset`). Requires a saved project. Hardened per SECURITY §7: AS-1 size/pixel caps reject decompression bombs before decode, AS-2 content type-sniffing, AS-5 EXIF strip on re-encode. Covered by `AssetCommandTest`, `AssetImportTest`, `AssetBytesTest`; verified by PL-7. |
 | **G-2** | Medium (never-lose-work / D9) | **Migrate-with-backup not wired.** No caller passed `backup=true`, so an older-schema file migrated on load and then saved was overwritten with **no `.bak`**, contradicting FEATURES D9. | ✅ **Fixed (issue #142).** `ProjectStore.load` now reports the pre-migration version; `EditorState.backupOnNextSave` carries it; `DocumentController` requests `backup=true` on the first save after a migrating open. Covered by `MigrationTest` + `DocumentSessionTest`. |
 | **G-3** | Doc-hygiene (non-blocking) | `memory/MEMORY.md` and `catalog-props-progress.md` predate #118–#123 / #127 / #137 (now merged); FEATURES.md is current. | Assistant-memory hygiene, **not** a project-tracker item (deliberately not filed in Forgejo). Reconciled this pass. Audit was performed against code + FEATURES, not memory. |
 
@@ -735,7 +739,8 @@ round-trip, regeneration planning.
 - [ ] SEC-1…SEC-7 verified; SEC-8/SEC-9 handled by release engineering.
 
 **Go with documented limitations (not blockers, but decide explicitly):**
-- [ ] **G-1** (#141) Image import: ship with the documented limitation, or implement before release.
+- [x] **G-1** (#141) Image import: **implemented** — disk import into a saved project's `assets/` sidecar,
+      hardened per SECURITY §7 (AS-1/AS-2/AS-5). Verified by PL-7.
 - [x] **G-2** (#142) migrate-with-backup: **fixed** — migrated files now back up the original on first save.
 - [ ] `NavigationBar` is intentionally Phase-2 (not a gap).
 - [ ] P2/P3 features (I9 responsive, H6 theme import, F4–F6 dynamic packages) are out of scope for

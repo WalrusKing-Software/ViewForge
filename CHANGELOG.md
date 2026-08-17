@@ -62,6 +62,11 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
   props; live canvas updates with no apply button (`I3`–`I5`).
 - Raw-expression escape hatch (node flagged "unverified", never evaluated), per-prop reset to default,
   and inline validation before codegen (`I6`–`I8`).
+- Import an image from disk into a saved project — the `Image` source picker's **Import image…** copies
+  the file into the project's `assets/` sidecar and points the node at it in one undoable step, hardened
+  per [`_docs/SECURITY.md`](_docs/SECURITY.md) §7 (size/dimension caps reject decompression bombs, format
+  sniffed from content, metadata stripped on re-encode); an unsaved document is refused with a save-first
+  prompt (`#141`).
 
 **Document & history**
 - New / Open / Save / Save As with lossless `.vforge` round-trips, and a Save/Discard/Cancel prompt when
@@ -117,8 +122,9 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
   build if `core` imports Compose (`F1`–`F3`).
 
 **Packaging & distribution**
-- Signed native installers for Windows (Msi/Exe) and Linux (Deb/Rpm) via vanilla jpackage, produced by a
-  tag-triggered release workflow that publishes SHA-256 checksums (see [`_docs/INSTALL.md`](_docs/INSTALL.md)).
+- Unsigned native Windows installers (`.msi`/`.exe`) via vanilla jpackage, with SHA-256 checksums
+  published alongside the release (see [`_docs/INSTALL.md`](_docs/INSTALL.md)). Code-signing and Linux
+  `.deb`/`.rpm` packaging are later release-engineering steps.
 
 ### Security
 - Entirely offline — **no network calls** anywhere (verified empirically).
@@ -134,9 +140,6 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
   and carry no project content.
 
 ### Known limitations
-- **No in-app image import.** `Image` resolves assets from the classpath (the bundled sample) and the
-  inspector picker lists only assets already in the project, so `Image` cannot yet be pointed at a user's
-  own file in a new project (`ADR-021`; see [`_docs/FEATURES.md`](_docs/FEATURES.md) §2).
 - **Unsigned alpha.** The installer is not code-signed; a downloaded build may show a Windows SmartScreen
   prompt (signing is a later release-engineering step).
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
