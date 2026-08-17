@@ -96,7 +96,7 @@ jobs:
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
           $pw = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
           $cert = Get-PfxCertificate -FilePath $pfx -Password $pw
-          Get-ChildItem app/build/compose/binaries/main/{msi,exe}/*.{msi,exe} | ForEach-Object {
+          Get-ChildItem -Path app/build/compose/binaries/main/msi/*.msi, app/build/compose/binaries/main/exe/*.exe | ForEach-Object {
             Write-Host "Signing $($_.Name)"
             Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert `
               -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
@@ -130,7 +130,7 @@ jobs:
         run: |
           $out = Join-Path $env:RUNNER_TEMP "artifacts"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Get-ChildItem app/build/compose/binaries/main/{msi,exe}/* -Include *.msi,*.exe | ForEach-Object {
+          Get-ChildItem -Path app/build/compose/binaries/main/msi/*.msi, app/build/compose/binaries/main/exe/*.exe | ForEach-Object {
             Copy-Item $_.FullName $out
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Out-File -Encoding ascii (Join-Path $out "$($_.Name).sha256")
