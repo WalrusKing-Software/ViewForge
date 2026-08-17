@@ -114,6 +114,13 @@ git tag -a v0.1.0-alpha-1 -m "First public alpha"
 git push origin v0.1.0-alpha-1
 ```
 
+> **Important — cut the release by pushing the tag, not from GitHub's *Releases* UI.** The workflow
+> triggers on `push:` of a `v*` **tag** and creates the Release object itself. Creating a release through
+> GitHub's "Draft a new release" page (which makes the tag for you) fires the `release` event, **not**
+> `push: tags`, so `release.yml` would not run and no installers would be attached. Always tag locally and
+> `git push origin <tag>` as above. When the release reaches the GitHub mirror, the mirror's tag push —
+> made with a PAT/deploy key, not the Actions `GITHUB_TOKEN` — likewise triggers the workflow there.
+
 ### Signing secrets
 
 Configure these as repository secrets. **If absent, the workflow still builds installers but leaves them
@@ -135,12 +142,12 @@ Secrets are never exposed to fork pull-request builds: the workflow only runs on
 
 Committed under `app/src/main/resources/packaging/`:
 
-- `icon.ico` — Windows
-- `icon.png` — Linux (512×512)
+- `icon.ico` — Windows (multi-resolution, 16–256)
+- `icon.png` — Linux + the on-screen window/taskbar icon (1024×1024 square master; jpackage downsizes)
 
-These are **generated placeholders** (an indigo "VF" mark). Replacing them with a real branded icon set
-(including a macOS `.icns`) is a follow-up; drop the files in at the same paths and the build picks them
-up.
+These carry the ViewForge logo (the anvil + cursor + selection-marquee mark, #197). Squaring, resizing,
+and multi-resolution `.ico` packing are done from the source art; drop replacements in at the same paths
+and the build picks them up. A macOS `.icns` is still a follow-up (paired with the deferred `.dmg`, §5).
 
 ---
 
