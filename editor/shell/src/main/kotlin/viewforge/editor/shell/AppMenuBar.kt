@@ -93,6 +93,17 @@ internal fun FrameWindowScope.AppMenuBar(
                 enabled = edit.canExtract,
                 onClick = { state.extractSelectionToComponent(state.uniqueComponentName()) },
             )
+            // Publish the whole active screen as a reusable component (#184) — distinct from Extract
+            // (which lifts a selection). A copy: the screen stays; the definition appears in the palette.
+            Item(
+                "Save Screen as Component",
+                enabled = state.activeScreenId != null,
+                onClick = {
+                    state.activeScreenId?.let {
+                        state.saveScreenAsComponent(it, state.defaultComponentNameForScreen(it))
+                    }
+                },
+            )
             Separator()
             Item(withAccel("Delete", "Del"), enabled = edit.hasSelection, onClick = state::deleteSelected)
         }

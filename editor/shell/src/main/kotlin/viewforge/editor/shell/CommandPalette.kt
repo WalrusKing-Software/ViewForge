@@ -155,6 +155,14 @@ internal fun buildPaletteCommands(
     commands += PaletteCommand("edit.extract", "Extract to Component", "Edit", enabled = edit.canExtract) {
         state.extractSelectionToComponent(state.uniqueComponentName())
     }
+    commands += PaletteCommand(
+        "edit.saveScreenAsComponent",
+        "Save Screen as Component",
+        "Edit",
+        enabled = state.activeScreenId != null,
+    ) {
+        state.activeScreenId?.let { state.saveScreenAsComponent(it, state.defaultComponentNameForScreen(it)) }
+    }
     commands +=
         PaletteCommand("edit.delete", "Delete", "Edit", enabled = edit.hasSelection, run = state::deleteSelected)
 

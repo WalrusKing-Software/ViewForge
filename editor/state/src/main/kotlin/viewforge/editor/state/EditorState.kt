@@ -22,6 +22,7 @@ import viewforge.command.SetProp
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
 import viewforge.command.importAsset
+import viewforge.command.promoteScreenToComponent
 import viewforge.command.promoteToParameter
 import viewforge.model.Asset
 import viewforge.model.ChildAddress
@@ -974,6 +975,30 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val component = ComponentDef(id = id, name = name.trim(), root = node)
         val instance = UserComponent.instance(id)
         execute(extractComponent(rootId, node.id, component, instance), selectAfter = instance.id)
+    }
+
+    /**
+     * Save the screen [screenId] as a new reusable component named [name] (#184), publishing it to the
+     * palette. Unlike [extractSelectionToComponent] this leaves the screen intact: the component's root
+     * is a **fresh-id copy** of the screen's root (ADR-024), so the copy's node ids are disjoint from the
+     * screen's and the two never collide. A no-op if the screen is unknown or the name is invalid/duplicate.
+     */
+    fun saveScreenAsComponent(screenId: String, name: String) {
+        val screen = document.screens.firstOrNull { it.id == screenId } ?: return
+        if (componentNameError(name) != null) return
+        val id = "cmp_${Ulid.next()}"
+        val component = ComponentDef(id = id, name = name.trim(), root = screen.root.withFreshIds())
+        execute(promoteScreenToComponent(component))
+    }
+
+    /**
+     * A legal, unique default component name seeded from the screen [screenId]'s own name (#184): the
+     * screen name when it is a valid, free identifier, otherwise the next `Component<n>` (as
+     * [uniqueComponentName]). Drives the "Save screen as component…" dialog's initial value.
+     */
+    fun defaultComponentNameForScreen(screenId: String): String {
+        val base = document.screens.firstOrNull { it.id == screenId }?.name?.trim()
+        return if (base != null && componentNameError(base) == null) base else uniqueComponentName()
     }
 
     /** The first `Component<n>` name not already taken — a legal identifier default for a fresh extraction. */

@@ -177,6 +177,52 @@ class EditorStateTest {
         assertNull(s.paletteDragType)
     }
 
+    // --- save a screen as a reusable palette component (#184) --------------------------------------
+
+    @Test
+    fun `saveScreenAsComponent publishes a fresh-id copy to the palette, leaving the screen intact`() {
+        val s = state()
+        val before = s.activeScreen!!.root
+        s.saveScreenAsComponent("s1", "HomeCard")
+
+        // A definition was created from a fresh-id copy (its ids disjoint from the screen's)…
+        val def = s.document.components.single()
+        assertEquals("HomeCard", def.name)
+        assertTrue(collectIds(before).intersect(collectIds(def.root)).isEmpty())
+        // …the source screen is untouched (copy, not move)…
+        assertEquals(before, s.activeScreen!!.root)
+        // …and it now appears in the palette under the Components category.
+        assertTrue(
+            s.palette.any { it.category == EditorState.USER_COMPONENTS_CATEGORY && it.componentId == def.id },
+        )
+    }
+
+    @Test
+    fun `saveScreenAsComponent with a duplicate, blank, or unknown target is a no-op`() {
+        val s = state()
+        s.saveScreenAsComponent("s1", "HomeCard")
+        assertEquals(1, s.document.components.size)
+        s.saveScreenAsComponent("s1", "HomeCard") // duplicate name
+        s.saveScreenAsComponent("s1", "   ") // blank name
+        s.saveScreenAsComponent("nope", "Other") // unknown screen
+        assertEquals(1, s.document.components.size)
+    }
+
+    @Test
+    fun `defaultComponentNameForScreen seeds from the screen name, else falls back`() {
+        val s = state()
+        assertEquals("Home", s.defaultComponentNameForScreen("s1"))
+        s.saveScreenAsComponent("s1", "Home")
+        // "Home" is now taken → falls back to a unique Component<n> name.
+        assertEquals("Component1", s.defaultComponentNameForScreen("s1"))
+    }
+
+    private fun collectIds(node: Node): Set<NodeId> = buildSet {
+        add(node.id)
+        node.children.forEach { addAll(collectIds(it)) }
+        node.slots.values.forEach { list -> list.forEach { addAll(collectIds(it)) } }
+    }
+
     @Test
     fun `dropPaletteDrag prefers the tree address over the canvas address (#164)`() {
         val s = state()
