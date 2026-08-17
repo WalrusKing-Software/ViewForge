@@ -194,6 +194,7 @@ internal fun ExitConfirmation(
     document: DocumentController,
     onExit: () -> Unit,
     onCancel: () -> Unit,
+    onSavedClean: () -> Unit = {},
 ) {
     if (!visible) return
     AlertDialog(
@@ -204,11 +205,19 @@ internal fun ExitConfirmation(
             TextButton(onClick = {
                 document.save()
                 // Exit only if the save landed; a cancelled Save As or a write error keeps it dirty, so stay.
-                if (state.isDirty) onCancel() else onExit()
+                if (state.isDirty) {
+                    onCancel()
+                } else {
+                    // A clean save leaves no unsaved work — drop the recovery sidecar now, before we exit,
+                    // so the next launch doesn't offer to restore what was just saved (#189).
+                    onSavedClean()
+                    onExit()
+                }
             }) { Text("Save") }
         },
         dismissButton = {
             Row {
+                // Discard keeps the recovery snapshot: a quit-without-saving stays recoverable next launch (#54).
                 TextButton(onClick = onExit) { Text("Discard") }
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onCancel) { Text("Cancel") }

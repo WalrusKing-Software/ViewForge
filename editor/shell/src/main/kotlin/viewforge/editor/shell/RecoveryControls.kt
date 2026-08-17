@@ -70,6 +70,18 @@ internal class RecoveryController(
         }
     }
 
+    /**
+     * Clear the recovery sidecar the instant the document is clean — e.g. right after a Save — instead of
+     * waiting for the next autosave [tick]. Save-and-quit calls `exitApplication()` before the timer fires
+     * again, so without this a cleanly-saved document still offered a stale "restore unsaved work?" prompt
+     * on the next launch (#189). A no-op while a recovered snapshot is still [pending] (the freshly-loaded
+     * launch document is clean but must not clear the very recovery the user has not answered) or while the
+     * document is dirty (that snapshot is real unsaved work to keep).
+     */
+    fun clearIfClean() {
+        if (pending == null && !state.isDirty) RecoveryStore.clear(dir)
+    }
+
     /** Restore the recovered document into the editor (marked dirty — it is ahead of what is on disk). */
     fun restore() {
         val snap = pending ?: return
