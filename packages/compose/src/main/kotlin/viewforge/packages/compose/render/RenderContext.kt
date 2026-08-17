@@ -41,6 +41,12 @@ import viewforge.model.Theme
  * not a plain [Modifier] — can be applied to a direct child of a Row/Column (#158). It is non-null only
  * while rendering those direct children (set in `RenderRow`/`RenderColumn`, cleared for every other
  * parent), so a `weight` on a node outside such a scope no-ops, exactly as codegen drops it there.
+ *
+ * [editorAffordances] turns on editor-only canvas hints that must never reach codegen, the export, or the
+ * fidelity comparison: an empty container that accepts children is given a small minimum size and a faint
+ * dashed outline so it is visible and can receive a palette drop (#191) — otherwise it wraps to ~zero size
+ * and has no hit-region on the canvas. Defaults false, so every non-editor render path stays byte-identical;
+ * only the editor canvas opts in.
  */
 data class RenderContext(
     val theme: Theme,
@@ -51,4 +57,5 @@ data class RenderContext(
     val expanding: Set<String> = emptySet(),
     val interactive: Boolean = false,
     val weightApplier: ((Modifier, Float) -> Modifier)? = null,
+    val editorAffordances: Boolean = false,
 )

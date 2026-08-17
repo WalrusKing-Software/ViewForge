@@ -35,6 +35,7 @@ object ComposeRenderer {
         imageLoader: (assetId: String) -> ImageBitmap? = { null },
         components: List<ComponentDef> = emptyList(),
         interactive: Boolean = false,
+        editorAffordances: Boolean = false,
     ) {
         ProjectTheme(theme, dark) {
             RenderNode(
@@ -46,6 +47,7 @@ object ComposeRenderer {
                     imageLoader = imageLoader,
                     components = components.associateBy { it.id },
                     interactive = interactive,
+                    editorAffordances = editorAffordances,
                 ),
             )
         }

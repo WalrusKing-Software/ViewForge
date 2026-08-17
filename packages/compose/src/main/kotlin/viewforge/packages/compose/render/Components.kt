@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -64,8 +65,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -82,6 +87,7 @@ import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.UserComponent
+import viewforge.packages.compose.catalog.ComposeComponents
 
 /**
  * The interpreter walk (ARCHITECTURE §4.2): map a node's `type` to a real Compose composable, fold
@@ -99,7 +105,12 @@ fun RenderNode(node: Node, ctx: RenderContext) {
     // Fold the node's own (semantic, ordered) chain, then append the editor's instrumentation last so
     // it observes the fully-modified node without altering its layout (ARCHITECTURE §4.2, ADR-009).
     // buildModifier may consume ctx.weightApplier for *this* node (a direct Row/Column child, #158).
-    val modifier = buildModifier(node.modifiers, ctx).then(ctx.instrument(node.id))
+    val own = buildModifier(node.modifiers, ctx)
+    // In the editor only, an empty container that accepts children gets a min size + dashed outline so it
+    // has a canvas hit-region for a palette drop and is visible (#191); inserted before the instrumentation
+    // so the captured bounds include it. ctx.editorAffordances is false in codegen, export, and fidelity.
+    val hinted = if (ctx.editorAffordances && isEmptyDefaultChildContainer(node)) own.emptyContainerHint() else own
+    val modifier = hinted.then(ctx.instrument(node.id))
     // Children never inherit this node's parent scope; a Row/Column re-establishes its own below, and
     // every other container must not leak the grandparent's applier to its grandchildren.
     val childCtx = if (ctx.weightApplier == null) ctx else ctx.copy(weightApplier = null)
@@ -133,6 +144,33 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
+
+/**
+ * Whether [node] is a container that takes default children — [ComponentSpec.acceptsChildren], the same
+ * source the canvas drop resolver uses — and currently has none. That is the case which renders to ~zero
+ * size and so needs the editor's drop affordance (#191). Pure, unit-tested without a composition.
+ */
+internal fun isEmptyDefaultChildContainer(node: Node): Boolean =
+    node.children.isEmpty() && ComposeComponents.specFor(node.type)?.acceptsChildren == true
+
+private val EMPTY_CONTAINER_MIN = 48.dp
+
+// Faint neutral, editor-only — never part of generated output or the fidelity comparison.
+private val EMPTY_HINT_COLOR = Color(0x33888888)
+
+/**
+ * The editor-only affordance for an empty container (#191): a minimum size so it has a canvas hit-region
+ * for a palette drop, plus a faint dashed outline drawn behind so it is visible. Drawn behind adds no
+ * layout beyond the min size, so it never alters how a filled container looks.
+ */
+private fun Modifier.emptyContainerHint(): Modifier =
+    defaultMinSize(EMPTY_CONTAINER_MIN, EMPTY_CONTAINER_MIN).drawBehind {
+        drawRoundRect(
+            color = EMPTY_HINT_COLOR,
+            cornerRadius = CornerRadius(4.dp.toPx()),
+            style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))),
+        )
+    }
 
 /** The outcome of resolving a `vforge.userComponent` instance against the available definitions. */
 internal sealed interface InstanceResolution {
