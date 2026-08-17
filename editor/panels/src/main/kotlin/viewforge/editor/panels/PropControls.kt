@@ -17,12 +17,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
@@ -245,25 +247,31 @@ private fun ColorControl(value: PropValue?, theme: Theme, themeable: Boolean, on
 
 @Composable
 private fun HexField(current: String, onChange: (PropValue?) -> Unit) {
-    var text by remember(current) { mutableStateOf(current) }
-    var invalid by remember(current) { mutableStateOf(false) }
+    var text by remember { mutableStateOf(current) }
+    var invalid by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    // Reflect an external change to the value (undo, selecting another node) only while the field is NOT
+    // being edited. Keying the text on `current` instead re-seeded it from our own committed echo, which
+    // rewrote a valid shorthand (00F) into its expansion (#0000FF) mid-typing (#188).
+    LaunchedEffect(current, focused) {
+        if (!focused && text != current) {
+            text = current
+            invalid = false
+        }
+    }
     FieldBox(error = invalid) {
         BasicTextField(
             value = text,
             onValueChange = { input ->
                 text = input
                 val normalized = normalizeHex(input)
-                if (normalized != null) {
-                    invalid = false
-                    onChange(stringValue(normalized))
-                } else {
-                    invalid = true
-                }
+                invalid = normalized == null
+                if (normalized != null) onChange(stringValue(normalized))
             },
             singleLine = true,
             textStyle = fieldStyle(),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
         )
     }
 }
