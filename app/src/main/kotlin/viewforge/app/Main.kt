@@ -68,10 +68,15 @@ private fun installCrashReporter() {
     }
 }
 
-private fun runEditor() = application {
-    // Load persisted preferences once, before the first frame — a missing/corrupt file yields defaults,
-    // so this never fails startup. Restore the panel layout (#43) now; the shell persists changes back on
-    // toggle/resize. The autosave interval (#55) is handed to the shell's recovery timer below.
+private fun runEditor() {
+    // One-time bootstrap — deliberately OUTSIDE the `application {}` composable below. That block is
+    // @Composable, so anything in its body re-runs on every recomposition; doing this there re-loaded
+    // preferences from disk (blocking I/O) and rebuilt EditorState each frame, and on the Blank seed
+    // `newDocument()` reads then writes `document` mid-composition — a self-invalidating write that spun
+    // the composition into an infinite recomposition loop, pegging the event thread (#186). Bootstrapping
+    // is a one-time side effect, so it runs once here, off the composition path.
+
+    // Load persisted preferences — a missing/corrupt file yields defaults, so this never fails startup.
     val prefs = PreferencesStore.load()
 
     // Seed the launch document (#156): the sample only on the very first run, otherwise the document open
@@ -92,11 +97,12 @@ private fun runEditor() = application {
     // writes on the first run; a best-effort save that must never fail startup (like the shell's persist).
     if (!prefs.hasLaunched) runCatching { PreferencesStore.save(prefs.copy(hasLaunched = true)) }
 
+    // Restore the panel layout (#43) — the shell persists changes back on toggle/resize — plus Open Recent
+    // (#88), palette favorites (P5a, #121), and the S3/S5 editor settings (chrome theme, autosave cadence,
+    // undo depth, default export path; #104/#105). Seeded once; the Preferences dialog edits them live.
     state.applyLayout(prefs.panelLayout)
-    state.applyRecentProjects(prefs.recentProjects) // File → Open Recent (#88), restored before the first frame
-    state.applyFavoriteComponents(prefs.favoriteComponents) // palette favorites (P5a, #121), before first frame
-    // Editor chrome theme (S3, #104) + the S5 editor settings — autosave cadence, undo depth, default export
-    // path (#105) — seeded before the first frame; the Preferences dialog edits them live thereafter.
+    state.applyRecentProjects(prefs.recentProjects)
+    state.applyFavoriteComponents(prefs.favoriteComponents)
     state.applyPreferences(prefs)
     val images = AssetImageLoader { state.document.assets }
 
@@ -118,26 +124,28 @@ private fun runEditor() = application {
             )
         }
 
-    val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))
-    // Save-on-close guard (#56): closing with unsaved edits raises this flag so the shell can prompt
-    // Save/Discard/Cancel instead of quitting outright; a clean document exits immediately. Recovery (#54)
-    // still protects a hard kill — this is only the clean-exit UX.
-    var closeRequested by remember { mutableStateOf(false) }
-    Window(
-        onCloseRequest = { if (state.isDirty) closeRequested = true else exitApplication() },
-        state = windowState,
-        title = "ViewForge",
-    ) {
-        EditorShell(
-            state,
-            renderer,
-            DesktopExportService,
-            DesktopCodePreviewService,
-            ConfigDir.resolve(),
-            closeRequested = closeRequested,
-            onCloseHandled = { closeRequested = false },
-            onExit = ::exitApplication,
-        )
+    application {
+        val windowState = rememberWindowState(size = DpSize(1280.dp, 832.dp))
+        // Save-on-close guard (#56): closing with unsaved edits raises this flag so the shell can prompt
+        // Save/Discard/Cancel instead of quitting outright; a clean document exits immediately. Recovery
+        // (#54) still protects a hard kill — this is only the clean-exit UX.
+        var closeRequested by remember { mutableStateOf(false) }
+        Window(
+            onCloseRequest = { if (state.isDirty) closeRequested = true else exitApplication() },
+            state = windowState,
+            title = "ViewForge",
+        ) {
+            EditorShell(
+                state,
+                renderer,
+                DesktopExportService,
+                DesktopCodePreviewService,
+                ConfigDir.resolve(),
+                closeRequested = closeRequested,
+                onCloseHandled = { closeRequested = false },
+                onExit = ::exitApplication,
+            )
+        }
     }
 }
 
