@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import viewforge.editor.canvas.CanvasRenderer
 import viewforge.editor.canvas.EditorCanvas
 import viewforge.editor.panels.CodePreview
@@ -108,6 +109,19 @@ fun FrameWindowScope.EditorShell(
     // .vforge New/Open/Save/Save As (#37) + Open Recent (#88): its own controller, shared by the File
     // menu and shortcuts.
     val document = rememberDocumentController(state, prefs)
+    // Image import (#141): the inspector requests an import; this controller does the disk work (pick,
+    // guarded copy into the project's assets/ dir, bind to the node). Observed off state so the panel
+    // names no shell/disk type — the same request-bridge as inline rename. Blocking chooser on the UI
+    // thread, like the document controller.
+    val assetImport = rememberAssetImportController(state)
+    LaunchedEffect(assetImport) {
+        snapshotFlow { state.imageImportRequest }
+            .filterNotNull()
+            .collect { request ->
+                assetImport.handle(request)
+                state.clearImageImportRequest()
+            }
+    }
     // Autosave + crash recovery (D4): a timer snapshots unsaved work; a snapshot found at launch prompts
     // to restore. The config dir comes from :app (the wiring site), like the panel-layout load. The cadence
     // is the live S5 preference (#105): keying the timer on it re-drives the interval without a restart.
@@ -155,6 +169,7 @@ fun FrameWindowScope.EditorShell(
         if (showPreferences) PreferencesDialog(state, prefs) { showPreferences = false }
         ExportDialogs(export)
         DocumentDialogs(document)
+        AssetImportDialogs(assetImport)
         RecoveryDialog(recovery)
         ExitConfirmation(
             closeRequested,

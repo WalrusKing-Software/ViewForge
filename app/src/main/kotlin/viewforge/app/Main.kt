@@ -104,7 +104,11 @@ private fun runEditor() {
     state.applyRecentProjects(prefs.recentProjects)
     state.applyFavoriteComponents(prefs.favoriteComponents)
     state.applyPreferences(prefs)
-    val images = AssetImageLoader { state.document.assets }
+    // Assets resolve from the open project's dir first (imported files, #141), then the classpath (the
+    // bundled sample); the export service reads from the same source, so both key off the current path.
+    val projectDir = { state.currentPath?.parent }
+    val images = AssetImageLoader(projectDir = projectDir, assets = { state.document.assets })
+    val exportService = DesktopExportService(projectDir)
 
     // The wiring: the editor asks CanvasRenderer to draw a node, handing it the per-node bounds
     // instrumentation the canvas needs for hit-testing (ADR-009); the Compose package obliges,
@@ -141,7 +145,7 @@ private fun runEditor() {
             EditorShell(
                 state,
                 renderer,
-                DesktopExportService,
+                exportService,
                 DesktopCodePreviewService,
                 ConfigDir.resolve(),
                 closeRequested = closeRequested,
@@ -187,8 +191,11 @@ private object DesktopCodePreviewService : CodePreviewService {
  * ([DesktopExporter], which builds the file bundle) and the guarded [ProjectExporter] in `core/project`
  * (which writes it). The same bootstrapping role `Main` plays for the renderer and catalog (ADR-013) —
  * the shell exports without ever naming the framework package.
+ *
+ * [projectDir] supplies the open project's directory so a Gradle export can copy the project's own
+ * imported image assets off disk (#141); it falls back to the classpath for the bundled sample.
  */
-private object DesktopExportService : ProjectExportService {
+private class DesktopExportService(private val projectDir: () -> Path?) : ProjectExportService {
     override fun conflicts(project: Project, dir: Path, mode: ExportMode): List<String> =
         ProjectExporter.conflicts(dir, bundle(project, mode))
 
@@ -212,8 +219,9 @@ private object DesktopExportService : ProjectExportService {
     private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
         ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)
         // Gradle export ships the referenced image assets so it runs unmodified (ADR-021); bytes come
-        // from the same classpath source the canvas loads from.
-        ExportMode.GRADLE_PROJECT -> DesktopExporter.gradleProject(project) { asset -> classpathAssetBytes(asset.path) }
+        // from the same source the canvas loads from — the project dir first, then the classpath.
+        ExportMode.GRADLE_PROJECT ->
+            DesktopExporter.gradleProject(project) { asset -> assetBytes(projectDir(), asset.path) }
     }
 }
 

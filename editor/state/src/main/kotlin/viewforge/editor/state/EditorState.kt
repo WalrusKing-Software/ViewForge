@@ -21,7 +21,9 @@ import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
+import viewforge.command.importAsset
 import viewforge.command.promoteToParameter
+import viewforge.model.Asset
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
 import viewforge.model.ComponentDef
@@ -329,6 +331,18 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * clears it. Null when no rename is pending.
      */
     var renameRequest: NodeId? by mutableStateOf(null)
+        private set
+
+    /**
+     * A pending request to import an image from disk into a node's resource prop (F-image, ADR-021).
+     * Transient view state spanning the inspector and the shell: the inspector's "Import image…" control
+     * sets it (via [requestImageImport]), naming the target node and prop, and the shell's asset-import
+     * controller — the one place with disk access and a native file dialog — observes it, runs the
+     * pick/copy/decode, commits the result through [commitImageImport], and clears it ([clearImageImportRequest]).
+     * Kept here, on the object both surfaces share, so the panel names no `:app` type and touches no disk
+     * (mirroring [renameRequest] and the context-menu bridge). Null when nothing is pending.
+     */
+    var imageImportRequest: ImageImportRequest? by mutableStateOf(null)
         private set
 
     /**
@@ -1112,6 +1126,32 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * Request importing an image from disk into node [nodeId]'s resource prop [propName] (ADR-021). The
+     * inspector's "Import image…" control calls this; the shell's asset-import controller picks up
+     * [imageImportRequest], does the disk work, and commits via [commitImageImport]. No-op wiring is fine
+     * — a request for a node that vanishes before the controller runs is discarded when it clears.
+     */
+    fun requestImageImport(nodeId: NodeId, propName: String) {
+        imageImportRequest = ImageImportRequest(nodeId, propName)
+    }
+
+    /** Clear a consumed (or cancelled) image-import request (called by the shell's controller). */
+    fun clearImageImportRequest() {
+        imageImportRequest = null
+    }
+
+    /**
+     * Commit an imported [asset] and point node [nodeId]'s prop [propName] at it, as one undoable step
+     * (add-asset + set-resource-ref, [importAsset]). The bytes are already copied to the project's
+     * `assets/` sidecar by the caller; this only records the document change. No-op with no active edit
+     * root. Keeps the current selection.
+     */
+    fun commitImageImport(nodeId: NodeId, propName: String, asset: Asset) {
+        val rootId = activeEditRootId ?: return
+        execute(importAsset(rootId, nodeId, propName, asset), selectAfter = selectedId)
+    }
+
+    /**
      * The selected nodes that share the primary's type — the set a **shared** inspector edit applies to
      * (C10). Same-type only, so the primary's data-driven [PropDefinition]s are valid for every target.
      * Empty with no selection; a single-element list for a lone selection.
@@ -1559,3 +1599,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         const val MAX_RECENT_COMPONENTS = 8
     }
 }
+
+/**
+ * A pending image import (ADR-021): which node's prop the picked image should be bound to. Carried on
+ * [EditorState.imageImportRequest] so the inspector (source) and the shell's asset-import controller
+ * (which does the disk work) share the target without either naming the other's types.
+ */
+data class ImageImportRequest(val nodeId: NodeId, val propName: String)
