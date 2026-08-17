@@ -13,10 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing after the first alpha yet._
 
-## [0.1.0-alpha-1] - unreleased
-
-> Release date is stamped when the tag is cut (see the release process). Until then this is the
-> pending first-alpha entry.
+## [0.1.0-alpha-1] - 2026-08-17
 
 First public release — an **ALPHA** of **Phase 1: Compose Desktop target.** ViewForge is a
 local-first, offline desktop WYSIWYG editor that renders a UI tree with the real Compose runtime and
