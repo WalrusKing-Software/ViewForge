@@ -56,6 +56,7 @@ internal fun ValueControl(
     range: ClosedFloatingPointRange<Float>? = null,
     themeable: Boolean = false,
     assets: List<Asset> = emptyList(),
+    onImport: (() -> Unit)? = null,
 ) {
     // An expression value overrides the typed control — it's the escape hatch (I6).
     if (value is PropValue.RawExpression) {
@@ -78,7 +79,7 @@ internal fun ValueControl(
         PropType.Int -> NumberField(value.literalText(), range, isInt = true, onChange = onChange)
         PropType.Float -> NumberField(value.literalText(), range, isInt = false, onChange = onChange)
         PropType.String -> StringField(value.literalText() ?: "", onChange)
-        PropType.Resource -> ResourceDropdown(assets, (value as? PropValue.ResourceRef)?.assetId, onChange)
+        PropType.Resource -> ResourceDropdown(assets, (value as? PropValue.ResourceRef)?.assetId, onChange, onImport)
     }
 }
 
@@ -192,12 +193,19 @@ private fun EnumDropdown(options: List<String>, current: String?, onChange: (Pro
 }
 
 /**
- * Picks an [Image] source from the project's already-imported [assets] (I2, data-driven). Importing
- * files from disk into the project is a focused follow-up (see FEATURES §5 / ADR-021); this control
- * assigns among assets the project already carries and shows a hint when there are none.
+ * Picks an [Image] source: either an "Import image…" action that pulls a file from disk into the
+ * project's `assets/` sidecar ([onImport], ADR-021), or one of the project's already-imported [assets]
+ * (I2, data-driven). The disk work lives in the shell — this control only raises the request via
+ * [onImport], keeping the panel Compose-free of file dialogs. [onImport] is null where import isn't
+ * wired (e.g. previews); the menu then only offers existing assets and shows a hint when there are none.
  */
 @Composable
-private fun ResourceDropdown(assets: List<Asset>, currentId: String?, onChange: (PropValue?) -> Unit) {
+private fun ResourceDropdown(
+    assets: List<Asset>,
+    currentId: String?,
+    onChange: (PropValue?) -> Unit,
+    onImport: (() -> Unit)? = null,
+) {
     var open by remember { mutableStateOf(false) }
     val current = assets.firstOrNull { it.id == currentId }
     val label = current?.originalName ?: current?.path ?: currentId ?: "—"
@@ -212,6 +220,15 @@ private fun ResourceDropdown(assets: List<Asset>, currentId: String?, onChange: 
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (onImport != null) {
+                DropdownMenuItem(
+                    text = { Text("Import image…", style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        open = false
+                        onImport()
+                    },
+                )
+            }
             assets.forEach { asset ->
                 DropdownMenuItem(
                     text = { Text(asset.originalName ?: asset.path, style = MaterialTheme.typography.bodySmall) },
