@@ -53,6 +53,7 @@ fun Palette(
     state: EditorState,
     onToggleFavorite: (PaletteEntry) -> Unit,
     onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
@@ -63,8 +64,15 @@ fun Palette(
             // Quick access to pinned + recent components (P5a) — only with no active search, since a filtered
             // list already shows everything matching and the sections would just duplicate it.
             if (query.isBlank()) {
-                QuickAccessSection("★ Favorites", state.favoriteEntries, state, onToggleFavorite, onInsert)
-                QuickAccessSection("Recent", state.recentEntries, state, onToggleFavorite, onInsert)
+                QuickAccessSection(
+                    "★ Favorites",
+                    state.favoriteEntries,
+                    state,
+                    onToggleFavorite,
+                    onInsert,
+                    onDropLibrary,
+                )
+                QuickAccessSection("Recent", state.recentEntries, state, onToggleFavorite, onInsert, onDropLibrary)
             }
             val entries = state.palette.filter { it.matches(query) }
             if (entries.isEmpty()) {
@@ -73,7 +81,7 @@ fun Palette(
                 entries.groupBy { it.category }.forEach { (category, items) ->
                     SectionLabelInset(category)
                     items.forEach { entry ->
-                        PaletteRow(state, entry, onToggleFavorite, onInsert)
+                        PaletteRow(state, entry, onToggleFavorite, onInsert, onDropLibrary)
                     }
                 }
             }
@@ -89,10 +97,11 @@ private fun QuickAccessSection(
     state: EditorState,
     onToggleFavorite: (PaletteEntry) -> Unit,
     onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
 ) {
     if (entries.isEmpty()) return
     SectionLabelInset(title)
-    entries.forEach { entry -> PaletteRow(state, entry, onToggleFavorite, onInsert) }
+    entries.forEach { entry -> PaletteRow(state, entry, onToggleFavorite, onInsert, onDropLibrary) }
 }
 
 /** Case-insensitive match against the label and category (type-ahead filtering, P3a). */
@@ -115,16 +124,17 @@ private fun PaletteRow(
     entry: PaletteEntry,
     onToggleFavorite: (PaletteEntry) -> Unit,
     onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
 ) {
     val cyclic = state.paletteEntryWouldCycle(entry)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val labelModifier = Modifier.weight(1f)
         if (cyclic) {
             TooltipArea(tooltip = { CycleTooltip(entry) }) {
-                PaletteRowLabel(state, entry, onInsert, disabled = true, modifier = labelModifier)
+                PaletteRowLabel(state, entry, onInsert, onDropLibrary, disabled = true, modifier = labelModifier)
             }
         } else {
-            PaletteRowLabel(state, entry, onInsert, disabled = false, modifier = labelModifier)
+            PaletteRowLabel(state, entry, onInsert, onDropLibrary, disabled = false, modifier = labelModifier)
         }
         FavoriteStar(favorite = state.isFavorite(entry), onClick = { onToggleFavorite(entry) })
     }
@@ -150,6 +160,7 @@ private fun PaletteRowLabel(
     state: EditorState,
     entry: PaletteEntry,
     onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
     disabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -165,10 +176,10 @@ private fun PaletteRowLabel(
             .pointerInput(entry) {
                 detectDragGestures(
                     onDragStart = { local ->
-                        // A library entry inserts by copy-into-document (possibly via a name prompt), which
-                        // has no drag surface this release (ADR-033) — click-to-insert only, so never start a
-                        // drag for it. Read cycle-state fresh (it flips when a component is opened, no re-key).
-                        if (entry.libraryId != null) return@detectDragGestures
+                        // Read cycle-state fresh (it flips when a component is opened, no re-key). A library
+                        // entry drags too (#234): the drag resolves a drop position like any other, but the
+                        // commit is a copy-into-document (possibly via a name prompt), routed on drag *end*
+                        // through [onDropLibrary] rather than the generic AddNode path.
                         if (state.paletteEntryWouldCycle(entry)) return@detectDragGestures
                         val window = coords?.localToWindow(local) ?: return@detectDragGestures
                         state.beginPaletteDrag(entry)
@@ -179,7 +190,7 @@ private fun PaletteRowLabel(
                         val window = coords?.localToWindow(change.position) ?: return@detectDragGestures
                         state.updatePaletteDrag(window.x, window.y)
                     },
-                    onDragEnd = { state.dropPaletteDrag() },
+                    onDragEnd = { if (entry.libraryId != null) onDropLibrary(entry) else state.dropPaletteDrag() },
                     onDragCancel = { state.cancelPaletteDrag() },
                 )
             }
