@@ -1198,6 +1198,111 @@ covered by SECURITY §3 (PF-9/PF-10).
 
 ---
 
+## ADR-033 — Cross-project component library: a config-dir folder of per-component files, copied into the document on use
+
+**Status:** Accepted
+
+**Context.** #209 asks for a library of reusable components that lives in the palette **across projects**,
+not just inside one document. #184 (ADR-024) already gives a document-scoped layer: a component published
+into `Project.components` travels inside its `.vforge`. What was missing is the *global* layer — a
+component a user builds once and reuses in *any* project. That forces four decisions the document layer
+never had to make: **where** these definitions live on disk (they cannot live in a `.vforge`, which is one
+document), **what happens when one is dropped into a project** (does the document copy it or reference an
+external store), **how a name clash with the document's own components is resolved**, and **how the library
+is managed** (add / remove / rename). The pieces to build on already exist: `ConfigDir` resolves the
+per-user config dir (ADR-023); `RecoveryStore` is the precedent for storing real *user content* — not
+chrome — under that dir via `VforgeJson` + `GuardedWriter`, taking the directory as a **parameter** so
+`core/project` keeps no dependency on `core/prefs` (ADR-025); `withFreshIds()` + `AddComponent` /
+`promoteScreenToComponent` already copy a definition into a document (#184); and the palette is built
+data-driven from `catalog.palette + document.components`, so new entry kinds need no per-entry UI.
+
+**Decision.**
+
+- **Storage: a `library/` folder in `ConfigDir`, one file per component.** Each component is its own file
+  (`library/<id>.json`, `<id>` a sanitized ULID), a single serialized `ComponentDef` wrapped in a
+  `LibraryComponent(libraryVersion, component)` record — its *own* version, independent of both the
+  `.vforge` `schemaVersion` and the prefs `prefsVersion`. Content is written through `VforgeJson` (the same
+  `PropValue`-discriminated codec as `.vforge`, so props/modifiers/`RawExpression` round-trip identically)
+  via `GuardedWriter`, confined to the `library/` root. A new **`ComponentLibraryStore` lives in
+  `core/project`** beside `RecoveryStore`, taking the library directory as a parameter (`:app` passes
+  `ConfigDir.resolve().resolve("library")`), so `core/project` stays free of `core/prefs`. This is the
+  ADR-025 recovery-store shape, applied to a *set* of files rather than one.
+- **Per-file, skip-bad-file loading.** Loading enumerates the folder and reads each file independently: a
+  missing folder yields an empty library, and one unreadable or corrupt file is **skipped** (best-effort,
+  logged), never aborting the rest. This is exactly the durability the one-file-per-component layout buys —
+  a single bad entry can never take down the whole palette or lose the other components — and it is why the
+  library is *not* one aggregate file. It sits between `ProjectStore` (a document fails loud, because it is
+  *the* user work) and `PreferencesStore` (chrome silently defaults): the library is user content, but each
+  entry is independent, so the unit of "fail" is one entry, not the set.
+- **Copy into the document on use, never a live reference.** Dropping a library entry copies its
+  `ComponentDef` — root through `withFreshIds()`, plus a fresh document component id — into
+  `Project.components` via a plain undoable `AddComponent`, then inserts a `UserComponent.instance`
+  referencing the copy. This is `promoteScreenToComponent` + palette insertion, reused. The `.vforge` stays
+  **self-contained** (ADR-024): it opens, renders, and generates on any machine with no external store, and
+  survives the user later deleting the library entry. The accepted trade-off: later edits to a library entry
+  do **not** propagate to copies already inserted into documents (a live reference would propagate but break
+  self-containment — see Rejected).
+- **Name collisions prompt for a name.** A library entry is inserted through the existing document
+  identifier rules (`componentNameError`: legal Kotlin identifier, unique among `document.components`). When
+  the incoming name is already taken (or otherwise invalid), a small dialog — pre-filled with a suggested
+  free name (`uniqueComponentName` style) and validated live — collects a valid, unique name before the copy
+  is made. A non-colliding drop inserts directly with no prompt, so the common case stays frictionless. A
+  library entry can never form a reference cycle (it becomes a brand-new document component, fresh ids,
+  referencing nothing in the target), so no cycle guard applies to library entries — the same reasoning as
+  extraction and #184's publish.
+- **Palette surface + management (add / insert / remove / rename this release).** Library entries appear in
+  their own palette section, distinct from the built-ins and from the document's own "Components" (ADR-024),
+  so the two component layers stay visibly separate. A `PaletteEntry` distinguishes a library entry from a
+  document-component entry (a `libraryId` alongside the existing `componentId`) so inserting one runs the
+  copy-then-insert path rather than referencing an existing document component. Management operations —
+  **add to library** (from a document component: copy its `ComponentDef` into the store under a fresh library
+  id, resolving a within-library name clash the same way), **remove from library** (delete the file), and
+  **rename** (rewrite the entry's `name`, re-validated for uniqueness within the library) — are **direct
+  store operations, not document commands**: they mutate the out-of-document library, not the `.vforge`, so
+  they are correctly outside the undo/redo system (CLAUDE.md rule 3 governs *document* mutations), exactly
+  like recent-projects and favorites management. Organizing (folders / tags) is deferred.
+
+**Rationale.** One file per component was the user's explicit call and is the right shape here: the library
+is an unbounded, independently-editable *set*, so per-file add/remove/rename are trivial atomic operations
+and a corrupt entry is isolated — an aggregate `library.json` would rewrite the whole set on every change
+and risk the whole library on one bad write. Placing the store in `core/project` (not `core/prefs`) follows
+ADR-025: this is user *content* — real `ComponentDef`s needing the `.vforge` codec — not chrome, and the
+`ConfigDir`-as-parameter seam keeps the module boundary clean. Copy-on-use is what actually preserves
+ADR-024's self-containment guarantee across machines; it also reuses the #184 copy path wholesale, so the
+canvas, codegen, and export need **zero** new awareness of a library. Prompting on collision keeps the user
+in control when two components genuinely differ, while a clean drop stays one gesture.
+
+**Rejected.** **Fold the library into `preferences.json`** (`core/prefs`) — mixes real user content into the
+chrome file whose load *silently defaults* on corruption (ADR-023), so a single bad byte would quietly
+erase the user's whole library; and it couples the library's version to `prefsVersion`. **One aggregate
+`library.json`** — rewrites every component on each edit and stakes the whole library on one file's
+integrity; per-file isolation is the durability the user chose. **A live reference from the document to the
+global store** — breaks ADR-024 self-containment: the `.vforge` would no longer render or generate off the
+origin machine, and would break outright if the library entry were deleted; render and codegen would each
+need to consult an external, mutable store. **Auto-renaming the incoming copy silently** — cheaper, but
+hides a real "is this the same component?" question from the user; the prompt surfaces it. **Making library
+add/remove/rename undoable document commands** — they don't touch the document, so routing them through the
+command system would be a category error (and would wrongly entangle library edits with document undo).
+**A schema bump** — none is owed: the library stores `ComponentDef`s (every field exists since schema 1) in
+a separate, independently-versioned file; the `.vforge` `schemaVersion` is untouched and v3 stays reserved
+for #21.
+
+**Consequences.** ViewForge gains a `library/` folder under its config dir that outlives any single project,
+and the palette shows a third component source (built-ins, this document's components, the global library)
+with no per-component UI. Because a library drop lands as an ordinary document component, everything
+downstream — render, cycle validation, codegen, export self-containment, the compile gate — treats it
+identically to a #184-published component and needs no change. The library store is a new tenant of
+`core/project` alongside `RecoveryStore`, writing through `GuardedWriter` under a `ConfigDir`-derived root
+(no scattered `File.writeText`, CLAUDE.md rule 6; no network, ADR-011; `ComponentDef` content is data,
+never evaluated, PF-4). Honest gaps: **library edits do not propagate** to copies already placed in
+documents (the deliberate cost of self-containment); the add/insert/remove/rename **gestures are not
+headless-testable** (the same class of gap as prior drag/dialog work) and are covered by pure store and
+state tests plus running the app; **organizing** the library (folders, tags, search beyond the palette
+filter) is a clean follow-up; and a future `ComponentDef` shape change that rides a `.vforge` migration must
+also migrate library files — the per-file `libraryVersion` is the hook, and no migration is owed today.
+
+---
+
 ## Template
 
 ```markdown
