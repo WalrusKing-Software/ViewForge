@@ -13,21 +13,28 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * One entry in the cross-project component library (ADR-033, #209): a single reusable [component],
- * wrapped so the on-disk file carries its own [libraryVersion] — independent of both the `.vforge`
+ * One entry in the cross-project component library (ADR-033, #209): the reusable [component] (the
+ * *primary*) plus, for a nested component, its transitive dependency closure ([dependencies], #234) — the
+ * other user components its tree references, bundled so the entry is self-contained on its own. Wrapped so
+ * the on-disk file carries its own [libraryVersion] — independent of both the `.vforge`
  * [viewforge.model.Project.schemaVersion] and the prefs `prefsVersion`. The library is a *global*,
  * cross-project layer distinct from a document's own `Project.components` (ADR-024): a component a user
- * builds once and reuses in any project. Always emitted (the file must be self-describing) even though
- * [VforgeJson] omits defaults.
+ * builds once and reuses in any project.
+ *
+ * [libraryVersion] is always emitted (the file must be self-describing) even though [VforgeJson] omits
+ * defaults. [dependencies] is **additive with an empty default** (#234): a self-contained entry writes no
+ * `dependencies` key — its file is byte-identical to a pre-#234 (`libraryVersion` 1) file — and any such
+ * older file loads as a bundle with no dependencies, which is the correct reading of a self-contained entry.
  */
 @Serializable
 data class LibraryComponent(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val libraryVersion: Int = LIBRARY_VERSION,
     val component: ComponentDef,
+    val dependencies: List<ComponentDef> = emptyList(),
 ) {
     companion object {
-        const val LIBRARY_VERSION = 1
+        const val LIBRARY_VERSION = 2
     }
 }
 
@@ -54,11 +61,12 @@ object ComponentLibraryStore {
     const val FILE_EXTENSION = ".json"
 
     /**
-     * Every library component in [dir], name-sorted for a stable palette order. A missing directory yields
-     * an empty list; an unreadable/corrupt individual file is skipped (never throws). Only regular
-     * `*.json` files are considered — subdirectories and other files are ignored.
+     * Every library entry in [dir] — the full [LibraryComponent] bundle (primary + any dependency closure,
+     * #234) — name-sorted by its primary for a stable palette order. A missing directory yields an empty
+     * list; an unreadable/corrupt individual file is skipped (never throws). Only regular `*.json` files are
+     * considered — subdirectories and other files are ignored.
      */
-    fun list(dir: Path): List<ComponentDef> {
+    fun list(dir: Path): List<LibraryComponent> {
         if (!Files.isDirectory(dir)) return emptyList()
         val files = try {
             Files.list(dir).use { stream ->
@@ -69,17 +77,18 @@ object ComponentLibraryStore {
         } catch (_: IOException) {
             return emptyList()
         }
-        return files.mapNotNull { readEntry(it)?.component }.sortedBy { it.name.lowercase() }
+        return files.mapNotNull { readEntry(it) }.sortedBy { it.component.name.lowercase() }
     }
 
     /**
-     * Atomically write [component] to `[dir]/<id>.json`, creating [dir] if needed. Used for both adding a
-     * component and renaming one: a rename keeps the same [ComponentDef.id], so it re-writes the same file
-     * with an updated name. Callers resolve name/id collisions before saving.
+     * Atomically write [entry] to `[dir]/<primary-id>.json`, creating [dir] if needed. The file name derives
+     * from the primary [ComponentDef.id]. Used for both adding a component and renaming one: a rename keeps
+     * the same primary id, so it re-writes the same file with an updated name. Callers resolve name/id
+     * collisions before saving.
      */
-    fun save(component: ComponentDef, dir: Path) {
-        val text = VforgeJson.encodeToString(LibraryComponent.serializer(), LibraryComponent(component = component))
-        GuardedWriter.write(dir.resolve(fileNameFor(component.id)), text, root = dir)
+    fun save(entry: LibraryComponent, dir: Path) {
+        val text = VforgeJson.encodeToString(LibraryComponent.serializer(), entry)
+        GuardedWriter.write(dir.resolve(fileNameFor(entry.component.id)), text, root = dir)
     }
 
     /** Remove the library component [id]. Returns whether a file was actually deleted; absent ⇒ a no-op. */
