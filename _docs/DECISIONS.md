@@ -1055,8 +1055,8 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
 
-**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v4 / `M3to4`** after
-ADR-034 claimed the v3 slot for read-only data binding (2026-08-18).
+**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v5 / `M4to5`** after
+ADR-034 claimed v3 for read-only data binding and its nested-lists amendment (#255) claimed v4 (2026-08-18).
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
@@ -1075,9 +1075,9 @@ the framework package's `TargetDefinition` (the Android target uses Material **w
 `compact` < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp). Render resolves the active breakpoint's
 overrides over the base props before dispatch (the same shape as `bindParameters`, ADR-028/#76); codegen
 emits the base value in Phase-2 M13, with window-size-class branching a later slice (M14). Introducing
-the field **bumps the schema 3 → 4** with an `M3to4` version stamp and a committed migration fixture
+the field **bumps the schema 4 → 5** with an `M4to5` version stamp and a committed migration fixture
 (DATA_MODEL §10), even though the field itself is additive. (Originally scoped to v3/`M2to3`; ADR-034's
-read-only data binding took v3 first, so responsive slides to v4.)
+read-only data binding took v3, then its nested-lists amendment (#255) took v4, so responsive slides to v5.)
 
 **Rationale.** Keeping overrides on the node keeps a node's full state in one place: selection, undo,
 copy/paste, extract-to-component, and structural-sharing rebuilds all already operate on a node and its
@@ -1085,9 +1085,9 @@ root-to-node path, so overrides ride along for free with no second structure to 
 identity. It also diffs cleanly (the overrides sit next to the props they modify) and needs no new
 cross-reference integrity rule. Opaque breakpoint strings keep `core` framework-agnostic — the same
 reason `Node.type` and theme tokens are strings — so a future non-Compose package can define its own
-breakpoint set. The 3 → 4 bump is deliberately conservative: a v3-only build silently ignoring a
+breakpoint set. The 4 → 5 bump is deliberately conservative: a v4-only build silently ignoring a
 populated `responsive` field would render/emit only base props, a fidelity loss, so this is a *semantic*
-change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M3to4` as
+change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M4to5` as
 the marker that lets an older build hit the `NEWER_SCHEMA` gate cleanly.
 
 **Rejected.** **A separate screen-level override layer keyed by node id** — duplicates node identity into
@@ -1100,9 +1100,9 @@ additive field with no version bump** — technically allowed by the additive po
 data-loss on old builds makes it a semantic change; bumping is the honest, safe call.
 
 **Consequences.** Phase 2 gains responsive layouts without disturbing any existing prop reader — render
-and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 4 with a
-one-line `M3to4` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
-(the field holds ordinary `PropValue`s). Costs accepted: a fourth schema version to carry forward, and a
+and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 5 with a
+one-line `M4to5` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
+(the field holds ordinary `PropValue`s). Costs accepted: a fifth schema version to carry forward, and a
 node can now hold prop values that only apply at some widths — the inspector must make the active
 breakpoint obvious so an edit's scope is never ambiguous (a Phase-2 UX task, M13).
 
@@ -1424,7 +1424,8 @@ separate, later, consent-gated ADR). Concretely:
   builds discard" that justified the `ParamRef` and responsive bumps. So the change claims **schema v3** with
   an `M2to3` *stamp* migration (v2 documents carry no state and are already structurally valid v3), a real
   fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v3 files in older builds. This is the reserved
-  v3 slot: **ADR-030 (responsive) slides to v4** (`M3to4`).
+  v3 slot: **ADR-030 (responsive) slides to v4** (`M3to4`). (Later slid again to **v5/`M4to5`** when the
+  nested-lists amendment below claimed v4.)
 
 **Rationale.** Read-only binding is the largest slice of #21 that is *fully safe by construction*: with no
 evaluator and no mutation, PF-4 needs no new machinery and the feared per-project consent gate is simply not
@@ -1465,7 +1466,8 @@ bindings; codegen (data classes, seeded stubs, `forEach`, member-access binding 
 `PropDefinition`, no per-component UI); and doc updates — DATA_MODEL §6/§10/§12 (resolve open question 2
 "lists and repeaters" and note the v3 claim), FEATURES §10 (carve the read-only slice out of the non-feature),
 SECURITY (new PF entry: binding paths validated, sample-data size bounds under PF-2, identifiers normalized
-per GC-3; affirm no eval path added), and **ADR-030 re-versioned to v4**. Honest boundaries this release
+per GC-3; affirm no eval path added), and **ADR-030 re-versioned to v4** (later v5; see the #255 amendment).
+Honest boundaries this release
 draws: **read-only only** (no mutation/events), **screen-scoped** (no component-local/global state), **flat
 records** (no nested lists), and **the sample is the generated data** (no real source, by design).
 
@@ -1484,6 +1486,30 @@ generated `Checkbox`/`Slider`), so no mutation or event path is introduced. The 
 Rejected here, as in the original Rejected note: a `ListOfScalar` state type so a dropdown could bind a bare
 list of strings — cleaner data but a schema bump and a wider model for a convenience the label-field selector
 already covers over the existing list-of-record shape.
+
+**Amendment (#255) — nested lists: a recursive record/sample model, schema v4.** The original decision drew
+"flat records (no nested lists)" as an honest boundary. Slice 2 removes it: a record field may **itself be a
+list-of-record**, so state can model a list of sections each holding a list of rows. Concretely, `RecordField`
+now carries a full `StateType` (not a bare `ScalarType`), and a sample cell is a `SampleValue` (a scalar **or**
+nested `Rows`) — the type and sample models become **recursive**, mirroring each other. A `vforge.repeat`'s
+`source` may bind `item.<listField>` (a nested list on the current row), not just a top-level field, so a repeat
+nested inside another repeat's template iterates the outer row's sub-list. **Scope stays single-keyword:** `item`
+always names the **innermost** repeat's element, so an inner `item.*` *shadows* the outer — a nested row cannot
+reach its parent's fields from inside the inner template (render the parent field in the *outer* template
+instead). This maps directly onto Kotlin's own lambda shadowing in the generated `item.teams.forEach { item -> … }`.
+Unlike the dropdown/`LazyColumn` amendments this **changes the serialized shape** of existing v3 state (record
+fields `{name, scalar}` → `{name, type}`; cells a bare primitive → `{kind:"scalar", value}`), so it **claims
+schema v4** with a real (transforming, not stamping) `M3to4` migration + a frozen v3 fixture — and **ADR-030
+responsive consequently slides to v5/`M4to5`**. Still fully inside the read-only, no-eval trust model: binding
+paths are validated identifier chains navigated structurally (PF-4 unchanged), and nested sample data is the
+same typed-literal trust boundary as any sample, merely deeper. Codegen emits recursive `data class`es (an outer
+type gains a `List<Element>` field) and a nested seeded stub; the renderer expands nested repeats against the
+sample, shadowing the `item` scope per level. **Rejected here:** *named/outer scopes* (e.g. `item.parent.…` or a
+per-repeat scope keyword) so an inner template could reach an outer row — it widens the model to a scope stack
+and multi-name resolution for a capability the outer-template placement already covers; `item`-shadowing keeps
+one keyword and one resolution rule. Deferred beyond this slice: deeper-than-two-level *source pickers* in the
+inspector (the picker offers `item.<listField>` from the nearest enclosing repeat; hand-nesting deeper still
+renders/generates correctly).
 
 ---
 
