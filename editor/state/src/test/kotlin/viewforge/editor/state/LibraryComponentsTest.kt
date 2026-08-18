@@ -171,6 +171,20 @@ class LibraryComponentsTest {
     }
 
     @Test
+    fun `libraryNameError and uniqueLibraryName enforce legal, unique library names`() {
+        val s = state()
+        s.applyLibraryComponents(listOf(libComponent("lib_1", "Card")))
+
+        assertNull(s.libraryNameError("Button")) // free and legal
+        assertNotNull(s.libraryNameError("")) // blank
+        assertNotNull(s.libraryNameError("Card")) // duplicate in library
+        assertNull(s.libraryNameError("Card", excludingId = "lib_1")) // renaming to its own name is fine
+
+        assertEquals("Card2", s.uniqueLibraryName("Card")) // disambiguated
+        assertEquals("Button", s.uniqueLibraryName("Button")) // free stays as-is
+    }
+
+    @Test
     fun `libraryAddBlockReason permits a self-contained component and refuses one that references others`() {
         // Seed two document components: a leaf, and one whose tree references the leaf.
         val leaf = libComponent("cmp_leaf", "Leaf")

@@ -1490,6 +1490,32 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun libraryInsertNeedsName(entry: PaletteEntry): Boolean =
         entry.libraryId != null && componentNameError(entry.label) != null
 
+    /**
+     * Why [name] cannot name a library component, or null if it is acceptable — the library-side counterpart
+     * to [componentNameError] (which validates against the *document*). It must be a legal identifier and
+     * unique **within the library** (a name a palette row would show), ignoring [excludingId] so renaming an
+     * entry to its own current name is allowed.
+     */
+    fun libraryNameError(name: String, excludingId: String? = null): String? {
+        val trimmed = name.trim()
+        return when {
+            trimmed.isBlank() -> "Name cannot be empty"
+            !catalog.isValidScreenName(trimmed) -> "Not a valid name (must be a legal Kotlin identifier)"
+            libraryComponents.any { it.id != excludingId && it.name == trimmed } ->
+                "A library component named “$trimmed” already exists"
+            else -> null
+        }
+    }
+
+    /** [base] if free within the library, else `base2`, `base3`, … — a legal default when adding to the library. */
+    fun uniqueLibraryName(base: String): String {
+        val taken = libraryComponents.mapTo(HashSet()) { it.name }
+        if (base !in taken) return base
+        var n = 2
+        while ("$base$n" in taken) n++
+        return "$base$n"
+    }
+
     /** A suggested free, legal name for inserting library [entry]: its own name if available, else the next unique. */
     fun suggestedLibraryName(entry: PaletteEntry): String =
         if (componentNameError(entry.label) == null) entry.label else uniqueComponentName()

@@ -85,6 +85,9 @@ fun FrameWindowScope.EditorShell(
     exportService: ProjectExportService,
     previewService: CodePreviewService,
     recoveryDir: Path,
+    // The per-user config-dir folder the cross-project component library persists to (ADR-033, #209),
+    // supplied by :app like [recoveryDir]. The library controller loads it into the palette at startup.
+    libraryDir: Path,
     // Save-on-close (#56): the window's onCloseRequest raises [closeRequested] when the document is dirty;
     // the shell shows a Save/Discard/Cancel prompt and calls [onExit] to actually quit or [onCloseHandled]
     // to abort. Defaulted so the shell stays usable (and the signature stable) without the close wiring.
@@ -133,6 +136,11 @@ fun FrameWindowScope.EditorShell(
             recovery.tick()
         }
     }
+    // The cross-project component library (ADR-033, #209): loads the config-dir folder into the palette at
+    // startup and owns add/remove/rename + the copy-into-document insert. A one-frame delay before library
+    // entries appear is fine (unlike panel layout, this is not chrome that would flash).
+    val library = rememberLibraryController(state, libraryDir)
+    LaunchedEffect(library) { library.reload() }
 
     AppMenuBar(
         state,
@@ -141,6 +149,7 @@ fun FrameWindowScope.EditorShell(
         onRegenerate = export::regenerate,
         onOpenThemeEditor = { showThemeEditor = true },
         onOpenPreferences = { showPreferences = true },
+        onOpenLibraryManager = library::openManager,
         onNew = document::newDocument,
         onOpen = document::open,
         onOpenGenerated = document::openGenerated,
@@ -173,6 +182,8 @@ fun FrameWindowScope.EditorShell(
         DocumentDialogs(document)
         AssetImportDialogs(assetImport)
         RecoveryDialog(recovery)
+        ManageLibraryDialog(library, state)
+        LibraryInsertDialog(library, state)
         ExitConfirmation(
             closeRequested,
             state,
@@ -191,6 +202,8 @@ fun FrameWindowScope.EditorShell(
                     export,
                     onOpenThemeEditor = { showThemeEditor = true },
                     onOpenPreferences = { showPreferences = true },
+                    onInsert = library::insert,
+                    onOpenLibraryManager = library::openManager,
                 ),
             ) { showPalette = false }
         }
@@ -230,7 +243,12 @@ fun FrameWindowScope.EditorShell(
                     // state (persisted across sessions), and the drag grows it toward the canvas — so the
                     // left panels add the delta and the right-hand inspector subtracts it.
                     if (state.paletteVisible) {
-                        Palette(state, prefs::toggleFavorite, Modifier.width(state.paletteWidth.dp).fillMaxHeight())
+                        Palette(
+                            state,
+                            prefs::toggleFavorite,
+                            onInsert = library::insert,
+                            Modifier.width(state.paletteWidth.dp).fillMaxHeight(),
+                        )
                         ResizableDivider(onResize = state::resizePalette, onCommit = prefs::persist)
                     }
                     if (state.treeVisible) {
