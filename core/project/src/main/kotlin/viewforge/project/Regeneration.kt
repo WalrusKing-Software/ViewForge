@@ -6,6 +6,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import viewforge.model.Project
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -27,12 +28,28 @@ data class ExportManifest(
     val manifestVersion: Int = MANIFEST_VERSION,
     val project: String = "",
     val paths: List<String> = emptyList(),
+    /**
+     * Maps a generated screen's project-relative `.kt` path to the [viewforge.model.Screen.id] it came from
+     * (ADR-032) — so re-opening a recognised `.kt` can select the exact screen it corresponds to. Added in
+     * manifest v2; a v1 manifest (or any without it) simply carries an empty map. Framework-agnostic: the
+     * path→id pairs are supplied by the target exporter, which owns the file-naming convention.
+     */
+    val screenPaths: Map<String, String> = emptyMap(),
 ) {
     companion object {
-        const val MANIFEST_VERSION = 1
+        /** v1: paths only. v2 (ADR-032): adds [screenPaths]. Additive — a v1 manifest still loads (empty map). */
+        const val MANIFEST_VERSION = 2
 
         /** Where the manifest lives inside a managed output directory (a namespaced dot-dir keeps the root clean). */
         const val RELATIVE_PATH = ".viewforge/manifest.json"
+
+        /**
+         * Where a regeneration stashes the source `Project` beside the manifest (ADR-032, #22): the lossless IR
+         * from which the `.kt` in this directory was generated, so ViewForge can re-open its own output without
+         * ever parsing Kotlin. Like [RELATIVE_PATH] this is export metadata, not a bundle path — it is not listed
+         * in [paths] and is overwritten wholesale on each regeneration.
+         */
+        const val SIDECAR_RELATIVE_PATH = ".viewforge/project.vforge"
 
         /**
          * The marker ViewForge stamps on the first line of every generated source file (G6). Used as a
@@ -101,6 +118,19 @@ object ExportManifestStore {
         GuardedWriter.write(resolve(realRoot), text, root = realRoot)
     }
 
+    /**
+     * Stash [project] as the IR sidecar beside the manifest (ADR-032), at [root]/[ExportManifest.SIDECAR_RELATIVE_PATH].
+     * Serialized with the same `.vforge` codec as a saved project, through the [GuardedWriter] (root-confined), so
+     * re-opening it later runs the identical hardened load path — no separate format, no Kotlin parsing.
+     */
+    fun saveSidecar(project: Project, root: Path) {
+        val realRoot = root.toRealPath()
+        GuardedWriter.write(sidecarPath(realRoot), ProjectCodec.encode(project), root = realRoot)
+    }
+
+    /** The IR-sidecar path inside [root] (resolved segment-by-segment, cross-platform). May not exist. */
+    fun sidecarPath(root: Path): Path = resolveRelative(root, ExportManifest.SIDECAR_RELATIVE_PATH)
+
     /** The manifest in [root], or null when absent or unreadable (never throws). */
     fun load(root: Path): ExportManifest? {
         val file = resolve(root)
@@ -116,6 +146,8 @@ object ExportManifestStore {
         }
     }
 
-    private fun resolve(root: Path): Path =
-        ExportManifest.RELATIVE_PATH.split('/').fold(root) { acc, segment -> acc.resolve(segment) }
+    private fun resolve(root: Path): Path = resolveRelative(root, ExportManifest.RELATIVE_PATH)
+
+    private fun resolveRelative(root: Path, relative: String): Path =
+        relative.split('/').fold(root) { acc, segment -> acc.resolve(segment) }
 }

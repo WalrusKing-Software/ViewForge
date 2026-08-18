@@ -219,13 +219,20 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
             RegenerationReport(written = it.toWrite, deleted = it.toDelete, blocked = it.blocked)
         }
 
-    override fun regenerate(project: Project, dir: Path): RegenerationReport =
-        when (val outcome = ProjectExporter.regenerate(dir, bundle(project, ExportMode.GRADLE_PROJECT), project.name)) {
-            is RegenerationOutcome.Blocked ->
-                RegenerationReport(written = emptyList(), deleted = emptyList(), blocked = outcome.unowned)
-            is RegenerationOutcome.Applied ->
-                RegenerationReport(written = outcome.written, deleted = outcome.deleted, blocked = emptyList())
-        }
+    override fun regenerate(project: Project, dir: Path): RegenerationReport = when (
+        val outcome = ProjectExporter.regenerate(
+            dir,
+            bundle(project, ExportMode.GRADLE_PROJECT),
+            project.name,
+            sidecar = project,
+            screenPaths = DesktopExporter.screenPaths(project),
+        )
+    ) {
+        is RegenerationOutcome.Blocked ->
+            RegenerationReport(written = emptyList(), deleted = emptyList(), blocked = outcome.unowned)
+        is RegenerationOutcome.Applied ->
+            RegenerationReport(written = outcome.written, deleted = outcome.deleted, blocked = emptyList())
+    }
 
     private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
         ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)

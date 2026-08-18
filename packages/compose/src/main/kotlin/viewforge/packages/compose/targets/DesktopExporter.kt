@@ -81,6 +81,16 @@ object DesktopExporter {
         }
     }
 
+    /**
+     * Maps each screen's generated `.kt` path *in the Gradle bundle* to its [viewforge.model.Screen.id]
+     * (ADR-032), for the re-open manifest. Uses the exact `$SOURCE_DIR/<FunctionName>.kt` shape
+     * [gradleProject] emits, so a recognised file resolves back to the screen it came from. Screens only —
+     * user components and the scaffold are not re-open entry points.
+     */
+    fun screenPaths(project: Project): Map<String, String> = project.screens.associate { screen ->
+        "$SOURCE_DIR/${KotlinIdentifiers.requireFunctionName(screen.name)}.kt" to screen.id
+    }
+
     /** Runs codegen (reusing the same emitter the canvas mirrors) and the G7 formatter over each screen. */
     private fun screenFiles(project: Project, dir: String): List<TextFile> =
         ComposeCodeGenerator().generate(project).map { generated ->
