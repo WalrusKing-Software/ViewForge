@@ -136,6 +136,11 @@ object Dropdown {
         if (node.type == TYPE) (node.props[OPTIONS_PROP] as? PropValue.StateBinding)?.path else null
 
     /** The record field name shown per option, or null when [node] is not a dropdown or no label field is set. */
-    fun labelFieldOf(node: Node): String? =
-        if (node.type == TYPE) (node.props[LABEL_PROP] as? PropValue.Literal)?.value?.content?.takeIf { it.isNotBlank() } else null
+    fun labelFieldOf(node: Node): String? = if (node.type ==
+        TYPE
+    ) {
+        (node.props[LABEL_PROP] as? PropValue.Literal)?.value?.content?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
 }

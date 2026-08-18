@@ -55,17 +55,16 @@ internal fun expandScreenState(root: Node, state: List<StateField>, rowLimit: In
     expandNode(root, BindingValueScope(fields = state), rowLimit)
 
 /** One node: resolve its own binding props/modifier args, then expand its child and slot lists under [scope]. */
-private fun expandNode(node: Node, scope: BindingValueScope, rowLimit: Int): Node =
-    if (node.type == Dropdown.TYPE) {
-        expandDropdown(node, scope)
-    } else {
-        node.copy(
-            props = node.props.resolveBindings(scope),
-            modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
-            children = node.children.expandList(scope, rowLimit),
-            slots = node.slots.mapValues { (_, list) -> list.expandList(scope, rowLimit) },
-        )
-    }
+private fun expandNode(node: Node, scope: BindingValueScope, rowLimit: Int): Node = if (node.type == Dropdown.TYPE) {
+    expandDropdown(node, scope)
+} else {
+    node.copy(
+        props = node.props.resolveBindings(scope),
+        modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
+        children = node.children.expandList(scope, rowLimit),
+        slots = node.slots.mapValues { (_, list) -> list.expandList(scope, rowLimit) },
+    )
+}
 
 /**
  * A populated dropdown resolved for preview (ADR-034 slice 2, #253). Its `options` binds to a list-of-record

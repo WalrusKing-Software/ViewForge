@@ -39,12 +39,12 @@ import viewforge.editor.state.BindingChoice
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.acceptsScalar
 import viewforge.editor.state.isBindableProp
+import viewforge.model.Dropdown
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.Parameter
 import viewforge.model.ParameterType
 import viewforge.model.PropDefinition
-import viewforge.model.Dropdown
 import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Repeater
