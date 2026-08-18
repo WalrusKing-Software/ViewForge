@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -84,6 +85,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import viewforge.model.ComponentDef
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.UserComponent
@@ -135,6 +137,7 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
         "compose.material3.Checkbox" -> RenderCheckbox(node, modifier, childCtx)
         "compose.material3.Switch" -> RenderSwitch(node, modifier, childCtx)
+        Dropdown.TYPE -> RenderDropdown(node, modifier)
         "compose.foundation.Image" -> RenderImage(node, modifier, childCtx)
         "compose.material3.Icon" -> RenderIcon(node, modifier)
         "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, childCtx)
@@ -442,6 +445,21 @@ private fun RenderOutlinedTextField(node: Node, modifier: Modifier, ctx: RenderC
     } else {
         OutlinedTextField(value = initial, onValueChange = {}, modifier = modifier, enabled = enabled)
     }
+}
+
+@Composable
+private fun RenderDropdown(node: Node, modifier: Modifier) {
+    // Read-only preview (ADR-034 slice 2, #253): the closed-menu anchor showing the first sample row's label as
+    // the current selection. Options arrive pre-resolved from the state pre-pass ([DROPDOWN_SELECTED_PROP]); no
+    // menu opens and nothing mutates — selection is a codegen concern, and the canvas must stay inert (PF-4).
+    val selected = node.props[DROPDOWN_SELECTED_PROP].literalString().orEmpty()
+    OutlinedTextField(
+        value = selected,
+        onValueChange = {},
+        readOnly = true,
+        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+        modifier = modifier,
+    )
 }
 
 @Composable

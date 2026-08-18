@@ -2,12 +2,14 @@ package viewforge.packages.compose.render
 
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.BindingValueScope
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.PropValue
 import viewforge.model.Repeater
 import viewforge.model.SampleValue
 import viewforge.model.StateField
+import viewforge.model.StateType
 import viewforge.model.resolveListSource
 import viewforge.model.resolveSampleScalar
 
@@ -37,6 +39,9 @@ internal const val PLACEHOLDER_TYPE: String = "vforge.render.placeholder"
 /** The prop under which a [PLACEHOLDER_TYPE] node carries its user-facing message. */
 internal const val PLACEHOLDER_MESSAGE_PROP: String = "message"
 
+/** Render-only prop: the sample selection a resolved [Dropdown] shows (never persisted; set by [expandDropdown]). */
+internal const val DROPDOWN_SELECTED_PROP: String = "vforge.dropdown.selected"
+
 /** The visible stand-in a `Text` (or any scalar-bound prop) shows when its binding [path] can't resolve. */
 internal fun unresolvedMarker(path: String): String = "⟨$path?⟩" // ⟨path?⟩
 
@@ -50,12 +55,39 @@ internal fun expandScreenState(root: Node, state: List<StateField>, rowLimit: In
     expandNode(root, BindingValueScope(fields = state), rowLimit)
 
 /** One node: resolve its own binding props/modifier args, then expand its child and slot lists under [scope]. */
-private fun expandNode(node: Node, scope: BindingValueScope, rowLimit: Int): Node = node.copy(
-    props = node.props.resolveBindings(scope),
-    modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
-    children = node.children.expandList(scope, rowLimit),
-    slots = node.slots.mapValues { (_, list) -> list.expandList(scope, rowLimit) },
-)
+private fun expandNode(node: Node, scope: BindingValueScope, rowLimit: Int): Node =
+    if (node.type == Dropdown.TYPE) {
+        expandDropdown(node, scope)
+    } else {
+        node.copy(
+            props = node.props.resolveBindings(scope),
+            modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
+            children = node.children.expandList(scope, rowLimit),
+            slots = node.slots.mapValues { (_, list) -> list.expandList(scope, rowLimit) },
+        )
+    }
+
+/**
+ * A populated dropdown resolved for preview (ADR-034 slice 2, #253). Its `options` binds to a list-of-record
+ * source — never a scalar — so the generic scalar resolution ([resolveBindings]) must not touch it: instead the
+ * canvas previews the dropdown read-only as the **first** sample row's label value, stashed in
+ * [DROPDOWN_SELECTED_PROP] for [RenderDropdown] (the original binding prop is left intact but unread). An
+ * unbound or unresolvable source becomes a loud placeholder (PF-6), exactly like a repeat. The label field is
+ * [Dropdown.labelFieldOf] or, absent, the record's first field. Modifier-arg bindings still resolve as normal.
+ */
+private fun expandDropdown(node: Node, scope: BindingValueScope): Node {
+    val optionsPath = Dropdown.optionsOf(node)
+    val listField = optionsPath?.let { resolveListSource(it, scope.fields) }
+        ?: return placeholder(node.id, "Unbound options: ${optionsPath?.ifBlank { "?" } ?: "?"}")
+    val fields = (listField.type as? StateType.ListOfRecord)?.fields.orEmpty()
+    val labelField = Dropdown.labelFieldOf(node) ?: fields.firstOrNull()?.name
+    val rows = (listField.sample as? SampleValue.Rows)?.rows.orEmpty()
+    val selected = labelField?.let { lf -> rows.firstOrNull()?.get(lf)?.content } ?: ""
+    return node.copy(
+        modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
+        props = node.props + (DROPDOWN_SELECTED_PROP to PropValue.Literal(JsonPrimitive(selected))),
+    )
+}
 
 /** Expand a child list, splicing each [Repeater]'s rows inline (a forEach in its parent's flow, not a wrapper). */
 private fun List<Node>.expandList(scope: BindingValueScope, rowLimit: Int): List<Node> = flatMap { child ->

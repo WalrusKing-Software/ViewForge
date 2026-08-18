@@ -1,6 +1,7 @@
 package viewforge.packages.compose.render
 
 import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.PropValue
@@ -161,6 +162,53 @@ class StateBindingTest {
         val row = expandScreenState(root, listOf(members, title)).children.single()
         assertEquals(PropValue.Literal(JsonPrimitive("Ada")), boundText(row.children[0]))
         assertEquals(PropValue.Literal(JsonPrimitive("Members")), boundText(row.children[1]))
+    }
+
+    @Test
+    fun `a populated dropdown previews the first sample row's label value, read-only`() {
+        val guests = listField(
+            "guests",
+            listOf(RecordField("name", ScalarType.STRING), RecordField("seat", ScalarType.INT)),
+            rows = listOf(
+                mapOf("name" to JsonPrimitive("Ada"), "seat" to JsonPrimitive(1)),
+                mapOf("name" to JsonPrimitive("Grace"), "seat" to JsonPrimitive(2)),
+            ),
+        )
+        val dropdown = Dropdown.node("guests", "name", id = NodeId("dd"))
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(dropdown))
+
+        val resolved = expandScreenState(root, listOf(guests)).children.single()
+        assertEquals(Dropdown.TYPE, resolved.type)
+        assertEquals(PropValue.Literal(JsonPrimitive("Ada")), resolved.props[DROPDOWN_SELECTED_PROP])
+        // The options binding is left intact (unread by the renderer), never scalar-clobbered into a marker.
+        assertEquals(PropValue.StateBinding("guests"), resolved.props[Dropdown.OPTIONS_PROP])
+    }
+
+    @Test
+    fun `a dropdown with no label field falls back to the record's first field`() {
+        val guests = listField(
+            "guests",
+            listOf(RecordField("name", ScalarType.STRING), RecordField("seat", ScalarType.INT)),
+            rows = listOf(mapOf("name" to JsonPrimitive("Ada"), "seat" to JsonPrimitive(1))),
+        )
+        val dropdown = Dropdown.node("guests", id = NodeId("dd"))
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(dropdown))
+
+        val resolved = expandScreenState(root, listOf(guests)).children.single()
+        assertEquals(PropValue.Literal(JsonPrimitive("Ada")), resolved.props[DROPDOWN_SELECTED_PROP])
+    }
+
+    @Test
+    fun `a dropdown whose options name no list field becomes a loud placeholder node`() {
+        val dropdown = Dropdown.node("nope", "name", id = NodeId("dd"))
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(dropdown))
+
+        val child = expandScreenState(root, state = emptyList()).children.single()
+        assertEquals(PLACEHOLDER_TYPE, child.type)
+        assertTrue(
+            (child.props[PLACEHOLDER_MESSAGE_PROP] as PropValue.Literal).value.content.contains("nope"),
+            "placeholder should name the unbound options source, got ${child.props}",
+        )
     }
 
     @Test
