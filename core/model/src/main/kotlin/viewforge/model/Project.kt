@@ -61,9 +61,20 @@ data class ComponentDef(
  * A top-level, exportable UI entry point (DATA_MODEL §3). [name] becomes the generated composable
  * function name and must normalize to a legal Kotlin identifier (validated at edit time / codegen,
  * GC-3).
+ *
+ * [state] is the screen's read-only, design-time data (ADR-034, #21): the named [StateField]s its props
+ * bind to via [PropValue.StateBinding]. Additive and defaulted — a screen without data serializes
+ * identically to before — though populating it is what claims schema v3 (a v2 build would silently drop
+ * it and misrender every binding).
  */
 @Serializable
-data class Screen(val id: String, val name: String, val root: Node, val previewProfile: String? = null)
+data class Screen(
+    val id: String,
+    val name: String,
+    val root: Node,
+    val previewProfile: String? = null,
+    val state: List<StateField> = emptyList(),
+)
 
 /**
  * The `.vforge` document root and the single source of truth (DATA_MODEL §2, ARCHITECTURE §1).
