@@ -141,6 +141,11 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, childCtx)
         "compose.material3.Scaffold" -> RenderScaffold(node, modifier, childCtx)
         UserComponent.TYPE -> RenderUserComponent(node, modifier, childCtx)
+        // A repeat whose source couldn't resolve to a list field (expandScreenState, ADR-034); drawn loudly.
+        PLACEHOLDER_TYPE -> ErrorPlaceholder(
+            node.props[PLACEHOLDER_MESSAGE_PROP].literalString() ?: "Unbound",
+            modifier,
+        )
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }

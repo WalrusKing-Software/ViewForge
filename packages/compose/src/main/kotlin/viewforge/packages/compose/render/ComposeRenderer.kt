@@ -4,12 +4,14 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.StateField
 import viewforge.model.Theme
 
 /**
@@ -34,12 +36,16 @@ object ComposeRenderer {
         instrument: (NodeId) -> Modifier = { Modifier },
         imageLoader: (assetId: String) -> ImageBitmap? = { null },
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
         interactive: Boolean = false,
         editorAffordances: Boolean = false,
     ) {
         ProjectTheme(theme, dark) {
+            // Resolve read-only screen state (ADR-034) before the walk: bindings become sample literals and
+            // repeats expand to their rows, so RenderNode only ever sees an ordinary tree. Remembered on
+            // (root, state) so it recomputes only when the screen or its data changes, like bindParameters.
             RenderNode(
-                root,
+                remember(root, state) { expandScreenState(root, state) },
                 RenderContext(
                     theme = theme,
                     dark = dark,
