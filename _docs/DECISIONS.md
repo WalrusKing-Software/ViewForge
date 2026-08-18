@@ -1300,6 +1300,13 @@ headless-testable** (the same class of gap as prior drag/dialog work) and are co
 state tests plus running the app; **organizing** the library (folders, tags, search beyond the palette
 filter) is a clean follow-up; and a future `ComponentDef` shape change that rides a `.vforge` migration must
 also migrate library files — the per-file `libraryVersion` is the hook, and no migration is owed today.
+**Nested components are out of scope this release:** a library entry must be *self-contained* — adding a
+component whose tree references other user components is refused fail-loud (`libraryAddBlockReason`), because
+its dependencies live in the origin document, not the library, and copying it alone would dangle those
+references. Bundling the transitive closure (store the dependency `ComponentDef`s with the entry, remap ids
+on insert) is a tracked follow-up (#234); until then insert is trivially correct because every library entry
+stands alone. Drag-from-library onto the canvas is likewise deferred (click-to-insert only), since a mid-drag name
+prompt is the awkward gesture this ADR's collision decision already flagged.
 
 ---
 
