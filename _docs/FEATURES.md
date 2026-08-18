@@ -192,7 +192,10 @@ Recorded so they're decisions, not oversights:
 - Round-trip parsing of hand-written Compose (see `PROJECT_PLAN.md` §7.1). *Exception:* re-opening
   output ViewForge itself generated is sanctioned separately — carried as an IR sidecar, recognised by
   ownership, never parsed (ADR-032, #22).
-- Visual state management / data binding
+- Visual state management / data binding. *Exception:* **read-only** data binding is sanctioned and
+  shipped (ADR-034, #21) — a screen declares typed, sample-backed `state`, props bind to it by structural
+  path (`PropValue.StateBinding`), and a `vforge.repeat` node repeats a template per row. Still excluded:
+  **mutable** state, event handlers, and any expression evaluation (a later, separately consent-gated ADR).
 - Navigation graph editing
 - Backend, API, or database integration
 - Real-time collaboration
