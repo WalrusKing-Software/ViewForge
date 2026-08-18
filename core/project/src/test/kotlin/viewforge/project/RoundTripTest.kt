@@ -49,7 +49,7 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 3")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 4")
     }
 
     @Test
@@ -87,7 +87,7 @@ class RoundTripTest {
     }
 
     @Test
-    fun `the committed schema-3 Dashboard_vforge fixture loads and equals the in-code model`() {
+    fun `the committed schema-4 Dashboard_vforge fixture loads and equals the in-code model`() {
         // Dashboard.vforge is the ADR-034 read-only-state fixture: screen state (scalar + list-of-record),
         // a StateBinding prop, and a vforge.repeat template. It is current-schema, so it loads without
         // migration and must decode to exactly the in-code fixture (DATA_MODEL rule 3).

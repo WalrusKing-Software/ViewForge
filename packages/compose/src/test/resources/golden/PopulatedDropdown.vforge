@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "01J8PICKER0",
   "name": "Picker",
   "framework": {
@@ -38,11 +38,17 @@
             "fields": [
               {
                 "name": "name",
-                "scalar": "STRING"
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
               },
               {
                 "name": "city",
-                "scalar": "STRING"
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
               }
             ]
           },
@@ -50,12 +56,24 @@
             "kind": "rows",
             "rows": [
               {
-                "name": "Grand Hall",
-                "city": "Paris"
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grand Hall"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Paris"
+                }
               },
               {
-                "name": "Sky Dome",
-                "city": "Tokyo"
+                "name": {
+                  "kind": "scalar",
+                  "value": "Sky Dome"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Tokyo"
+                }
               }
             ]
           }

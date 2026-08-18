@@ -18,6 +18,7 @@ import viewforge.model.StateField
 import viewforge.model.StateType
 import viewforge.model.Theme
 import viewforge.model.UserComponent
+import viewforge.model.scalarRows
 
 /** Shared test fixtures. [demoProject] is the DATA_MODEL §11 worked example, built in code. */
 object Fixtures {
@@ -104,7 +105,7 @@ object Fixtures {
         Project(id = "01MIN", name = "Min", framework = FrameworkRef("compose-multiplatform", "1.0.0"))
 
     /**
-     * A schema-v3 project exercising ADR-034 read-only screen state: a scalar [StateField] and a
+     * A schema-v4 project exercising ADR-034 read-only screen state: a scalar [StateField] and a
      * list-of-record one, a scalar [PropValue.StateBinding], and a [Repeater] whose template binds an
      * `item.*` path. The byte-identical serialization is committed as `samples/Dashboard.vforge`; the
      * two are kept in lockstep by a test (as Gallery is with the app's sample), so this is the single
@@ -143,7 +144,7 @@ object Fixtures {
                             ),
                         ),
                         sample =
-                        SampleValue.Rows(
+                        scalarRows(
                             listOf(
                                 mapOf("name" to JsonPrimitive("Ada"), "role" to JsonPrimitive("Lead")),
                                 mapOf("name" to JsonPrimitive("Grace"), "role" to JsonPrimitive("Engineer")),

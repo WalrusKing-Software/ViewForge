@@ -9,6 +9,7 @@ import viewforge.model.StateField
 import viewforge.model.StateType
 import viewforge.model.allChildren
 import viewforge.model.resolveListSource
+import viewforge.model.scalarOrNull
 
 /**
  * Pure editor-side resolution of the read-only state paths a prop can bind to (ADR-034, #21). Kept out of
@@ -31,8 +32,10 @@ fun bindablePaths(root: Node?, node: Node, screenState: List<StateField>): List<
         (field.type as? StateType.Scalar)?.let { BindingChoice(field.name, it.scalar, field.name) }
     }
     val itemFields = enclosingItemFields(root, node.id, screenState)
-    val itemScalars = itemFields.map { rf ->
-        BindingChoice("${Repeater.ITEM_SCOPE}.${rf.name}", rf.scalar, "${Repeater.ITEM_SCOPE}.${rf.name}")
+    val itemScalars = itemFields.mapNotNull { rf ->
+        rf.scalarOrNull?.let { scalar ->
+            BindingChoice("${Repeater.ITEM_SCOPE}.${rf.name}", scalar, "${Repeater.ITEM_SCOPE}.${rf.name}")
+        }
     }
     return screenScalars + itemScalars
 }

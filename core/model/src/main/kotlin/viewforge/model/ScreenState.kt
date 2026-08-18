@@ -18,15 +18,26 @@ data class StateField(val name: String, val type: StateType, val sample: SampleV
 @Serializable
 enum class ScalarType { STRING, INT, FLOAT, BOOL }
 
-/** One named, scalar-typed field of a record (a row of a list-of-record state). Names are identifiers (GC-3). */
+/**
+ * One named field of a record (a row of a list-of-record state). Its [type] is a full [StateType], so a field
+ * is either a scalar or **itself a nested list-of-record** (ADR-034 Amendment, #255): the model is recursive.
+ * Names are identifiers (GC-3). The [scalar] secondary constructor keeps the common flat case terse:
+ * `RecordField("name", ScalarType.STRING)`.
+ */
 @Serializable
-data class RecordField(val name: String, val scalar: ScalarType)
+data class RecordField(val name: String, val type: StateType) {
+    constructor(name: String, scalar: ScalarType) : this(name, StateType.Scalar(scalar))
+}
+
+/** The scalar type of a flat record field, or null when the field is itself a nested list-of-record. */
+val RecordField.scalarOrNull: ScalarType? get() = (type as? StateType.Scalar)?.scalar
 
 /**
- * The shape of a [StateField]: a single [Scalar] value, or a [ListOfRecord] — a list whose elements are flat
- * records (named scalar fields). These two cover the issue's examples (a live indicator binds a scalar; a
- * dynamic list / populated dropdown repeats over a list of records). A closed hierarchy (PF-1); serialized
- * with the `kind` discriminator, so no member may declare a `kind` property.
+ * The shape of a [StateField] (or a [RecordField]): a single [Scalar] value, or a [ListOfRecord] — a list
+ * whose elements are records ([RecordField]s). A record field may itself be a [ListOfRecord], so the hierarchy
+ * is **recursive** — nested lists (ADR-034 Amendment, #255). These cover the issue's examples (a live indicator
+ * binds a scalar; a dynamic list / populated dropdown / nested list repeats over records). A closed hierarchy
+ * (PF-1); serialized with the `kind` discriminator, so no member may declare a `kind` property.
  */
 @Serializable
 sealed interface StateType {
@@ -40,9 +51,11 @@ sealed interface StateType {
 }
 
 /**
- * The design-time sample backing a [StateField]: a [Scalar] literal, or [Rows] — a list of records, each a
- * map of field name → scalar literal. Sample data is what the canvas renders and what codegen seeds the
- * generated stub with (never a live source; ADR-034). A closed hierarchy tagged with `kind`.
+ * The design-time sample backing a [StateField] (or record field): a [Scalar] literal, or [Rows] — a list of
+ * records, each a map of field name → [SampleValue]. A cell is itself a [SampleValue], so a nested-list field's
+ * sample is [Rows] within a row — mirroring the recursive [StateType] (ADR-034 Amendment, #255). Sample data is
+ * what the canvas renders and what codegen seeds the generated stub with (never a live source; ADR-034). A
+ * closed hierarchy tagged with `kind`.
  */
 @Serializable
 sealed interface SampleValue {
@@ -52,8 +65,15 @@ sealed interface SampleValue {
 
     @Serializable
     @SerialName("rows")
-    data class Rows(val rows: List<Map<String, JsonPrimitive>>) : SampleValue
+    data class Rows(val rows: List<Map<String, SampleValue>>) : SampleValue
 }
+
+/** The scalar primitive of a sample cell, or null when the cell holds nested [SampleValue.Rows]. */
+val SampleValue?.scalarValue: JsonPrimitive? get() = (this as? SampleValue.Scalar)?.value
+
+/** Build [SampleValue.Rows] from flat scalar rows (field name → primitive) — the common, non-nested case. */
+fun scalarRows(rows: List<Map<String, JsonPrimitive>>): SampleValue.Rows =
+    SampleValue.Rows(rows.map { row -> row.mapValues { (_, v) -> SampleValue.Scalar(v) } })
 
 /**
  * The schema contract for a **repeat** node (ADR-034, #21): a node whose subtree is rendered once per element

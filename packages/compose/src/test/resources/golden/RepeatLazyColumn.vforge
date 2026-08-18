@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "01J8ROSTER",
   "name": "Roster",
   "framework": {
@@ -60,11 +60,17 @@
             "fields": [
               {
                 "name": "name",
-                "scalar": "STRING"
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
               },
               {
                 "name": "role",
-                "scalar": "STRING"
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
               }
             ]
           },
@@ -72,12 +78,24 @@
             "kind": "rows",
             "rows": [
               {
-                "name": "Ada",
-                "role": "Lead"
+                "name": {
+                  "kind": "scalar",
+                  "value": "Ada"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Lead"
+                }
               },
               {
-                "name": "Grace",
-                "role": "Engineer"
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grace"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Engineer"
+                }
               }
             ]
           }

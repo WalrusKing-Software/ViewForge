@@ -57,6 +57,7 @@ import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
 import viewforge.model.reachableComponents
 import viewforge.model.remapComponentReferences
+import viewforge.model.scalarRows
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
 import viewforge.prefs.EditorPreferences
@@ -784,7 +785,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         val field = StateField(
             name,
             StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
-            SampleValue.Rows(listOf(mapOf("name" to JsonPrimitive("")))),
+            scalarRows(listOf(mapOf("name" to JsonPrimitive("")))),
         )
         execute(AddStateField(screen.id, field))
     }
