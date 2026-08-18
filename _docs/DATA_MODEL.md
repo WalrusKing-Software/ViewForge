@@ -232,6 +232,14 @@ since v1), so consuming it is not a forward-incompatible change on its own; the 
 from the companion `Screen.state` capability (§3, §10). Read-only only this release — mutation and events
 are a later, separately consent-gated ADR.
 
+A `StateBinding` may also name a **list** field, not just a scalar — the slice-2 **`vforge.dropdown`** node
+(ADR-034 Amendment #253) binds its `options` prop to a list-of-record `StateField` and shows one of that
+record's fields per option (an ordinary literal `optionLabel` prop). Both are additive props on a new node
+type, so a dropdown is **schema-neutral** (no bump). The canvas previews the first sample row's label
+read-only; codegen emits `options.forEach { item -> DropdownMenuItem(…) }` reading the same seeded stub, with
+inert selection handlers (no mutation path). This and the `LazyColumn` repeat variant (§12.2, #251) are the
+read-only extensions of slice 2.
+
 ### `RawExpression` — the escape hatch
 
 Passes a literal Kotlin expression straight through to codegen. This is **necessary** (no allowlist
@@ -492,7 +500,8 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    `vforge.repeat` node: its `source` prop is a `PropValue.StateBinding` to a list-of-record `Screen.state`
    field (§6), and its children are the per-item template, rendered once per row against an `item` scope.
    Read-only this release — the canvas previews the field's sample rows and codegen seeds a `forEach` over a
-   runnable stub; a `LazyColumn` variant and nested lists are deferred to slice 2.
+   runnable stub. Slice 2 (ADR-034 Amendments) added a `LazyColumn` layout for the repeat (#251) and a
+   `vforge.dropdown` node whose `options` bind to a list field (#253); nested lists remain deferred.
 3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
    overrides live **on the node** as an additive optional field
    `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
