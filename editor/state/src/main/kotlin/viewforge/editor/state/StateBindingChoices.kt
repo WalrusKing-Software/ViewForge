@@ -41,6 +41,20 @@ fun bindablePaths(root: Node?, node: Node, screenState: List<StateField>): List<
 }
 
 /**
+ * The list sources a `vforge.repeat` at [node] can bind (nested lists, #255): every top-level list-of-record
+ * screen field by name, plus `item.<field>` for each **nested** list field of the nearest enclosing repeat's
+ * record — so a repeat inside another repeat's template may iterate the outer row's sub-list. A top-level
+ * repeat (no enclosing repeat) sees only the screen's list fields, exactly as before.
+ */
+fun listSourceChoices(root: Node?, node: Node, screenState: List<StateField>): List<String> {
+    val topLevel = screenState.filter { it.type is StateType.ListOfRecord }.map { it.name }
+    val nested = enclosingItemFields(root, node.id, screenState)
+        .filter { it.type is StateType.ListOfRecord }
+        .map { "${Repeater.ITEM_SCOPE}.${it.name}" }
+    return topLevel + nested
+}
+
+/**
  * The record fields of the nearest [Repeater] ancestor of [id] whose `source` resolves against [screenState],
  * or empty when [id] sits in no repeat (or the source doesn't resolve). Walks the root→node ancestor chain and
  * takes the *closest* repeat, so a template's own items win over an outer scope.

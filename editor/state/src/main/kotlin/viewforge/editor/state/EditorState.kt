@@ -770,6 +770,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Every read-only state path [node] can bind a prop to on the active edit surface (ADR-034). */
     fun bindablePaths(node: Node): List<BindingChoice> = bindablePaths(activeEditRoot, node, activeScreenStateForRender)
 
+    /** The list sources a `vforge.repeat` [node] can bind: top-level lists + nested `item.<listField>` (#255). */
+    fun listSourceChoices(node: Node): List<String> =
+        listSourceChoices(activeEditRoot, node, activeScreenStateForRender)
+
     /** Declare a fresh scalar state field on the active screen (ADR-034), seeded with an empty String sample. */
     fun addScalarStateField() {
         val screen = activeScreen ?: return

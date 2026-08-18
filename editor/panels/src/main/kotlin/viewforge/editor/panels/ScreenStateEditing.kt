@@ -7,7 +7,6 @@ import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
 import viewforge.model.isBindingIdentifier
-import viewforge.model.scalarOrNull
 
 /**
  * Pure, Compose-free logic behind the screen-state editor (ADR-034, #21): parsing typed sample literals,
@@ -40,34 +39,34 @@ internal fun parseScalar(text: String, type: ScalarType): JsonPrimitive? = when 
 internal fun retypeScalar(field: StateField, type: ScalarType): StateField =
     field.copy(type = StateType.Scalar(type), sample = SampleValue.Scalar(scalarDefault(type)))
 
-/**
- * Rebuild [rows] to match [fields]: keep only cells whose key is a current field, and add a default cell for
- * every field a row is missing. Run after any record-field add/remove/rename so the sample never drifts out of
- * shape from the declared record.
- */
-internal fun reconcileRows(
-    rows: List<Map<String, JsonPrimitive>>,
-    fields: List<RecordField>,
-): List<Map<String, JsonPrimitive>> = rows.map { row ->
-    fields.associate {
-        it.name to
-            (row[it.name] ?: scalarDefault(it.scalarOrNull ?: ScalarType.STRING))
-    }
+/** A default sample cell for [field]: the scalar zero value, or empty sub-rows for a nested list (#255). */
+internal fun defaultCell(field: RecordField): SampleValue = when (val t = field.type) {
+    is StateType.Scalar -> SampleValue.Scalar(scalarDefault(t.scalar))
+    is StateType.ListOfRecord -> SampleValue.Rows(emptyList())
 }
 
-/** A fresh row with a default cell per record field. */
-internal fun emptyRow(fields: List<RecordField>): Map<String, JsonPrimitive> =
-    fields.associate { it.name to scalarDefault(it.scalarOrNull ?: ScalarType.STRING) }
+/** A fresh sample row: a [defaultCell] per record field. */
+internal fun emptySampleRow(fields: List<RecordField>): Map<String, SampleValue> =
+    fields.associate { it.name to defaultCell(it) }
 
 /**
- * The flat scalar-cell view of a list field's [sample] rows (nested cells dropped): slice-A editing is
- * scalar-only, so the composable editor works over `Map<String, JsonPrimitive>` and re-wraps via
- * [viewforge.model.scalarRows]. Nested-row editing arrives in #259 and will read the full [SampleValue] rows.
+ * Reconcile [rows] to [fields] **recursively** (nested lists, #255): keep only cells whose key is a current
+ * field, seed a default for any a row is missing, and — for a nested list field — reconcile each cell's own
+ * sub-rows to the field's sub-shape. Run after any record-shape edit so the sample never drifts out of shape.
  */
-internal fun scalarRowsView(sample: SampleValue): List<Map<String, JsonPrimitive>> =
-    (sample as? SampleValue.Rows)?.rows.orEmpty().map { row ->
-        row.mapNotNull { (k, v) -> (v as? SampleValue.Scalar)?.let { k to it.value } }.toMap()
-    }
+internal fun reconcileSampleRows(
+    rows: List<Map<String, SampleValue>>,
+    fields: List<RecordField>,
+): List<Map<String, SampleValue>> = rows.map { row ->
+    fields.associate { f -> f.name to reconcileCell(row[f.name], f) }
+}
+
+/** Coerce [cell] to [field]'s shape: a scalar default/kept, or a nested-list cell reconciled to the sub-shape. */
+private fun reconcileCell(cell: SampleValue?, field: RecordField): SampleValue = when (val t = field.type) {
+    is StateType.Scalar -> cell as? SampleValue.Scalar ?: SampleValue.Scalar(scalarDefault(t.scalar))
+    is StateType.ListOfRecord ->
+        SampleValue.Rows(reconcileSampleRows((cell as? SampleValue.Rows)?.rows.orEmpty(), t.fields))
+}
 
 /**
  * Whether [name] is a legal, non-duplicate name for the state field at [index] among [fields] — a binding
