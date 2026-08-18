@@ -46,6 +46,7 @@ internal object ComposeNames {
     val Spacer = MemberName("androidx.compose.foundation.layout", "Spacer")
     val LazyColumn = MemberName("androidx.compose.foundation.lazy", "LazyColumn")
     val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")
+    val lazyItems = MemberName("androidx.compose.foundation.lazy", "items")
     val Text = MemberName("androidx.compose.material3", "Text")
     val Button = MemberName("androidx.compose.material3", "Button")
 

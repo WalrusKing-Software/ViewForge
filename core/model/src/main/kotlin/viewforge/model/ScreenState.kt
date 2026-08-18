@@ -70,6 +70,16 @@ object Repeater {
     /** The path root a binding uses inside a repeat template to name the current element (e.g. `item.title`). */
     const val ITEM_SCOPE: String = "item"
 
+    /**
+     * The prop selecting how a repeat lays its rows out (ADR-034 slice 2). Absent ⇒ [LAYOUT_FOR_EACH]: the rows
+     * land inline in the parent's flow. [LAYOUT_LAZY_COLUMN] instead renders/emits a scrolling `LazyColumn`.
+     * An ordinary [PropValue.Literal] string, so it is an additive prop — **no schema change** (a repeat without
+     * it reads as `forEach`, exactly as every pre-slice-2 repeat does).
+     */
+    const val LAYOUT_PROP: String = "layout"
+    const val LAYOUT_FOR_EACH: String = "forEach"
+    const val LAYOUT_LAZY_COLUMN: String = "lazyColumn"
+
     /** A fresh repeat node bound to the list field [sourcePath], holding [template] as its per-item subtree. */
     fun node(sourcePath: String, template: List<Node> = emptyList(), id: NodeId = NodeId.random()): Node = Node(
         id = id,
@@ -81,4 +91,11 @@ object Repeater {
     /** The source list path this repeat binds to, or null if [node] is not a repeat / carries no binding. */
     fun sourceOf(node: Node): String? =
         if (node.type == TYPE) (node.props[SOURCE_PROP] as? PropValue.StateBinding)?.path else null
+
+    /** The layout mode of [node]: its [LAYOUT_PROP] literal, or [LAYOUT_FOR_EACH] when unset/not a repeat. */
+    fun layoutOf(node: Node): String =
+        (node.props[LAYOUT_PROP] as? PropValue.Literal)?.value?.content ?: LAYOUT_FOR_EACH
+
+    /** Whether [node] renders/emits as a scrolling `LazyColumn` rather than an inline `forEach`. */
+    fun isLazyColumn(node: Node): Boolean = layoutOf(node) == LAYOUT_LAZY_COLUMN
 }

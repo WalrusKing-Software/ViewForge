@@ -141,22 +141,40 @@ internal class ComponentEmitter(
     }
 
     /**
-     * A `vforge.repeat` over a list-typed state field (ADR-034, #21) emits `source.forEach { item -> … }`:
-     * the template ([Repeater] children) once per element, the element bound to the `item` scope so an
-     * `item.<field>` [PropValue.StateBinding] in the template emits as member access. Layout-neutral — the
-     * items land directly in the parent's flow, mirroring the renderer's in-place expansion (a `LazyColumn`
-     * variant is a follow-up). [parentAllowsWeight] is forwarded so a repeated Row/Column child may `weight`.
+     * A `vforge.repeat` over a list-typed state field (ADR-034, #21): the template ([Repeater] children) once
+     * per element, the element bound to the `item` scope so an `item.<field>` [PropValue.StateBinding] in the
+     * template emits as member access. Two layouts (ADR-034 slice 2, [Repeater.layoutOf]):
+     * - **forEach** (default) — `source.forEach { item -> … }`, items landing inline in the parent's flow,
+     *   mirroring the renderer's in-place expansion. [parentAllowsWeight] is forwarded so a repeated Row/Column
+     *   child may `weight`.
+     * - **lazyColumn** — `LazyColumn { items(source) { item -> … } }`, a scrolling list. Items sit in a
+     *   `LazyItemScope`, not the parent Row/Column, so `weight` does not apply and is not forwarded.
      */
     private fun repeater(node: Node, parentAllowsWeight: Boolean): CodeBlock {
         val source = Repeater.sourceOf(node)
             ?: throw CodegenException("vforge.repeat node '${node.id.value}' has no source binding")
-        return CodeBlock.builder()
-            .add("%L.forEach { %N ->\n", CodegenValues.bindingPath(source), Repeater.ITEM_SCOPE)
-            .indent()
-            .add(body(node.children, allowWeight = parentAllowsWeight))
-            .unindent()
-            .add("}")
-            .build()
+        val sourceRef = CodegenValues.bindingPath(source)
+        return if (Repeater.isLazyColumn(node)) {
+            CodeBlock.builder()
+                .add("%M {\n", ComposeNames.LazyColumn)
+                .indent()
+                .add("%M(%L) { %N ->\n", ComposeNames.lazyItems, sourceRef, Repeater.ITEM_SCOPE)
+                .indent()
+                .add(body(node.children, allowWeight = false))
+                .unindent()
+                .add("}\n")
+                .unindent()
+                .add("}")
+                .build()
+        } else {
+            CodeBlock.builder()
+                .add("%L.forEach { %N ->\n", sourceRef, Repeater.ITEM_SCOPE)
+                .indent()
+                .add(body(node.children, allowWeight = parentAllowsWeight))
+                .unindent()
+                .add("}")
+                .build()
+        }
     }
 
     /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */
