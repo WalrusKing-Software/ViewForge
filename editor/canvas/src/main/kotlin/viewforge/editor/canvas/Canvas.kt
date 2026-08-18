@@ -27,6 +27,7 @@ import viewforge.editor.state.CanvasFitBounds
 import viewforge.editor.state.EditorState
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.StateField
 
 /**
  * The seam between the editor and whatever framework package renders the IR. Compose-typed (so it
@@ -40,10 +41,15 @@ import viewforge.model.NodeId
  * [interactive] is the C13 preview mode (#120): when true the renderer gives its stateful inputs real
  * local state and live callbacks, so buttons, fields, and toggles respond to the pointer instead of being
  * inert. The editor pairs it with removing the selection overlay, so pointer events reach the live tree.
+ *
+ * [state] is the active screen's read-only declared state (ADR-034, #21): the renderer resolves each
+ * `StateBinding` prop to its sample value and expands `vforge.repeat` over the sample rows before drawing.
+ * It is Compose-free `core/model`, so passing it keeps the seam framework-agnostic. Empty for a screen with
+ * no state and while a component is open for in-place editing (a component has no screen state).
  */
 fun interface CanvasRenderer {
     @Composable
-    fun Render(root: Node, interactive: Boolean, instrument: (NodeId) -> Modifier)
+    fun Render(root: Node, interactive: Boolean, state: List<StateField>, instrument: (NodeId) -> Modifier)
 }
 
 /**
@@ -113,7 +119,7 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                         .background(Color.White),
                 ) {
                     Box(Modifier.matchParentSize().onGloballyPositioned { contentCoords = it }) {
-                        renderer.Render(editRoot, state.interactivePreview) { id ->
+                        renderer.Render(editRoot, state.interactivePreview, state.activeScreenStateForRender) { id ->
                             Modifier.onGloballyPositioned { child ->
                                 contentCoords?.let {
                                     bounds.record(id, it.localBoundingBoxOf(child, clipBounds = false))

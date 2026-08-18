@@ -69,6 +69,12 @@ internal fun ValueControl(
         ParamRefChip(value.param)
         return
     }
+    // A prop bound to read-only screen state (ADR-034) likewise shows its path read-only — the value is the
+    // field's sample at design time and its member access at codegen. The inspector's "unbind" action clears it.
+    if (value is PropValue.StateBinding) {
+        StateBindingChip(value.path)
+        return
+    }
     when (type) {
         PropType.Bool -> BoolControl(value.literalBool() ?: false, onChange)
         PropType.Enum -> EnumDropdown(enumValues.orEmpty(), value.literalText(), onChange)
@@ -472,10 +478,23 @@ private fun ParamRefChip(name: String) {
     }
 }
 
+/** Read-only display of a prop bound to read-only screen state (ADR-034): `⇨ data: path`. */
+@Composable
+private fun StateBindingChip(path: String) {
+    FieldBox {
+        Text(
+            "⇨ data: $path",
+            style = fieldStyle(),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
 // --- shared bits -------------------------------------------------------------------------------
 
 @Composable
-private fun FieldBox(error: Boolean = false, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+internal fun FieldBox(error: Boolean = false, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val base = Modifier
         .fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
@@ -495,7 +514,7 @@ private fun ErrorText(message: String) {
 }
 
 @Composable
-private fun fieldStyle() = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface)
+internal fun fieldStyle() = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface)
 
 /** A preview color for the swatch: the literal hex, or the theme token resolved against the light value. */
 private fun previewArgb(value: PropValue?, theme: Theme): Long? = when (value) {
