@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.SCHEMA_VERSION
 import viewforge.project.migrations.M1to2
+import viewforge.project.migrations.M2to3
 
 /**
  * One step in the schema upgrade chain (DATA_MODEL §10). Migrations operate on the raw [JsonObject],
@@ -29,7 +30,7 @@ object SchemaMigrations {
     const val CURRENT: Int = SCHEMA_VERSION
 
     /** Registered migrations, in any order (the runner selects by [Migration.fromVersion]). */
-    val ALL: List<Migration> = listOf(M1to2)
+    val ALL: List<Migration> = listOf(M1to2, M2to3)
 
     /** Reads `schemaVersion` from a parsed document, or null if absent/non-numeric. */
     fun readVersion(document: JsonObject): Int? = (document["schemaVersion"] as? JsonPrimitive)?.content?.toIntOrNull()

@@ -49,7 +49,7 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 2")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 3")
     }
 
     @Test
@@ -85,4 +85,41 @@ class RoundTripTest {
         assertTrue(result is LoadResult.Success)
         assertEquals(project, result.project)
     }
+
+    @Test
+    fun `the committed schema-3 Dashboard_vforge fixture loads and equals the in-code model`() {
+        // Dashboard.vforge is the ADR-034 read-only-state fixture: screen state (scalar + list-of-record),
+        // a StateBinding prop, and a vforge.repeat template. It is current-schema, so it loads without
+        // migration and must decode to exactly the in-code fixture (DATA_MODEL rule 3).
+        val result = ProjectStore.load(Paths.get(samplesDir(), "Dashboard.vforge"))
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(Fixtures.stateProject(), result.project)
+    }
+
+    @Test
+    fun `the in-code state fixture stays byte-identical to the committed Dashboard_vforge`() {
+        // As Gallery is kept in lockstep with the app's sample, the state fixture and its committed
+        // serialization must never drift — the encoder writes the file, so they are byte-identical.
+        val onDisk = Files.readString(Paths.get(samplesDir(), "Dashboard.vforge"))
+        assertEquals(ProjectCodec.encode(Fixtures.stateProject()), onDisk.replace("\r\n", "\n"))
+    }
+
+    @Test
+    fun `screen state, a StateBinding, and a vforge_repeat all survive a round-trip`() {
+        val json = ProjectCodec.encode(Fixtures.stateProject())
+        assertContains(json, "\"kind\": \"binding\"") // PropValue.StateBinding
+        assertContains(json, "\"kind\": \"listOfRecord\"") // StateType.ListOfRecord
+        assertContains(json, "\"type\": \"vforge.repeat\"") // Repeater node
+        val decoded = ProjectCodec.decode(json)
+        assertEquals(Fixtures.stateProject(), decoded)
+
+        // The fixture is meaningful: the screen declares state and a repeat binds a list source.
+        val screen = decoded.screens.single()
+        assertEquals(listOf("title", "online", "members"), screen.state.map { it.name })
+        val repeat = screen.root.children.single { it.type == viewforge.model.Repeater.TYPE }
+        assertEquals("members", viewforge.model.Repeater.sourceOf(repeat))
+    }
 }
+
+private fun samplesDir(): String = System.getProperty("viewforge.samplesDir")
+    ?: error("viewforge.samplesDir system property not set by the build")

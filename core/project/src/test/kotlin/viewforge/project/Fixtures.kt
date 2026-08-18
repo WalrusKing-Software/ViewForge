@@ -9,7 +9,13 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.PropValue
+import viewforge.model.RecordField
+import viewforge.model.Repeater
+import viewforge.model.SampleValue
+import viewforge.model.ScalarType
 import viewforge.model.Screen
+import viewforge.model.StateField
+import viewforge.model.StateType
 import viewforge.model.Theme
 import viewforge.model.UserComponent
 
@@ -96,6 +102,83 @@ object Fixtures {
     /** A minimal valid project (defaults everywhere possible). */
     fun minimalProject(): Project =
         Project(id = "01MIN", name = "Min", framework = FrameworkRef("compose-multiplatform", "1.0.0"))
+
+    /**
+     * A schema-v3 project exercising ADR-034 read-only screen state: a scalar [StateField] and a
+     * list-of-record one, a scalar [PropValue.StateBinding], and a [Repeater] whose template binds an
+     * `item.*` path. The byte-identical serialization is committed as `samples/Dashboard.vforge`; the
+     * two are kept in lockstep by a test (as Gallery is with the app's sample), so this is the single
+     * in-code source of that fixture.
+     */
+    fun stateProject(): Project = Project(
+        id = "01J8DASHBRD",
+        name = "Dashboard",
+        framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+        targets = listOf("desktop"),
+        screens =
+        listOf(
+            Screen(
+                id = "scr_dash",
+                name = "Dashboard",
+                previewProfile = "desktop_1280x800",
+                state =
+                listOf(
+                    StateField(
+                        name = "title",
+                        type = StateType.Scalar(ScalarType.STRING),
+                        sample = SampleValue.Scalar(JsonPrimitive("Team Dashboard")),
+                    ),
+                    StateField(
+                        name = "online",
+                        type = StateType.Scalar(ScalarType.BOOL),
+                        sample = SampleValue.Scalar(JsonPrimitive(true)),
+                    ),
+                    StateField(
+                        name = "members",
+                        type =
+                        StateType.ListOfRecord(
+                            listOf(
+                                RecordField("name", ScalarType.STRING),
+                                RecordField("role", ScalarType.STRING),
+                            ),
+                        ),
+                        sample =
+                        SampleValue.Rows(
+                            listOf(
+                                mapOf("name" to JsonPrimitive("Ada"), "role" to JsonPrimitive("Lead")),
+                                mapOf("name" to JsonPrimitive("Grace"), "role" to JsonPrimitive("Engineer")),
+                            ),
+                        ),
+                    ),
+                ),
+                root =
+                Node(
+                    id = NodeId("n_dash_col"),
+                    type = "compose.foundation.layout.Column",
+                    children =
+                    listOf(
+                        Node(
+                            id = NodeId("n_dash_title"),
+                            type = "compose.material3.Text",
+                            props = mapOf("text" to PropValue.StateBinding("title")),
+                        ),
+                        Repeater.node(
+                            sourcePath = "members",
+                            id = NodeId("n_dash_repeat"),
+                            template =
+                            listOf(
+                                Node(
+                                    id = NodeId("n_dash_member"),
+                                    type = "compose.material3.Text",
+                                    props = mapOf("text" to PropValue.StateBinding("item.name")),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
 
     /** A single chain of [depth] nodes, for depth-limit tests. */
     fun linearTree(depth: Int): Node {
