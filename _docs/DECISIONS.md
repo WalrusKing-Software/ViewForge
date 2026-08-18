@@ -1055,7 +1055,8 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
 
-**Status:** Accepted (to be implemented in Phase 2)
+**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v4 / `M3to4`** after
+ADR-034 claimed the v3 slot for read-only data binding (2026-08-18).
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
@@ -1074,8 +1075,9 @@ the framework package's `TargetDefinition` (the Android target uses Material **w
 `compact` < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp). Render resolves the active breakpoint's
 overrides over the base props before dispatch (the same shape as `bindParameters`, ADR-028/#76); codegen
 emits the base value in Phase-2 M13, with window-size-class branching a later slice (M14). Introducing
-the field **bumps the schema 2 → 3** with an `M2to3` version stamp and a committed migration fixture
-(DATA_MODEL §10), even though the field itself is additive.
+the field **bumps the schema 3 → 4** with an `M3to4` version stamp and a committed migration fixture
+(DATA_MODEL §10), even though the field itself is additive. (Originally scoped to v3/`M2to3`; ADR-034's
+read-only data binding took v3 first, so responsive slides to v4.)
 
 **Rationale.** Keeping overrides on the node keeps a node's full state in one place: selection, undo,
 copy/paste, extract-to-component, and structural-sharing rebuilds all already operate on a node and its
@@ -1083,9 +1085,9 @@ root-to-node path, so overrides ride along for free with no second structure to 
 identity. It also diffs cleanly (the overrides sit next to the props they modify) and needs no new
 cross-reference integrity rule. Opaque breakpoint strings keep `core` framework-agnostic — the same
 reason `Node.type` and theme tokens are strings — so a future non-Compose package can define its own
-breakpoint set. The 2 → 3 bump is deliberately conservative: a v2-only build silently ignoring a
+breakpoint set. The 3 → 4 bump is deliberately conservative: a v3-only build silently ignoring a
 populated `responsive` field would render/emit only base props, a fidelity loss, so this is a *semantic*
-change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M2to3` as
+change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M3to4` as
 the marker that lets an older build hit the `NEWER_SCHEMA` gate cleanly.
 
 **Rejected.** **A separate screen-level override layer keyed by node id** — duplicates node identity into
@@ -1098,9 +1100,9 @@ additive field with no version bump** — technically allowed by the additive po
 data-loss on old builds makes it a semantic change; bumping is the honest, safe call.
 
 **Consequences.** Phase 2 gains responsive layouts without disturbing any existing prop reader — render
-and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 3 with a
-one-line `M2to3` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
-(the field holds ordinary `PropValue`s). Costs accepted: a third schema version to carry forward, and a
+and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 4 with a
+one-line `M3to4` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
+(the field holds ordinary `PropValue`s). Costs accepted: a fourth schema version to carry forward, and a
 node can now hold prop values that only apply at some widths — the inspector must make the active
 breakpoint obvious so an edit's scope is never ambiguous (a Phase-2 UX task, M13).
 
@@ -1360,7 +1362,7 @@ correct reading of a self-contained entry.
 
 ## ADR-034 — Read-only data binding: screen state + sample data + a repeat node, no evaluation
 
-**Status:** Proposed
+**Status:** Accepted (2026-08-18). Slice 1 implemented across #239–#243 on schema v3.
 
 **Context.** #21 asks for UI whose content is **data-driven at runtime** — a list with a dynamic number
 of rows, a dropdown populated from data, an indicator bound to live state. It has stood blocked because
