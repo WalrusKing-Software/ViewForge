@@ -22,6 +22,7 @@ import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
 import viewforge.editor.state.RegenerationReport
 import viewforge.model.ComponentDef
+import viewforge.model.Dropdown
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
@@ -263,13 +264,18 @@ private object ComposeCatalog : ComponentCatalog {
     // binding is edited by the inspector's dedicated Repeater picker rather than a generic prop schema.
     private val repeatEntry = PaletteEntry(Repeater.TYPE, "Repeat", "Data")
 
-    override val palette: List<PaletteEntry> =
-        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) } + repeatEntry
+    // Likewise the framework-agnostic `vforge.dropdown` (ADR-034 slice 2, #253): a populated selection whose
+    // options bind to a list-of-record field. A leaf (no children); its options + shown-field are edited by the
+    // inspector's dedicated Dropdown picker, so it carries no generic prop schema.
+    private val dropdownEntry = PaletteEntry(Dropdown.TYPE, "Dropdown", "Data")
 
-    override fun newNode(type: String): Node = if (type == Repeater.TYPE) {
-        Repeater.node("")
-    } else {
-        (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
+    override val palette: List<PaletteEntry> =
+        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) } + repeatEntry + dropdownEntry
+
+    override fun newNode(type: String): Node = when (type) {
+        Repeater.TYPE -> Repeater.node("")
+        Dropdown.TYPE -> Dropdown.node("")
+        else -> (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
     }
 
     override fun acceptsChildren(type: String): Boolean =

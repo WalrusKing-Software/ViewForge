@@ -99,3 +99,48 @@ object Repeater {
     /** Whether [node] renders/emits as a scrolling `LazyColumn` rather than an inline `forEach`. */
     fun isLazyColumn(node: Node): Boolean = layoutOf(node) == LAYOUT_LAZY_COLUMN
 }
+
+/**
+ * The schema contract for a **populated dropdown** (ADR-034 slice 2, #253): a selection component whose menu is
+ * populated, read-only, from a list-of-record state field. Its [OPTIONS_PROP] carries a [PropValue.StateBinding]
+ * to that list field (resolved by [resolveListSource], exactly like a repeat's `source`); its [LABEL_PROP] is a
+ * literal naming which record field is shown as each option's text. Both are ordinary props, so a dropdown is an
+ * **additive, schema-neutral** node — no `.vforge` version bump. Like [Repeater], this is a framework-neutral
+ * `vforge.*` concept the compose package realizes (as a Material3 `ExposedDropdownMenuBox`); these constants are
+ * the single source of the contract shared by the validator, renderer, generator, and inspector.
+ *
+ * Read-only this release: the canvas previews the sample rows and codegen seeds a runnable stub — no selection is
+ * persisted to state and no event fires (mutation/events remain the separate, consent-gated ADR).
+ */
+object Dropdown {
+    const val TYPE: String = "vforge.dropdown"
+
+    /** The prop binding the menu options to a list-of-record state field (a [PropValue.StateBinding]). */
+    const val OPTIONS_PROP: String = "options"
+
+    /** The prop naming which record field of the bound list is shown as each option's text (a literal string). */
+    const val LABEL_PROP: String = "optionLabel"
+
+    /** A fresh dropdown bound to the list field [optionsPath], showing record field [labelField] per option. */
+    fun node(optionsPath: String = "", labelField: String = "", id: NodeId = NodeId.random()): Node = Node(
+        id = id,
+        type = TYPE,
+        props = buildMap {
+            put(OPTIONS_PROP, PropValue.StateBinding(optionsPath))
+            if (labelField.isNotBlank()) put(LABEL_PROP, PropValue.Literal(JsonPrimitive(labelField)))
+        },
+    )
+
+    /** The source list path this dropdown binds its options to, or null if [node] is not a dropdown / unbound. */
+    fun optionsOf(node: Node): String? =
+        if (node.type == TYPE) (node.props[OPTIONS_PROP] as? PropValue.StateBinding)?.path else null
+
+    /** The record field name shown per option, or null when [node] is not a dropdown or no label field is set. */
+    fun labelFieldOf(node: Node): String? = if (node.type ==
+        TYPE
+    ) {
+        (node.props[LABEL_PROP] as? PropValue.Literal)?.value?.content?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
+}

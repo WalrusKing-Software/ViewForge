@@ -1469,6 +1469,22 @@ per GC-3; affirm no eval path added), and **ADR-030 re-versioned to v4**. Honest
 draws: **read-only only** (no mutation/events), **screen-scoped** (no component-local/global state), **flat
 records** (no nested lists), and **the sample is the generated data** (no real source, by design).
 
+**Amendment (#253) — populated dropdown: a list-valued prop binding.** Slice 2 adds the first binding whose
+source is a *list*, not a scalar. Until now a `PropValue.StateBinding` on a prop always resolved to one scalar
+(`resolveSampleScalar`); lists were consumed only by a `vforge.repeat`'s `source`. A **`vforge.dropdown`** node
+(framework-neutral like `vforge.repeat`, realized by the Compose package as a Material3 dropdown) binds its
+`options` prop to a list-of-record field and names, in an ordinary literal `optionLabel` prop, which record
+field is shown per option. **No `.vforge` schema change is owed** — both are ordinary additive props on a new
+node type; a dropdown is data-clean the same way a repeat is. This stays inside the trust model: the canvas
+previews the **first** sample row's label read-only (no selection state, PF-4), and codegen emits a `Box` with
+a read-only anchor over a `DropdownMenu` populated by `options.forEach { item -> DropdownMenuItem(…) }` reading
+the same seeded state stub — the selection/`onClick` handlers are **inert stubs** (the house style for a
+generated `Checkbox`/`Slider`), so no mutation or event path is introduced. The `LazyColumn` repeat variant
+(#251) landed under the same slice with no ADR change (an additive `layout` literal on the repeat node).
+Rejected here, as in the original Rejected note: a `ListOfScalar` state type so a dropdown could bind a bare
+list of strings — cleaner data but a schema bump and a wider model for a convenience the label-field selector
+already covers over the existing list-of-record shape.
+
 ---
 
 ## Template

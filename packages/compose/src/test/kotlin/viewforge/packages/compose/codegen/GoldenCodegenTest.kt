@@ -107,6 +107,11 @@ class GoldenCodegenTest {
     // same seeded stub + record `data class` and item-scoped member-access bindings.
     @Test fun repeatLazyColumn() = assertGolden("RepeatLazyColumn")
 
+    // A populated dropdown (ADR-034 slice 2, #253): a `vforge.dropdown` bound to a list-of-record state field
+    // lowers to a `Box { OutlinedTextField(...) ; DropdownMenu { options.forEach { item -> DropdownMenuItem } } }`,
+    // reading the seeded stub + generated `data class`, with the label field selecting the shown record field.
+    @Test fun populatedDropdown() = assertGolden("PopulatedDropdown")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.

@@ -39,6 +39,7 @@ import viewforge.editor.state.BindingChoice
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.acceptsScalar
 import viewforge.editor.state.isBindableProp
+import viewforge.model.Dropdown
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.Parameter
@@ -95,6 +96,11 @@ private fun InspectorBody(state: EditorState, node: Node) {
             Repeater.TYPE -> {
                 SectionLabel("Repeat")
                 RepeaterSource(state, node)
+            }
+            // A vforge.dropdown (ADR-034 slice 2) binds its options to a list field + picks the shown field.
+            Dropdown.TYPE -> {
+                SectionLabel("Dropdown")
+                DropdownSource(state, node)
             }
             else -> {
                 SectionLabel("Props")
