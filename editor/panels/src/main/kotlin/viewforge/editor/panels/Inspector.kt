@@ -44,6 +44,7 @@ import viewforge.model.Node
 import viewforge.model.Parameter
 import viewforge.model.ParameterType
 import viewforge.model.PropDefinition
+import viewforge.model.Dropdown
 import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Repeater
@@ -95,6 +96,11 @@ private fun InspectorBody(state: EditorState, node: Node) {
             Repeater.TYPE -> {
                 SectionLabel("Repeat")
                 RepeaterSource(state, node)
+            }
+            // A vforge.dropdown (ADR-034 slice 2) binds its options to a list field + picks the shown field.
+            Dropdown.TYPE -> {
+                SectionLabel("Dropdown")
+                DropdownSource(state, node)
             }
             else -> {
                 SectionLabel("Props")

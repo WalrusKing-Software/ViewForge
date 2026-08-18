@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.RecordField
 import viewforge.model.Repeater
@@ -367,6 +368,96 @@ private fun RepeaterLayoutPicker(state: EditorState, node: Node) {
 private fun repeatLayoutLabel(mode: String): String = when (mode) {
     Repeater.LAYOUT_LAZY_COLUMN -> "Scrolling (LazyColumn)"
     else -> "Inline (forEach)"
+}
+
+// --- the vforge.dropdown options picker -----------------------------------------------------------
+
+/**
+ * The inspector body for a `vforge.dropdown` node (ADR-034 slice 2, #253): bind its `options` to a
+ * list-of-record screen field, then pick which record field is shown per option ([Dropdown.LABEL_PROP]).
+ * Binding options defaults the label to the list's first field so the node is immediately generatable; the
+ * label picker only appears once options are bound. A node-type special case, like [RepeaterSource].
+ */
+@Composable
+internal fun DropdownSource(state: EditorState, node: Node) {
+    val current = Dropdown.optionsOf(node)?.takeIf { it.isNotEmpty() }
+    val lists = state.listStateFields
+    if (lists.isEmpty()) {
+        MutedText("Declare a list field in Screen State first.")
+        return
+    }
+    StatePickerRow("options", current ?: "—") { open ->
+        lists.forEach { listField ->
+            DropdownMenuItem(
+                text = { Text(listField.name, style = MaterialTheme.typography.bodySmall) },
+                onClick = {
+                    state.setProp(
+                        node.id,
+                        Dropdown.OPTIONS_PROP,
+                        viewforge.model.PropValue.StateBinding(listField.name),
+                    )
+                    // Default the shown field to the list's first record field, so the dropdown generates
+                    // without a second step; the user can retarget it via the label picker below.
+                    val firstField = (listField.type as? StateType.ListOfRecord)?.fields?.firstOrNull()?.name
+                    state.setProp(node.id, Dropdown.LABEL_PROP, firstField?.let { labelLiteral(it) })
+                    open.value = false
+                },
+            )
+        }
+    }
+    val boundFields = current
+        ?.let { path -> lists.firstOrNull { it.name == path } }
+        ?.let { (it.type as? StateType.ListOfRecord)?.fields }
+        .orEmpty()
+    if (boundFields.isNotEmpty()) DropdownLabelPicker(state, node, boundFields)
+}
+
+/** The record field shown per option: one of the bound list's fields, stored as a literal in [Dropdown.LABEL_PROP]. */
+@Composable
+private fun DropdownLabelPicker(state: EditorState, node: Node, fields: List<RecordField>) {
+    StatePickerRow("label", Dropdown.labelFieldOf(node) ?: "—") { open ->
+        fields.forEach { field ->
+            DropdownMenuItem(
+                text = { Text(field.name, style = MaterialTheme.typography.bodySmall) },
+                onClick = {
+                    state.setProp(node.id, Dropdown.LABEL_PROP, labelLiteral(field.name))
+                    open.value = false
+                },
+            )
+        }
+    }
+}
+
+private fun labelLiteral(field: String) =
+    viewforge.model.PropValue.Literal(kotlinx.serialization.json.JsonPrimitive(field))
+
+/**
+ * A labelled picker row (label column + a click-to-open [FieldBox] anchoring a [DropdownMenu]) shared by the
+ * dropdown's options/label pickers. [menuItems] receives the open-state so an item can close the menu on pick.
+ */
+@Composable
+private fun StatePickerRow(
+    label: String,
+    display: String,
+    menuItems: @Composable (open: androidx.compose.runtime.MutableState<Boolean>) -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(84.dp),
+        )
+        val open = remember { mutableStateOf(false) }
+        Box(Modifier.weight(1f)) {
+            FieldBox(onClick = { open.value = true }) {
+                Text(display, style = fieldStyle(), modifier = Modifier.fillMaxWidth())
+            }
+            DropdownMenu(expanded = open.value, onDismissRequest = { open.value = false }) {
+                menuItems(open)
+            }
+        }
+    }
 }
 
 // --- shared small controls ------------------------------------------------------------------------
