@@ -1358,6 +1358,117 @@ correct reading of a self-contained entry.
 
 ---
 
+## ADR-034 — Read-only data binding: screen state + sample data + a repeat node, no evaluation
+
+**Status:** Proposed
+
+**Context.** #21 asks for UI whose content is **data-driven at runtime** — a list with a dynamic number
+of rows, a dropdown populated from data, an indicator bound to live state. It has stood blocked because
+FEATURES §10 lists "visual state management / data binding" as an explicit non-feature for v1, and any
+real design brushes against SECURITY **PF-4** ("the canvas must not have any code-evaluation path") and the
+reserved `PropValue.StateBinding` (ADR-006, defined but never built). Three facts reshape the problem now.
+(1) `StateBinding(path)` is *already* a member of the closed `PropValue` hierarchy, so consuming it is not a
+forward-incompatible closed-hierarchy change the way `ParamRef` was (ADR-028). (2) The issue's three
+motivating examples — dynamic list, populated dropdown, live indicator — are all *display of data*; none of
+them require mutation or event handling. (3) The **static** component halves (`*ProgressIndicator`, a static
+dropdown, a table-shaped layout) are ordinary catalog components tracked elsewhere; #21 is purely the
+*dynamic* behaviour on top of them. What was missing is a model for **where the data lives**, **how a prop
+points at it without evaluating code**, **how a subtree repeats per row**, **how the canvas previews it
+without a live data source**, and **what codegen emits given that there is no backend** (also a §10
+non-feature). Decided with the user via AskUserQuestion (2026-08-18).
+
+**Decision.** Ship **read-only data binding** — bind, repeat, and populate from named data with design-time
+sample values; **no** mutable state, event handlers, or expression evaluation this release (those are a
+separate, later, consent-gated ADR). Concretely:
+
+- **State lives on the screen.** `Screen` gains an additive optional `state: List<StateField>` (default
+  empty). A `StateField` is `(name, type, sample)`: a legal-Kotlin-identifier `name` (the binding root), a
+  structured `type`, and a typed `sample` value used at design time and to seed generated code. This
+  release's `type` covers **scalars** (String / Int / Float / Bool) and a **list of records** (a record is a
+  flat set of named, scalar-typed fields) — enough for all three examples; nested lists and component-local
+  state are deferred. Sample data is stored as typed literals (the same `JsonPrimitive`/structured-literal
+  trust boundary as any `PropValue.Literal`), **never as code**.
+- **A binding is a structured path, navigated — never parsed.** `PropValue.StateBinding(path)` (already
+  reserved) is repurposed as a **dotted identifier path** resolved by *structural lookup*, not evaluation:
+  `progress`, `user.name`, or `item.title` inside a repeat scope. The grammar is `identifier ('.' identifier)*`
+  — no indexing, calls, operators, or Kotlin syntax. A path that does not resolve against the declared state
+  (or the current item record) renders a visible placeholder and marks the node unverified, exactly as
+  `RawExpression` does (PF-6 discipline: unknown → placeholder, never dynamic dispatch). This is the whole of
+  the PF-4 answer: there is no evaluator to attack, because a path is a list of names looked up in a typed
+  structure.
+- **A dynamic list is a dedicated `vforge.repeat` node.** Its `source` prop is a `StateBinding` to a
+  list-typed field; its children are the **per-item template**, rendered once per element. Inside the
+  template, bindings resolve against an `item` scope (the current record). This mirrors the user-component
+  model (ADR-024): a repeat is a *reference + template* — expanded at render/codegen, edited once as the
+  template, not inline per copy. `Repeater.TYPE`/`SOURCE_PROP` and the `item` scope keyword are pinned as
+  `core.model` constants (the DATA_MODEL §4 single-source pattern), shared by validator, renderer, and
+  generator. A container `forEach` flag was rejected (below).
+- **The canvas previews sample data, never a live source.** At design time the renderer resolves each
+  binding against its `StateField.sample`; a `vforge.repeat` renders its template once per sample row
+  (bounded — the first *N* rows). Nothing is compiled or executed; binding resolution is a structural lookup
+  over static typed values, so **no code-evaluation path is introduced** and PF-4 stays literally true. C13
+  interactive preview is unaffected — bindings are read-only, so run mode still just operates the real
+  widgets ephemerally.
+- **Codegen seeds a working stub with a `TODO`.** Because a backend is a non-feature, generated code cannot
+  fetch data — so it *is* the sample, made obviously replaceable. A screen with state emits, per field, a
+  seeded `val` from the sample (`val progress = 0.6f`; `val items = listOf(Item(…), …)`) preceded by
+  `// TODO: replace with your real data source`; record types emit a generated `data class`. A `vforge.repeat`
+  over `items` emits `items.forEach { item -> … }` (layout-neutral; a `LazyColumn` variant is a follow-up),
+  and each binding emits as a KotlinPoet **member access** (`item.title`), never string-concatenated
+  (GC-1/GC-2). The result compiles and runs out of the box; the user swaps the stub for their real source.
+  Hoisting data as a screen composable parameter was rejected (below).
+- **Schema bumps 2 → 3.** Although `Screen.state` is technically an additive optional field, a v2-only build
+  would **silently drop** it and misrender every binding and repeat — the same "semantic capability old
+  builds discard" that justified the `ParamRef` and responsive bumps. So the change claims **schema v3** with
+  an `M2to3` *stamp* migration (v2 documents carry no state and are already structurally valid v3), a real
+  fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v3 files in older builds. This is the reserved
+  v3 slot: **ADR-030 (responsive) slides to v4** (`M3to4`).
+
+**Rationale.** Read-only binding is the largest slice of #21 that is *fully safe by construction*: with no
+evaluator and no mutation, PF-4 needs no new machinery and the feared per-project consent gate is simply not
+owed — sample data is typed literals and paths are validated identifier lookups, both already within the
+existing trust boundary. Screen-level state is the smallest surface that still expresses all three examples
+and gives codegen one clear owner per generated composable. A dedicated `vforge.repeat` node keeps the tree
+honest — hit-testing, selection, and codegen all see an explicit thing with an explicit template — where a
+`forEach` flag would overload every container with an "is this one child or a template?" ambiguity. Seeding a
+runnable stub keeps ViewForge's promise that generated code *compiles and runs*, while the `TODO` makes the
+one thing the tool cannot provide (a real data source) impossible to miss.
+
+**Rejected.** **Interactive mutation / events this release** — mutable state plus `onClick → setState` is
+what actually pushes toward evaluating user expressions and needs the SECURITY PF-4 threat model and consent
+gate; it does more than the issue's examples require and is deferred to its own ADR. **Component-local or
+project-global state** — component-local doubles the model/inspector/codegen surface and entangles with
+`ParamRef` resolution; project-global couples screens and blurs codegen ownership. Screen-level first, the
+others as clean additions. **A `forEach` flag on containers** — fewer node types but overloads container
+semantics and muddies selection/codegen (rejected for the same reason ADR-030 rejected a node-id-keyed
+override layer: keep the capability explicit, not smeared across existing shapes). **Hoisting data as a
+screen parameter** (`fun HomeScreen(items: List<Item>)`) — cleaner injection, but the screen no longer runs
+standalone and every preview/call site must supply data; the seeded stub keeps standalone-runnable as the
+default and a parameterized variant can come later. **Evaluating a binding path as a Kotlin expression** —
+the direct route to PF-4 violation; a path is navigated structurally, never parsed.
+
+**Consequences.** ViewForge gains a data layer that stays entirely within the offline, no-eval trust model:
+a screen owns typed sample-backed state, props bind to it by structural path, and a `vforge.repeat` expands a
+template per row — previewed against sample data and generated as a runnable stub. This spans **two point
+releases** (the issue's "slice hard"): **slice 1** (this release) is screen scalars + list-of-record state,
+`StateBinding` on props with an `item` scope, `vforge.repeat`, the inspector to declare/bind, sample-data
+preview, and codegen (record `data class`es + seeded stubs + repeater), on schema v3; **slice 2** (later) is
+the populated-dropdown convenience, component-local state, nested lists, `LazyColumn` selection, and
+eventually the separate interactive-state ADR. Implementation work this ADR authorizes, to be filed as
+sub-issues once accepted (issues are the source of truth): the `Screen.state` model + `StateField`/`StateType`
+in `core.model`; the `Repeater` constants + binding-path resolver (pure, `core`); `M2to3` + fixture +
+`NEWER_SCHEMA` update; renderer sample-data resolution + repeat expansion + placeholder for unresolved
+bindings; codegen (data classes, seeded stubs, `forEach`, member-access binding emit) with **golden fixtures**
+(CLAUDE.md rule 5); inspector UI to declare state and pick a binding for a prop (data-driven from
+`PropDefinition`, no per-component UI); and doc updates — DATA_MODEL §6/§10/§12 (resolve open question 2
+"lists and repeaters" and note the v3 claim), FEATURES §10 (carve the read-only slice out of the non-feature),
+SECURITY (new PF entry: binding paths validated, sample-data size bounds under PF-2, identifiers normalized
+per GC-3; affirm no eval path added), and **ADR-030 re-versioned to v4**. Honest boundaries this release
+draws: **read-only only** (no mutation/events), **screen-scoped** (no component-local/global state), **flat
+records** (no nested lists), and **the sample is the generated data** (no real source, by design).
+
+---
+
 ## Template
 
 ```markdown
