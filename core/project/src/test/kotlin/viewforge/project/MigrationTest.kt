@@ -83,6 +83,36 @@ class MigrationTest {
     }
 
     @Test
+    fun `M2to3 stamps the version and leaves the rest of the document untouched`() {
+        val v2 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(2), "id" to JsonPrimitive("x")))
+        val v3 = viewforge.project.migrations.M2to3.migrate(v2)
+        assertEquals(3, SchemaMigrations.readVersion(v3))
+        assertEquals(JsonPrimitive("x"), v3["id"])
+    }
+
+    @Test
+    fun `a schema-2 document with no state migrates through the store and loads at the current version`() {
+        // A v2 file carries no screen state, so the 2->3 step is a pure version stamp (M2to3): the
+        // document is already a valid v3 and must load as-is, reporting its on-disk version for backup.
+        val tmp = Files.createTempDirectory("vforge-2to3").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 2,
+              "id": "01LEGACY",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" }
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(2, result.migratedFromVersion)
+    }
+
+    @Test
     fun `the committed schema-1 Demo_vforge fixture migrates and loads at the current version`() {
         // Demo.vforge is intentionally pinned at schema 1 (samples/README) so the 1->2 chain is
         // exercised end to end against a real committed file (DATA_MODEL rule 3).
