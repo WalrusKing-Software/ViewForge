@@ -57,6 +57,7 @@ internal object CodegenValues {
             )
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("dp prop has no value")
         else -> throw CodegenException("dp prop must be a literal or expression, got $value")
     }
@@ -71,6 +72,7 @@ internal object CodegenValues {
             )
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("float prop has no value")
         else -> throw CodegenException("float prop must be a literal or expression, got $value")
     }
@@ -86,6 +88,7 @@ internal object CodegenValues {
             )
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("sp prop has no value")
         else -> throw CodegenException("sp prop must be a literal or expression, got $value")
     }
@@ -100,6 +103,7 @@ internal object CodegenValues {
             )
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("int prop has no value")
         else -> throw CodegenException("int prop must be a literal or expression, got $value")
     }
@@ -114,6 +118,7 @@ internal object CodegenValues {
             )
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("bool prop has no value")
         else -> throw CodegenException("bool prop must be a literal or expression, got $value")
     }
@@ -124,6 +129,7 @@ internal object CodegenValues {
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         else -> throw CodegenException("Text 'text' must be a string literal or expression, got $value")
     }
 
@@ -136,6 +142,7 @@ internal object CodegenValues {
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         else -> throw CodegenException("Expected a string literal, null, or expression, got $value")
     }
 
@@ -212,6 +219,7 @@ internal object CodegenValues {
         is PropValue.ThemeRef -> colorTheme(value.token, theme)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         else -> throw CodegenException("Color prop must be a literal, theme ref, or expression, got $value")
     }
 
@@ -265,6 +273,7 @@ internal object CodegenValues {
         is PropValue.Literal -> enumMember(propName, value.value.content)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
+        is PropValue.StateBinding -> binding(value)
         null -> throw CodegenException("Enum prop '$propName' has no value")
         else -> throw CodegenException("Enum prop '$propName' must be a literal or expression, got $value")
     }
@@ -315,4 +324,18 @@ internal object CodegenValues {
      * the parameter's declared type. Resolution to a concrete value happens at the instance call site.
      */
     private fun param(value: PropValue.ParamRef): CodeBlock = CodeBlock.of("%N", value.param)
+
+    /**
+     * A read-only [PropValue.StateBinding] (ADR-034, #21): the binding's dotted identifier path emitted as
+     * **member access** — a scalar screen field `title`, or a repeat item's field `item.title` — using `%N`
+     * per segment so it is structural (GC-1/GC-2), never spliced source text, and never evaluated (PF-4). The
+     * path is a validated identifier chain (core/model `parseBindingPath`); the seeded state stub declares the
+     * `val` this reads, and a repeat's `forEach { item -> … }` binds the `item` scope.
+     */
+    fun bindingPath(path: String): CodeBlock {
+        val segments = path.split('.')
+        return CodeBlock.of(segments.joinToString(".") { "%N" }, *segments.toTypedArray())
+    }
+
+    private fun binding(value: PropValue.StateBinding): CodeBlock = bindingPath(value.path)
 }

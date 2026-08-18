@@ -6,6 +6,7 @@ import viewforge.model.Asset
 import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.PropValue
+import viewforge.model.Repeater
 import viewforge.model.Theme
 import viewforge.model.UserComponent
 
@@ -103,6 +104,7 @@ internal class ComponentEmitter(
             "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList())
             "compose.material3.Scaffold" -> scaffold(node, mod)
             UserComponent.TYPE -> userComponentCall(node, mod)
+            Repeater.TYPE -> repeater(node, parentAllowsWeight)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -136,6 +138,25 @@ internal class ComponentEmitter(
             if (mod != null) add(named("modifier", mod))
         }
         return componentCall(fnName, args)
+    }
+
+    /**
+     * A `vforge.repeat` over a list-typed state field (ADR-034, #21) emits `source.forEach { item -> … }`:
+     * the template ([Repeater] children) once per element, the element bound to the `item` scope so an
+     * `item.<field>` [PropValue.StateBinding] in the template emits as member access. Layout-neutral — the
+     * items land directly in the parent's flow, mirroring the renderer's in-place expansion (a `LazyColumn`
+     * variant is a follow-up). [parentAllowsWeight] is forwarded so a repeated Row/Column child may `weight`.
+     */
+    private fun repeater(node: Node, parentAllowsWeight: Boolean): CodeBlock {
+        val source = Repeater.sourceOf(node)
+            ?: throw CodegenException("vforge.repeat node '${node.id.value}' has no source binding")
+        return CodeBlock.builder()
+            .add("%L.forEach { %N ->\n", CodegenValues.bindingPath(source), Repeater.ITEM_SCOPE)
+            .indent()
+            .add(body(node.children, allowWeight = parentAllowsWeight))
+            .unindent()
+            .add("}")
+            .build()
     }
 
     /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */

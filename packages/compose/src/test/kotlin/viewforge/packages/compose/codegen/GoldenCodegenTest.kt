@@ -98,6 +98,10 @@ class GoldenCodegenTest {
     // The M9 "something real" screen: nested Column/Row/Box, Text, Buttons, Images, a scrollable list.
     @Test fun gallery() = assertGolden("Gallery")
 
+    // Read-only screen state (ADR-034, #21): a scalar-bound Text/Slider, a seeded stub + generated record
+    // `data class`, and a `vforge.repeat` lowered to `members.forEach { item -> … }` with item-scoped bindings.
+    @Test fun stateBinding() = assertGolden("StateBinding")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.

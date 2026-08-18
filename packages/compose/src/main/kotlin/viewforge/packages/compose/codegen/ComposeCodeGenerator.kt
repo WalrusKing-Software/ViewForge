@@ -10,6 +10,7 @@ import viewforge.model.Node
 import viewforge.model.Parameter
 import viewforge.model.Project
 import viewforge.model.Screen
+import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.spi.CodeGenerator
 import viewforge.spi.GeneratedFile
@@ -37,6 +38,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.schemaVersion,
                     project.assets,
                     project.components,
+                    screen.state,
                 ),
             )
         }
@@ -77,6 +79,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(screen.name),
         screen.root,
@@ -85,6 +88,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion,
         assets,
         components,
+        state = state,
     )
 
     /**
@@ -99,6 +103,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
     ): GeneratedSource = SourceSpans.strip(
         generateComposable(
             KotlinIdentifiers.requireFunctionName(screen.name),
@@ -108,6 +113,7 @@ class ComposeCodeGenerator : CodeGenerator {
             schemaVersion,
             assets,
             components,
+            state = state,
             recordSpans = true,
         ),
     )
@@ -177,11 +183,16 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset>,
         components: List<ComponentDef>,
         parameters: List<Parameter> = emptyList(),
+        state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
     ): String {
         val emitter = ComponentEmitter(theme, assets, components, recordSpans)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
+        // Read-only screen state (ADR-034): seed a runnable stub declaring one `val` per StateField, so a
+        // bound prop reads it as member access. Omitted for a hidden root (no body) and for stateless
+        // screens/components, keeping their output byte-identical to before.
+        val stubs = if (body == null) null else StateEmitter.stubs(state)
         val function = FunSpec.builder(fnName)
             .apply {
                 // Emitting the body first sets the opt-in flag for any experimental API used (TopAppBar).
@@ -212,7 +223,11 @@ class ComposeCodeGenerator : CodeGenerator {
                     .build(),
             )
             .apply {
-                if (body != null) addCode("%L\n", body)
+                if (body != null) {
+                    // Stubs (if any) precede the tree so a binding's `val` is in scope where it is read.
+                    if (stubs != null) addCode(stubs)
+                    addCode("%L\n", body)
+                }
             }
             .build()
 
@@ -225,6 +240,9 @@ class ComposeCodeGenerator : CodeGenerator {
             )
             .indent("    ") // 4 spaces — Kotlin convention (KotlinPoet defaults to 2).
             .addFunction(function)
+            // A generated `data class` per list-of-record state type, after the composable (order is
+            // irrelevant to the compiler); none for a screen without list state, so output is unchanged.
+            .apply { StateEmitter.recordTypes(state).forEach { addType(it) } }
             .build()
             .toString()
     }
