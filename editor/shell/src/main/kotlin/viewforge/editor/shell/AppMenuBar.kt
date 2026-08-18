@@ -158,15 +158,30 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Fit to Frame", "Ctrl+9"), enabled = view.canFit, onClick = state::fitToFrame)
             Separator()
             // Panel visibility (S1, #39) — checked when shown, mirroring the Dark canvas toggle above.
-            // Routed through the preferences controller so a toggle persists across sessions (#43).
-            CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { prefs.togglePalette() })
-            CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { prefs.toggleTree() })
-            CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { prefs.toggleInspector() })
+            // Routed through the preferences controller so a toggle persists across sessions (#43). The
+            // Ctrl+1..4 accelerators are display-only (#208) — handlePanelShortcut binds the real keys.
+            CheckboxItem(
+                withAccel("Palette", "Ctrl+1"),
+                checked = state.paletteVisible,
+                onCheckedChange = { prefs.togglePalette() },
+            )
+            CheckboxItem(
+                withAccel("Tree", "Ctrl+2"),
+                checked = state.treeVisible,
+                onCheckedChange = { prefs.toggleTree() },
+            )
+            CheckboxItem(
+                withAccel("Inspector", "Ctrl+3"),
+                checked = state.inspectorVisible,
+                onCheckedChange = { prefs.toggleInspector() },
+            )
             // The live code preview (G3, #50). Persisted across sessions (#52), so it routes through the
             // preferences controller like the panel toggles above.
-            CheckboxItem("Code preview", checked = state.codePreviewVisible, onCheckedChange = {
-                prefs.toggleCodePreview()
-            })
+            CheckboxItem(
+                withAccel("Code preview", "Ctrl+4"),
+                checked = state.codePreviewVisible,
+                onCheckedChange = { prefs.toggleCodePreview() },
+            )
             // Soft-wrap long lines in the code preview instead of scrolling horizontally (#115). Persisted
             // like the panel toggles above, so it routes through the preferences controller.
             CheckboxItem("Wrap code preview", checked = state.codePreviewWrap, onCheckedChange = {
