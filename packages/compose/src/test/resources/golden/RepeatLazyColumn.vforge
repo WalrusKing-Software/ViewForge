@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 3,
+  "id": "01J8ROSTER",
+  "name": "Roster",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_roster",
+      "name": "Roster",
+      "root": {
+        "id": "n_roster_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_roster_repeat",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "guests"
+              },
+              "layout": {
+                "kind": "literal",
+                "value": "lazyColumn"
+              }
+            },
+            "children": [
+              {
+                "id": "n_roster_name",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.name"
+                  }
+                }
+              },
+              {
+                "id": "n_roster_role",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.role"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "guests",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "scalar": "STRING"
+              },
+              {
+                "name": "role",
+                "scalar": "STRING"
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": "Ada",
+                "role": "Lead"
+              },
+              {
+                "name": "Grace",
+                "role": "Engineer"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

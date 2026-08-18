@@ -321,6 +321,52 @@ internal fun RepeaterSource(state: EditorState, node: Node) {
             }
         }
     }
+    RepeaterLayoutPicker(state, node)
+}
+
+/**
+ * The `vforge.repeat` layout picker (ADR-034 slice 2, #251): inline `forEach` (default) or a scrolling
+ * `LazyColumn`. Picking the default clears the additive [Repeater.LAYOUT_PROP] so the node stays byte-clean.
+ */
+@Composable
+private fun RepeaterLayoutPicker(state: EditorState, node: Node) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "layout",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(84.dp),
+        )
+        var open by remember { mutableStateOf(false) }
+        val current = Repeater.layoutOf(node)
+        Box(Modifier.weight(1f)) {
+            FieldBox(onClick = { open = true }) {
+                Text(repeatLayoutLabel(current), style = fieldStyle(), modifier = Modifier.fillMaxWidth())
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                listOf(Repeater.LAYOUT_FOR_EACH, Repeater.LAYOUT_LAZY_COLUMN).forEach { mode ->
+                    DropdownMenuItem(
+                        text = { Text(repeatLayoutLabel(mode), style = MaterialTheme.typography.bodySmall) },
+                        onClick = {
+                            // Default (forEach) clears the prop; lazyColumn stores an explicit literal.
+                            val value = if (mode == Repeater.LAYOUT_LAZY_COLUMN) {
+                                viewforge.model.PropValue.Literal(kotlinx.serialization.json.JsonPrimitive(mode))
+                            } else {
+                                null
+                            }
+                            state.setProp(node.id, Repeater.LAYOUT_PROP, value)
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun repeatLayoutLabel(mode: String): String = when (mode) {
+    Repeater.LAYOUT_LAZY_COLUMN -> "Scrolling (LazyColumn)"
+    else -> "Inline (forEach)"
 }
 
 // --- shared small controls ------------------------------------------------------------------------

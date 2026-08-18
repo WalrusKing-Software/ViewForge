@@ -102,6 +102,11 @@ class GoldenCodegenTest {
     // `data class`, and a `vforge.repeat` lowered to `members.forEach { item -> … }` with item-scoped bindings.
     @Test fun stateBinding() = assertGolden("StateBinding")
 
+    // A `vforge.repeat` in LazyColumn layout (ADR-034 slice 2, #251): lowers to
+    // `LazyColumn { items(members) { item -> … } }` instead of the default inline `forEach`, with the
+    // same seeded stub + record `data class` and item-scoped member-access bindings.
+    @Test fun repeatLazyColumn() = assertGolden("RepeatLazyColumn")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.

@@ -71,6 +71,12 @@ private fun List<Node>.expandList(scope: BindingValueScope, rowLimit: Int): List
  * template ([Repeater] children) with the row exposed as the `item` scope. A source that doesn't resolve to
  * a list field yields a single placeholder (PF-6). Per-row ids are suffixed so the spliced siblings keep
  * distinct, stable keys (duplicate keys among direct siblings would break Compose keying).
+ *
+ * The canvas preview is **layout-neutral** (ADR-034 slice 2): both `forEach` and `lazyColumn`
+ * ([Repeater.layoutOf]) splice their sample rows inline here. A `lazyColumn` repeat is deliberately *not*
+ * wrapped in a real `LazyColumn` for preview — a lazy list measured with unbounded height (e.g. inside a
+ * `Column`) crashes Compose, and the canvas must never crash. The scrolling `LazyColumn` distinction is a
+ * codegen-only concern (`ComponentEmitter.repeater`); against small bounded sample data the previews match.
  */
 private fun expandRepeat(node: Node, scope: BindingValueScope, rowLimit: Int): List<Node> {
     val source = Repeater.sourceOf(node)

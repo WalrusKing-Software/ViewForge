@@ -108,6 +108,26 @@ class StateBindingTest {
     }
 
     @Test
+    fun `a lazyColumn repeat still previews as spliced rows, not a LazyColumn wrapper (layout is codegen-only)`() {
+        val members = listField(
+            "members",
+            listOf(RecordField("name", ScalarType.STRING)),
+            rows = listOf(mapOf("name" to JsonPrimitive("Ada")), mapOf("name" to JsonPrimitive("Grace"))),
+        )
+        // A repeat marked lazyColumn: the canvas stays layout-neutral to avoid an unbounded-height crash, so
+        // the rows still splice into the parent's flow exactly as forEach does. Only codegen emits LazyColumn.
+        val repeat = Repeater.node("members", id = NodeId("rep"), template = listOf(text("row", "item.name")))
+            .let { it.copy(props = it.props + (Repeater.LAYOUT_PROP to lit(Repeater.LAYOUT_LAZY_COLUMN))) }
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(repeat))
+
+        val expanded = expandScreenState(root, listOf(members))
+        assertEquals(2, expanded.children.size)
+        assertTrue(expanded.children.none { it.type == "compose.foundation.lazy.LazyColumn" }, "no LazyColumn wrapper")
+        assertTrue(expanded.children.none { it.type == Repeater.TYPE })
+        assertEquals(PropValue.Literal(JsonPrimitive("Ada")), boundText(expanded.children[0]))
+    }
+
+    @Test
     fun `a repeat whose source names no list field becomes a loud placeholder node`() {
         val repeat = Repeater.node("nope", id = NodeId("rep"), template = listOf(text("row", "item.name")))
         val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(repeat))
