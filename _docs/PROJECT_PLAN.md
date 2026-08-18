@@ -28,7 +28,8 @@ Explicit non-goals, stated so they don't creep in:
 - **Not a full IDE.** No Kotlin editing, no debugger, no refactoring tools.
 - **Not a code round-trip tool.** v1 does not parse arbitrary hand-written Compose source back into
   the editor. This is the single largest scope risk in the project and is deliberately excluded.
-  See §7.1.
+  See §7.1. (Re-opening output ViewForge *itself* generated — carried as an IR sidecar and recognised
+  by ownership, never parsed — is a narrow sanctioned exception; see ADR-032.)
 - **Not a build system.** ViewForge generates source; the user compiles and runs it in their own
   IDE/Gradle setup. ViewForge does not bundle a JDK, Gradle, Android SDK, or Xcode toolchain.
 - **Not a backend/app-logic builder.** No visual state machines, no database bindings, no API
@@ -271,6 +272,11 @@ this entirely.** The editor owns the `.vforge` file; generated `.kt` is an outpu
 
 *Mitigation if users demand it later:* support a narrow, marked region (`// region ViewForge`) that
 is regenerated wholesale, rather than general parsing.
+
+*Distinct, already sanctioned (ADR-032):* re-opening a `.kt` ViewForge **itself** generated is not this
+risk — the IR is carried alongside the code as a `.viewforge/project.vforge` sidecar and recognised by
+the ADR-029 ownership manifest, so no Kotlin is parsed. That is "round-trip of own output", not round-trip
+parsing of hand-written source, and stays fail-loud for anything outside the owned set.
 
 ### 7.2 Modifier chain combinatorics
 
