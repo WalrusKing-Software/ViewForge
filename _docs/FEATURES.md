@@ -189,7 +189,9 @@ into issues directly.
 
 Recorded so they're decisions, not oversights:
 
-- Round-trip parsing of hand-written Compose (see `PROJECT_PLAN.md` §7.1)
+- Round-trip parsing of hand-written Compose (see `PROJECT_PLAN.md` §7.1). *Exception:* re-opening
+  output ViewForge itself generated is sanctioned separately — carried as an IR sidecar, recognised by
+  ownership, never parsed (ADR-032, #22).
 - Visual state management / data binding
 - Navigation graph editing
 - Backend, API, or database integration
