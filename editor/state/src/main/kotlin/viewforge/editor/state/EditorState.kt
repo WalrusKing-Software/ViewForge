@@ -3,6 +3,7 @@ package viewforge.editor.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import viewforge.command.AddComponent
 import viewforge.command.AddNode
 import viewforge.command.AddScreen
 import viewforge.command.Command
@@ -45,6 +46,7 @@ import viewforge.model.UserComponent
 import viewforge.model.findById
 import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
+import viewforge.model.referencedComponentIds
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
 import viewforge.prefs.EditorPreferences
@@ -449,6 +451,16 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * The cross-project component library (ADR-033, #209) — global user components surfaced in the palette
+     * beside the built-ins and this document's own components. A transient snapshot loaded from the on-disk
+     * `ComponentLibraryStore` at launch and after any library edit ([applyLibraryComponents]); the shell
+     * owns the store and persistence. Not document data — these live outside any `.vforge`, and dropping one
+     * into a document *copies* it into [document] (`insertLibraryComponent`), keeping the file self-contained.
+     */
+    var libraryComponents: List<ComponentDef> by mutableStateOf(emptyList())
+        private set
+
+    /**
      * The selection, as an **ordered** list of node ids (C10). The last entry is the *primary*: the node
      * the inspector focuses. Empty means nothing is selected. Shared, observable state so canvas and tree
      * stay in sync (T1). Selection is transient view state — it lives here, never in the IR. Always a
@@ -764,6 +776,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val palette: List<PaletteEntry>
         get() = catalog.palette + document.components.map {
             PaletteEntry(UserComponent.TYPE, it.name, USER_COMPONENTS_CATEGORY, componentId = it.id)
+        } + libraryComponents.map {
+            PaletteEntry(UserComponent.TYPE, it.name, LIBRARY_CATEGORY, libraryId = it.id)
         }
 
     /** A fresh node for a palette entry: an instance node for a user component, else a built-in. */
@@ -789,6 +803,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Add a fresh node for [entry] at the current insertion point on the active edit surface, and select it (P1a/P6a). */
     fun addFromPalette(entry: PaletteEntry) {
+        // A library entry is inserted by *copying* its definition into the document first, and may need a
+        // name from the user on collision — that flow is driven by the shell (insertLibraryComponent), not
+        // this generic path. Refuse it here so a stray call can never insert a mis-typed built-in node.
+        if (entry.libraryId != null) return
         val rootId = activeEditRootId ?: return
         val address = insertionAddress() ?: return
         val node = paletteNode(entry.type, entry.componentId)
@@ -1440,6 +1458,68 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         return keys.mapNotNull { byKey[it] }
     }
 
+    // --- cross-project component library (ADR-033, #209) -------------------------------------------
+
+    /** Restore the library snapshot from the store (name-sorted for a stable palette order). */
+    fun applyLibraryComponents(list: List<ComponentDef>) {
+        libraryComponents = list.sortedBy { it.name.lowercase() }
+    }
+
+    /**
+     * Why the document component [id] cannot be added to the cross-project library, or null if it can. It
+     * must resolve, and — this release — it must be **self-contained**: a component whose tree references
+     * other user components would dangle when copied alone into another project (its dependencies live in
+     * this document, not the library), so it is refused fail-loud rather than inserted broken (ADR-033).
+     * Bundling the transitive closure is a documented follow-up.
+     */
+    fun libraryAddBlockReason(id: String): String? {
+        val component = document.components.firstOrNull { it.id == id }
+            ?: return "That component no longer exists"
+        return if (component.root.referencedComponentIds().isNotEmpty()) {
+            "“${component.name}” uses other components; nested library components aren’t supported yet"
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Whether inserting library [entry] would collide with an existing document component name (or is
+     * otherwise not a legal identifier), so the shell must prompt for a name before copying it in (ADR-033).
+     * False — a clean drop — inserts directly with the entry's own name.
+     */
+    fun libraryInsertNeedsName(entry: PaletteEntry): Boolean =
+        entry.libraryId != null && componentNameError(entry.label) != null
+
+    /** A suggested free, legal name for inserting library [entry]: its own name if available, else the next unique. */
+    fun suggestedLibraryName(entry: PaletteEntry): String =
+        if (componentNameError(entry.label) == null) entry.label else uniqueComponentName()
+
+    /**
+     * Insert library [entry] by copying its definition into [document] under [name] and dropping an instance
+     * at the current insertion point, in one undoable step (ADR-033). The copy takes a fresh document
+     * component id and fresh node ids ([withFreshIds]) so it never collides with anything already in the
+     * document, and the `.vforge` stays self-contained (ADR-024) — later edits to the library entry do not
+     * propagate to this copy. A no-op if the entry is unknown or [name] is invalid/duplicate.
+     */
+    fun insertLibraryComponent(entry: PaletteEntry, name: String) {
+        val libraryId = entry.libraryId ?: return
+        val source = libraryComponents.firstOrNull { it.id == libraryId } ?: return
+        if (componentNameError(name) != null) return
+        val rootId = activeEditRootId ?: return
+        val address = insertionAddress() ?: return
+        val newId = "cmp_${Ulid.next()}"
+        val copy = source.copy(id = newId, name = name.trim(), root = source.root.withFreshIds())
+        val instance = UserComponent.instance(newId)
+        execute(
+            CompositeCommand(
+                commands = listOf(AddComponent(copy, index = Int.MAX_VALUE), AddNode(rootId, address, instance)),
+                label = "Insert library component",
+            ),
+            selectAfter = instance.id,
+        )
+        noteRecentComponent(entry.key) // resurface it under "Recent" (P5a) — same key re-inserts via this path
+    }
+
     // --- canvas viewport (C5) ---------------------------------------------------------------------
 
     /** Zoom the canvas in one step (View → Zoom In / Ctrl +). */
@@ -1619,6 +1699,9 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     companion object {
         /** The palette category the document's user components cluster under (P6a). */
         const val USER_COMPONENTS_CATEGORY = "Components"
+
+        /** The palette category the cross-project library components cluster under (ADR-033, #209). */
+        const val LIBRARY_CATEGORY = "Library"
 
         /** How many recently-used palette entries to keep for the palette's "Recent" quick-access row (P5a, #121). */
         const val MAX_RECENT_COMPONENTS = 8
