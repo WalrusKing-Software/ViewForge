@@ -26,6 +26,7 @@ import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.PropDefinition
+import viewforge.model.Repeater
 import viewforge.model.Screen
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
@@ -119,7 +120,7 @@ private fun runEditor() {
     // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
     // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
-        CanvasRenderer { root, interactive, instrument ->
+        CanvasRenderer { root, interactive, screenState, instrument ->
             ComposeRenderer.RenderScreen(
                 root = root,
                 theme = state.document.theme,
@@ -127,6 +128,7 @@ private fun runEditor() {
                 instrument = instrument,
                 imageLoader = images::load,
                 components = state.document.components,
+                state = screenState,
                 interactive = interactive,
                 // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
                 // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
@@ -187,6 +189,9 @@ private object DesktopCodePreviewService : CodePreviewService {
         project.schemaVersion,
         project.assets,
         project.components,
+        // Read-only screen state (ADR-034): the preview shows the seeded stub + member-access bindings the
+        // export emits, so the code panel matches generated source for a stateful screen.
+        state = screen.state,
     ).let { PreviewSource(it.code, it.spans) }
 
     override fun previewComponent(project: Project, component: ComponentDef): PreviewSource =
@@ -252,13 +257,23 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
  * The editor consults this for the palette and drop validation without ever naming the package.
  */
 private object ComposeCatalog : ComponentCatalog {
+    // The framework-agnostic `vforge.repeat` (ADR-034, #21) is a core node type, not a Compose component, so
+    // this bootstrap layer — the one place allowed to bridge core and the Compose package — offers it as its
+    // own palette entry. It accepts children (its subtree is the per-item template); its single `source`
+    // binding is edited by the inspector's dedicated Repeater picker rather than a generic prop schema.
+    private val repeatEntry = PaletteEntry(Repeater.TYPE, "Repeat", "Data")
+
     override val palette: List<PaletteEntry> =
-        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) }
+        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) } + repeatEntry
 
-    override fun newNode(type: String): Node =
+    override fun newNode(type: String): Node = if (type == Repeater.TYPE) {
+        Repeater.node("")
+    } else {
         (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
+    }
 
-    override fun acceptsChildren(type: String): Boolean = ComposeComponents.specFor(type)?.acceptsChildren ?: false
+    override fun acceptsChildren(type: String): Boolean =
+        if (type == Repeater.TYPE) true else ComposeComponents.specFor(type)?.acceptsChildren ?: false
 
     override fun slotsOf(type: String): List<String> = ComposeComponents.specFor(type)?.slots ?: emptyList()
 

@@ -3,15 +3,18 @@ package viewforge.editor.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.serialization.json.JsonPrimitive
 import viewforge.command.AddComponent
 import viewforge.command.AddNode
 import viewforge.command.AddScreen
+import viewforge.command.AddStateField
 import viewforge.command.Command
 import viewforge.command.CompositeCommand
 import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
 import viewforge.command.RemoveScreen
+import viewforge.command.RemoveStateField
 import viewforge.command.RenameNode
 import viewforge.command.RenameScreen
 import viewforge.command.RenameThemeToken
@@ -20,6 +23,7 @@ import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
 import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
+import viewforge.command.SetStateField
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
 import viewforge.command.importAsset
@@ -37,7 +41,12 @@ import viewforge.model.ParameterType
 import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
+import viewforge.model.RecordField
+import viewforge.model.SampleValue
+import viewforge.model.ScalarType
 import viewforge.model.Screen
+import viewforge.model.StateField
+import viewforge.model.StateType
 import viewforge.model.Theme
 import viewforge.model.ThemeCategory
 import viewforge.model.TypographyToken
@@ -741,6 +750,60 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         if (screen.previewProfile == profileId) return
         execute(SetPreviewProfile(screen.id, profileId), selectAfter = selectedId)
     }
+
+    // --- read-only screen state (ADR-034, #21) ----------------------------------------------------
+
+    /**
+     * The active screen's declared state (ADR-034) as it should feed the renderer and code preview — the
+     * screen's fields when a **screen** is the edit surface, but empty while a component is open for
+     * in-place editing (a component has no screen state; its `item`/screen bindings never resolve). The
+     * canvas seam and the code panel both read this, so a component edit never previews screen data.
+     */
+    val activeScreenStateForRender: List<StateField>
+        get() = if (editingComponentId == null) activeScreen?.state.orEmpty() else emptyList()
+
+    /** The active screen's list-of-record fields (ADR-034) — the `source`s a `vforge.repeat` can bind to. */
+    val listStateFields: List<StateField>
+        get() = activeScreen?.state.orEmpty().filter { it.type is StateType.ListOfRecord }
+
+    /** Every read-only state path [node] can bind a prop to on the active edit surface (ADR-034). */
+    fun bindablePaths(node: Node): List<BindingChoice> = bindablePaths(activeEditRoot, node, activeScreenStateForRender)
+
+    /** Declare a fresh scalar state field on the active screen (ADR-034), seeded with an empty String sample. */
+    fun addScalarStateField() {
+        val screen = activeScreen ?: return
+        val name = uniqueStateName("field", screen.state)
+        val field = StateField(name, StateType.Scalar(ScalarType.STRING), SampleValue.Scalar(JsonPrimitive("")))
+        execute(AddStateField(screen.id, field))
+    }
+
+    /** Declare a fresh list-of-record state field on the active screen (ADR-034), seeded with one `name` field. */
+    fun addListStateField() {
+        val screen = activeScreen ?: return
+        val name = uniqueStateName("items", screen.state)
+        val field = StateField(
+            name,
+            StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
+            SampleValue.Rows(listOf(mapOf("name" to JsonPrimitive("")))),
+        )
+        execute(AddStateField(screen.id, field))
+    }
+
+    /** Replace the state field at [index] on the active screen with [field] — rename, retype, or sample edit. */
+    fun updateStateField(index: Int, field: StateField) {
+        val screen = activeScreen ?: return
+        execute(SetStateField(screen.id, index, field))
+    }
+
+    /** Remove the state field named [name] from the active screen (ADR-034). Undoable. */
+    fun removeStateField(name: String) {
+        val screen = activeScreen ?: return
+        execute(RemoveStateField(screen.id, name))
+    }
+
+    /** The first `<base><n>` name not already a state field name — always a legal binding identifier (GC-3). */
+    private fun uniqueStateName(base: String, taken: List<StateField>): String =
+        uniqueNameAmong(base, taken.mapTo(HashSet()) { it.name })
 
     /**
      * Add a fresh, empty screen after the last one and make it active. It is auto-named to the first
