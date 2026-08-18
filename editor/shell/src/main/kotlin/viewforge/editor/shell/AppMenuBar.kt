@@ -34,6 +34,7 @@ internal fun FrameWindowScope.AppMenuBar(
     onRegenerate: () -> Unit,
     onOpenThemeEditor: () -> Unit,
     onOpenPreferences: () -> Unit,
+    onOpenLibraryManager: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onOpenGenerated: () -> Unit,
@@ -108,6 +109,9 @@ internal fun FrameWindowScope.AppMenuBar(
                     }
                 },
             )
+            // Manage the cross-project component library (ADR-033, #209): add project components to it,
+            // rename/remove entries. Inserting is done from the palette; this is the management surface.
+            Item("Manage Library…", onClick = onOpenLibraryManager)
             Separator()
             Item(withAccel("Delete", "Del"), enabled = edit.hasSelection, onClick = state::deleteSelected)
         }

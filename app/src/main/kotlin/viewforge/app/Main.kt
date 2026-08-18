@@ -159,6 +159,9 @@ private fun runEditor() {
                 exportService,
                 DesktopCodePreviewService,
                 ConfigDir.resolve(),
+                // The cross-project component library lives in a `library/` folder under the config dir
+                // (ADR-033, #209), a sibling of recovery.json/preferences.json.
+                ConfigDir.resolve().resolve("library"),
                 closeRequested = closeRequested,
                 onCloseHandled = { closeRequested = false },
                 onExit = ::exitApplication,
