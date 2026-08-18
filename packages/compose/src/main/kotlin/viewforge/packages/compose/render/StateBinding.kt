@@ -10,6 +10,7 @@ import viewforge.model.Repeater
 import viewforge.model.SampleValue
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.resolveListRows
 import viewforge.model.resolveListSource
 import viewforge.model.resolveSampleScalar
 import viewforge.model.scalarValue
@@ -99,10 +100,15 @@ private fun List<Node>.expandList(scope: BindingValueScope, rowLimit: Int): List
 }
 
 /**
- * A repeat's rows: the first [rowLimit] rows of the list field its `source` names, each rendering the
- * template ([Repeater] children) with the row exposed as the `item` scope. A source that doesn't resolve to
- * a list field yields a single placeholder (PF-6). Per-row ids are suffixed so the spliced siblings keep
- * distinct, stable keys (duplicate keys among direct siblings would break Compose keying).
+ * A repeat's rows: the first [rowLimit] rows of the list its `source` names, each rendering the template
+ * ([Repeater] children) with the row exposed as the `item` scope. The `source` resolves in **either** scope
+ * ([resolveListRows], nested lists #255): a top-level list field, or `item.<listField>` naming a nested list on
+ * the *current* row — so a repeat nested inside another repeat's template expands over the outer row's sub-list.
+ * Entering the repeat replaces the `item` scope with the row, so an inner `item.*` **shadows** the outer one
+ * (the approved model: no outer-scope access). A source that doesn't resolve to a list yields a single
+ * placeholder (PF-6). Per-row ids are suffixed so the spliced siblings keep distinct, stable keys (duplicate
+ * keys among direct siblings would break Compose keying); a nested repeat suffixes again, keeping keys unique
+ * down the nesting.
  *
  * The canvas preview is **layout-neutral** (ADR-034 slice 2): both `forEach` and `lazyColumn`
  * ([Repeater.layoutOf]) splice their sample rows inline here. A `lazyColumn` repeat is deliberately *not*
@@ -112,12 +118,13 @@ private fun List<Node>.expandList(scope: BindingValueScope, rowLimit: Int): List
  */
 private fun expandRepeat(node: Node, scope: BindingValueScope, rowLimit: Int): List<Node> {
     val source = Repeater.sourceOf(node)
-    val listField = source?.let { resolveListSource(it, scope.fields) }
+    val rows = source?.let { resolveListRows(it, scope) }
         ?: return listOf(placeholder(node.id, "Unbound list: ${source ?: "?"}"))
-    val rows = (listField.sample as? SampleValue.Rows)?.rows.orEmpty().take(rowLimit)
-    return rows.flatMapIndexed { index, row ->
+    return rows.take(rowLimit).flatMapIndexed { index, row ->
         val itemScope = scope.copy(itemRow = row)
-        node.children.map { template -> expandNode(template, itemScope, rowLimit).suffixIds("#$index") }
+        // Expand the template through `expandList`, so a repeat *inside* the template (a nested repeat) is
+        // itself spliced — its `item.*` resolves against this row's sub-list, shadowing the outer item.
+        node.children.expandList(itemScope, rowLimit).map { it.suffixIds("#$index") }
     }
 }
 

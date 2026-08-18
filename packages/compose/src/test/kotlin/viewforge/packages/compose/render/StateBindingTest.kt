@@ -143,6 +143,83 @@ class StateBindingTest {
         )
     }
 
+    /** `sections: List<{ title: String, rows: List<{ label: String }> }>` — a nested list-of-record (#255). */
+    private fun sectionsState(): StateField {
+        val sectionRecord = listOf(
+            RecordField("title", ScalarType.STRING),
+            RecordField("rows", StateType.ListOfRecord(listOf(RecordField("label", ScalarType.STRING)))),
+        )
+        fun cell(v: String): SampleValue = SampleValue.Scalar(JsonPrimitive(v))
+        fun subRow(label: String) = mapOf("label" to cell(label))
+        fun section(title: String, vararg labels: String) =
+            mapOf("title" to cell(title), "rows" to SampleValue.Rows(labels.map(::subRow)))
+        return StateField(
+            "sections",
+            StateType.ListOfRecord(sectionRecord),
+            SampleValue.Rows(listOf(section("A", "x", "y"), section("B", "z"))),
+        )
+    }
+
+    private fun textContent(node: Node): String = (boundText(node) as PropValue.Literal).value.content
+
+    @Test
+    fun `a nested repeat expands over the outer row's sub-list with item shadowing`() {
+        val inner = Repeater.node("item.rows", id = NodeId("inner"), template = listOf(text("cell", "item.label")))
+        val outer = Repeater.node(
+            "sections",
+            id = NodeId("outer"),
+            template = listOf(text("hdr", "item.title"), inner),
+        )
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(outer))
+
+        val expanded = expandScreenState(root, listOf(sectionsState()))
+        // Section A → title "A" then rows x,y; Section B → title "B" then row z. Order preserved, no nodes left.
+        assertEquals(listOf("A", "x", "y", "B", "z"), expanded.children.map(::textContent))
+        assertTrue(expanded.children.none { it.type == Repeater.TYPE }, "no repeat nodes remain after expansion")
+        val ids = expanded.children.map { it.id.value }
+        assertEquals(ids, ids.distinct(), "nested-expanded ids must stay unique, got $ids")
+    }
+
+    @Test
+    fun `an inner item shadows the outer — an outer-only field does not resolve inside a nested repeat`() {
+        // The inner template binds `item.title`, which only the *outer* section row has; inside the inner repeat
+        // `item` is the sub-row (which has no title), so it must not resolve — it shows the loud marker (PF-6).
+        val inner = Repeater.node("item.rows", id = NodeId("inner"), template = listOf(text("cell", "item.title")))
+        val outer = Repeater.node("sections", id = NodeId("outer"), template = listOf(inner))
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(outer))
+
+        val expanded = expandScreenState(root, listOf(sectionsState()))
+        // Three sub-rows total (x, y, z), each an unresolved `item.title` marker — never the outer section title.
+        assertEquals(3, expanded.children.size)
+        assertTrue(
+            expanded.children.all { textContent(it) == unresolvedMarker("item.title") },
+            "inner item must shadow the outer; got ${expanded.children.map(::textContent)}",
+        )
+    }
+
+    @Test
+    fun `a nested repeat whose source names no sub-list becomes a loud placeholder`() {
+        val inner = Repeater.node("item.missing", id = NodeId("inner"), template = listOf(text("cell", "item.label")))
+        val outer = Repeater.node("sections", id = NodeId("outer"), template = listOf(inner))
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(outer))
+
+        val expanded = expandScreenState(root, listOf(sectionsState()))
+        // One placeholder per outer section (2), each naming the unresolved nested source.
+        assertEquals(2, expanded.children.size)
+        assertTrue(
+            expanded.children.all {
+                it.type == PLACEHOLDER_TYPE
+            },
+            "each unresolved nested repeat is a placeholder",
+        )
+        assertTrue(
+            expanded.children.all {
+                (it.props[PLACEHOLDER_MESSAGE_PROP] as PropValue.Literal).value.content.contains("item.missing")
+            },
+            "placeholder should name the unbound nested source",
+        )
+    }
+
     @Test
     fun `a screen field binding still resolves inside a repeat template alongside the item scope`() {
         val members = listField(
