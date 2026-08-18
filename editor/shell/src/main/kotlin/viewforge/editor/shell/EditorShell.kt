@@ -142,6 +142,7 @@ fun FrameWindowScope.EditorShell(
         onOpenPreferences = { showPreferences = true },
         onNew = document::newDocument,
         onOpen = document::open,
+        onOpenGenerated = document::openGenerated,
         onOpenRecent = document::openRecent,
         onClearRecent = prefs::clearRecent,
         onSave = document::save,

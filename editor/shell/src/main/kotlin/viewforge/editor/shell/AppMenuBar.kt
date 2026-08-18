@@ -36,6 +36,7 @@ internal fun FrameWindowScope.AppMenuBar(
     onOpenPreferences: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
+    onOpenGenerated: () -> Unit,
     onOpenRecent: (String) -> Unit,
     onClearRecent: () -> Unit,
     onSave: () -> Unit,
@@ -49,6 +50,9 @@ internal fun FrameWindowScope.AppMenuBar(
             // .vforge persistence (#37). Accelerators display-only — handleShortcut binds the real keys.
             Item(withAccel("New", "Ctrl+N"), onClick = onNew)
             Item(withAccel("Open…", "Ctrl+O"), onClick = onOpen)
+            // Re-open a ViewForge-generated .kt via its IR sidecar (#22/#227). No accelerator — a rarely
+            // used entry point, kept discoverable in the menu without claiming a global chord.
+            Item("Open Generated .kt…", onClick = onOpenGenerated)
             // Recently opened/saved projects (D8, #88). Empty -> a single disabled placeholder so the
             // submenu is discoverable; each entry shows its file name and reopens it (guarding unsaved
             // edits in the controller). Clear Recent empties the list.

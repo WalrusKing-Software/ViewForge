@@ -128,6 +128,7 @@ internal fun buildPaletteCommands(
     // File
     commands += PaletteCommand("file.new", "New Project", "File", run = document::newDocument)
     commands += PaletteCommand("file.open", "Open Project…", "File", run = document::open)
+    commands += PaletteCommand("file.openGenerated", "Open Generated .kt…", "File", run = document::openGenerated)
     commands += PaletteCommand("file.save", "Save", "File", enabled = file.canSave, run = document::save)
     commands += PaletteCommand("file.saveAs", "Save As…", "File", run = document::saveAs)
     commands += PaletteCommand("file.exportKt", "Export → .kt files", "File") {
