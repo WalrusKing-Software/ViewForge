@@ -58,9 +58,12 @@ information disclosure when opened.
 
 **Design note on PF-11 (read-only data binding, ADR-034):** because a binding is a name looked up in a
 typed structure — not an expression — there is **no evaluator to attack**, so PF-4 stays literally true and
-**no per-project consent gate is owed** this release. That gate becomes owed only when *mutable* state and
-event handlers arrive (the direct route toward evaluating user code), which is a separate, later ADR with
-its own threat model.
+**no per-project consent gate is owed** this release. The slice-2 amendments do not change this: a populated
+`vforge.dropdown` (#253) and **nested lists** (#255) only deepen the same structure — a record field may hold
+a nested list and a sample cell may hold nested rows — still typed literals looked up by validated identifier
+paths, with the per-repeat row cap applying at every nesting level, so the recursion introduces no new eval
+surface. That gate becomes owed only when *mutable* state and event handlers arrive (the direct route toward
+evaluating user code), which is a separate, later ADR with its own threat model.
 
 **Design note on PF-4:** users will eventually ask for a live-evaluating expression field. That
 would mean embedding a Kotlin scripting engine and executing untrusted code from project files. If

@@ -194,8 +194,10 @@ Recorded so they're decisions, not oversights:
   ownership, never parsed (ADR-032, #22).
 - Visual state management / data binding. *Exception:* **read-only** data binding is sanctioned and
   shipped (ADR-034, #21) — a screen declares typed, sample-backed `state`, props bind to it by structural
-  path (`PropValue.StateBinding`), and a `vforge.repeat` node repeats a template per row. Still excluded:
-  **mutable** state, event handlers, and any expression evaluation (a later, separately consent-gated ADR).
+  path (`PropValue.StateBinding`), and a `vforge.repeat` node repeats a template per row. Slice 2 extends the
+  read-only surface with a populated `vforge.dropdown` (#253) and **nested lists** (#255) — a record field may
+  itself be a list, repeated by an inner repeat over `item.<listField>`. Still excluded: **mutable** state,
+  event handlers, and any expression evaluation (a later, separately consent-gated ADR).
 - Navigation graph editing
 - Backend, API, or database integration
 - Real-time collaboration

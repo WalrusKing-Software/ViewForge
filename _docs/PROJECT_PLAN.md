@@ -98,8 +98,9 @@ and the canvas can preview it in an Android device frame that matches the real d
   node field `responsive` keyed by breakpoint id (Material window size classes for Android), resolved at
   render (canvas shows the active breakpoint) and codegen (emit the base value; a later slice may emit
   `BoxWithConstraints`/window-size-class branching). This is the one **schema-affecting** item —
-  bump **3 → 4** with an `M3to4` migration and a committed fixture (DATA_MODEL §10). (v3 was claimed by
-  ADR-034 read-only data binding, so responsive re-versioned from its original v3 scope to v4.)
+  bump **4 → 5** with an `M4to5` migration and a committed fixture (DATA_MODEL §10). (v3 was claimed by
+  ADR-034 read-only data binding and v4 by its nested-lists amendment (#255), so responsive re-versioned
+  from its original v3 scope to v5.)
 - **Android-specific validation warnings.** Non-blocking inspector/validation hints, e.g. touch-target
   minimum sizes (48dp), and unset `contentDescription` on interactive/image nodes (accessibility). Fail
   loud in the inspector (I8), never at codegen.
@@ -119,7 +120,7 @@ ADR-021, independent of the target work).
 3. The canvas Android device frame (density + insets) matches the app on a real device/emulator within
    tolerance (screenshot diff, mirroring Phase-1 exit #3).
 4. A screen with at least one responsive override renders correctly per breakpoint on the canvas and
-   round-trips losslessly through the schema-4 format (with a passing `M3to4` migration fixture).
+   round-trips losslessly through the schema-5 format (with a passing `M4to5` migration fixture).
 5. Golden codegen tests cover the Android target output and the responsive-override emission.
 
 **Prerequisite design decisions (record before coding):** ADR-030 (responsive data model — decided);
@@ -332,7 +333,7 @@ tests that encode intent so context survives gaps between work sessions.
 | — | **v0.1.0-alpha-1 release** | Cut `release/v0.1.0-alpha-1`, run `RELEASE_QA.md`, tag, publish the (unsigned, for the alpha) installer + checksums, back-merge to `main`. |
 | M11 | Android target scaffold | Compose package gains an Android `TargetDefinition`; exporter routes `commonMain` vs `androidMain` (G9) and emits an Android Gradle + manifest scaffold; Android compile gate green in CI. |
 | M12 | Android device preview | `DeviceProfiles` gains Android profiles with density + safe-area/system-bar insets; the framed canvas scales by density and draws inset chrome. |
-| M13 | Responsive overrides | Schema **3 → 4** (`M3to4` + fixture; v3 taken by ADR-034); node `responsive` field (ADR-030); canvas renders the active breakpoint; inspector edits per-breakpoint values. |
+| M13 | Responsive overrides | Schema **4 → 5** (`M4to5` + fixture; v3 taken by ADR-034, v4 by nested lists #255); node `responsive` field (ADR-030); canvas renders the active breakpoint; inspector edits per-breakpoint values. |
 | M14 | Android validation + codegen | Android-specific validation warnings (touch targets, missing `contentDescription`); responsive-override codegen with golden coverage. |
 | M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. |
 

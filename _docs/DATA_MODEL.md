@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
 **Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
-**Schema version:** 3 (v3 = read-only data binding, ADR-034; see §10 version history)
+**Schema version:** 4 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; see §10 version history)
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -79,12 +79,14 @@ A top-level, exportable UI entry point.
 to (#21). Each `StateField` is `(name, type, sample)`:
 
 - **`name`** — a legal Kotlin identifier (GC-3), the binding root a `PropValue.StateBinding` path names (§6).
-- **`type`** — either a **scalar** (`String`/`Int`/`Float`/`Bool`) or a **list of records** (a record is a
-  flat set of named, scalar-typed fields). These cover #21's examples (a live indicator binds a scalar; a
-  dynamic list / populated dropdown repeats over a list of records). Nested lists are deferred.
+- **`type`** — either a **scalar** (`String`/`Int`/`Float`/`Bool`) or a **list of records**. A record's field
+  carries a full type in turn, so a field may itself be a **nested list of records** — the model is *recursive*
+  (nested lists, ADR-034 Amendment #255). These cover #21's examples (a live indicator binds a scalar; a dynamic
+  list / populated dropdown repeats over a list; a list of sections each holding a list of rows nests).
 - **`sample`** — a typed literal value (the same `JsonPrimitive`/structured-literal trust boundary as any
-  `PropValue.Literal`), **never code**: a scalar literal, or rows for a list. The canvas renders the sample
-  and codegen seeds the generated stub from it (ADR-034).
+  `PropValue.Literal`), **never code**: a scalar literal, or rows for a list — and a row's cell is itself a
+  sample value, so a nested-list cell holds its own rows (recursive, mirroring `type`). The canvas renders the
+  sample and codegen seeds the generated stub from it (ADR-034).
 
 A `vforge.repeat` node iterates a list field (§12.2); a scalar field feeds a scalar `StateBinding`. State is
 screen-scoped and read-only this release — component-local state, mutation, and events are deferred. Adding
@@ -218,7 +220,9 @@ Binds a prop to a screen's declared **read-only** state (§3, `Screen.state`) �
 #21's "data-driven content" without any evaluation. `path` is a **dotted identifier path** resolved by
 *structural lookup*, never parsed or evaluated as Kotlin (grammar: `identifier ('.' identifier)*` — no
 indexing, calls, or operators). A single segment names a scalar `StateField` (`progress`); inside a
-`vforge.repeat` template the reserved `item` root names the current record (`item.title`). Resolution:
+`vforge.repeat` template the reserved `item` root names the current record (`item.title`). `item` always names
+the **innermost** enclosing repeat's element, so a nested repeat's `item.*` *shadows* the outer one (nested
+lists, ADR-034 Amendment #255). Resolution:
 
 - **Canvas** substitutes the field's typed `sample` value; a `vforge.repeat` renders its template once per
   sample row (bounded to the first *N*). No live source, no compilation — so **PF-4 stays literally true**.
@@ -239,6 +243,13 @@ type, so a dropdown is **schema-neutral** (no bump). The canvas previews the fir
 read-only; codegen emits `options.forEach { item -> DropdownMenuItem(…) }` reading the same seeded stub, with
 inert selection handlers (no mutation path). This and the `LazyColumn` repeat variant (§12.2, #251) are the
 read-only extensions of slice 2.
+
+**Nested lists (ADR-034 Amendment #255, schema 4).** A record field may itself be a list of records, so a
+`vforge.repeat` can bind `source = item.<listField>` (a nested list on the current row) and iterate the outer
+row's sub-list. Because a nested repeat replaces the `item` scope, an inner `item.*` reaches only the inner
+row — to show a parent field, bind it in the *outer* template. Unlike the dropdown, this changes the serialized
+shape of record fields and sample cells, so it **claims schema v4** (`M3to4`, §10). Codegen mirrors the render:
+`departments.forEach { item -> … item.teams.forEach { item -> … } }` with recursive `data class`es.
 
 ### `RawExpression` — the escape hatch
 
@@ -375,7 +386,8 @@ changes.
 | **1** | Initial format. | — |
 | **2** | `PropValue.ParamRef` — a new member of the *closed* `PropValue` union (§6), forward-incompatible (ADR-028). | `M1to2` (stamp). |
 | **3** | `Screen.state` read-only data binding (§3, ADR-034) — an additive field, but a v2 build would silently drop it and misrender every `StateBinding`/`vforge.repeat`, so it is treated as semantic. | `M2to3` (stamp; v2 docs carry no state and are already valid v3). |
-| **4** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M3to4`. |
+| **4** | Nested lists (ADR-034 Amendment #255) — `RecordField` carries a full `StateType` and a sample cell is a `SampleValue`, so a record field may be a nested list. Changes the serialized shape of v3 record fields/cells, so a *transforming* migration (not a stamp). | `M3to4` (transforms `{name,scalar}`→`{name,type}` and cell primitive→`{kind:"scalar",value}`; frozen v3 fixture). |
+| **5** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M4to5`. |
 
 ---
 
@@ -500,18 +512,20 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    `vforge.repeat` node: its `source` prop is a `PropValue.StateBinding` to a list-of-record `Screen.state`
    field (§6), and its children are the per-item template, rendered once per row against an `item` scope.
    Read-only this release — the canvas previews the field's sample rows and codegen seeds a `forEach` over a
-   runnable stub. Slice 2 (ADR-034 Amendments) added a `LazyColumn` layout for the repeat (#251) and a
-   `vforge.dropdown` node whose `options` bind to a list field (#253); nested lists remain deferred.
+   runnable stub. Slice 2 (ADR-034 Amendments) added a `LazyColumn` layout for the repeat (#251), a
+   `vforge.dropdown` node whose `options` bind to a list field (#253), and **nested lists** (#255, schema 4) —
+   a record field may itself be a list, and a repeat may bind `source = item.<listField>`, with `item`
+   shadowing the innermost element.
 3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
    overrides live **on the node** as an additive optional field
    `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
    base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
    strings to `core` and defined by the framework package's target (Material window size classes —
    `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
-   Introducing the field will bump the schema **3 → 4** (an `M3to4` stamp) because it is a semantic
+   Introducing the field will bump the schema **4 → 5** (an `M4to5` stamp) because it is a semantic
    capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). (Originally
-   scoped to v3; ADR-034 read-only data binding claimed v3 first, so responsive slides to v4.) A separate
-   node-id-keyed override layer was rejected — see ADR-030.
+   scoped to v3; ADR-034 read-only data binding claimed v3, then its nested-lists amendment (#255) claimed
+   v4, so responsive slides to v5.) A separate node-id-keyed override layer was rejected — see ADR-030.
 4. **Interaction/navigation.** *Partially resolved (ADR-034):* `StateBinding` is now live for **read-only**
    data binding (§6). Mutable state, event handlers, and navigation remain out of scope for v1 — a later,
    separately consent-gated ADR.
