@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -211,6 +212,7 @@ fun FrameWindowScope.EditorShell(
                     // hijacked. Editing shortcuts first, then the File-menu document shortcuts.
                     .onKeyEvent {
                         handlePaletteShortcut(it) { showPalette = true } ||
+                            handlePanelShortcut(it, prefs) ||
                             handleShortcut(it, state) ||
                             handleDocumentShortcut(it, document)
                     },
@@ -539,6 +541,50 @@ private fun handlePaletteShortcut(event: KeyEvent, onOpen: () -> Unit): Boolean 
         return true
     }
     return false
+}
+
+/** The four editor panels that toggle from the keyboard (S1, #208). */
+internal enum class EditorPanel { PALETTE, TREE, INSPECTOR, CODE_PREVIEW }
+
+/**
+ * The pure Ctrl/Cmd+1..4 → panel mapping (#208): 1 Palette, 2 Tree, 3 Inspector, 4 Code preview. The
+ * digits are collision-free with the existing shortcuts (Ctrl+0/9 reset/fit, Ctrl+± zoom, the Ctrl+letter
+ * edit/document actions). Requires the platform command modifier and rejects Shift/Alt chords so those
+ * combinations stay free for the future. Extracted from [KeyEvent] so the mapping is unit-testable
+ * without synthesising a key event (mirroring the pure menu models).
+ */
+internal fun panelForShortcut(key: Key, cmd: Boolean, shift: Boolean, alt: Boolean): EditorPanel? {
+    if (!cmd || shift || alt) return null
+    return when (key) {
+        Key.One -> EditorPanel.PALETTE
+        Key.Two -> EditorPanel.TREE
+        Key.Three -> EditorPanel.INSPECTOR
+        Key.Four -> EditorPanel.CODE_PREVIEW
+        else -> null
+    }
+}
+
+/**
+ * The panel show/hide shortcuts (S1, #208): Ctrl/Cmd+1..4 toggle the four editor panels through the same
+ * [PreferencesController] toggles the View menu uses, so a keyboard toggle persists across sessions like a
+ * menu one. Checked after the palette shortcut and before the editing/document shortcuts; the digits don't
+ * overlap those, so ordering is only for readability. The real binder — the menu labels only display.
+ */
+private fun handlePanelShortcut(event: KeyEvent, prefs: PreferencesController): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val panel = panelForShortcut(
+        event.key,
+        cmd = event.isCtrlPressed || event.isMetaPressed,
+        shift = event.isShiftPressed,
+        alt = event.isAltPressed,
+    ) ?: return false
+    when (panel) {
+        EditorPanel.PALETTE -> prefs.togglePalette()
+        EditorPanel.TREE -> prefs.toggleTree()
+        EditorPanel.INSPECTOR -> prefs.toggleInspector()
+        EditorPanel.CODE_PREVIEW -> prefs.toggleCodePreview()
+    }
+    return true
 }
 
 /**
