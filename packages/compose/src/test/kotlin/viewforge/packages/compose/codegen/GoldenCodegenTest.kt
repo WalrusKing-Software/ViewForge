@@ -112,6 +112,11 @@ class GoldenCodegenTest {
     // reading the seeded stub + generated `data class`, with the label field selecting the shown record field.
     @Test fun populatedDropdown() = assertGolden("PopulatedDropdown")
 
+    // Nested lists (ADR-034 Amendment, #255): a list-of-record whose record has a nested list-of-record field.
+    // Emits recursive `data class`es (Department has `teams: List<Team>`), a nested seeded stub, and a repeat
+    // over `item.teams` inside the outer repeat — `departments.forEach { item -> … item.teams.forEach { item -> … } }`.
+    @Test fun nestedList() = assertGolden("NestedList")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.

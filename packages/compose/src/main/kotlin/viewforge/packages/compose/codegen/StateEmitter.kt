@@ -1,11 +1,14 @@
 package viewforge.packages.compose.codegen
 
 import com.squareup.kotlinpoet.BOOLEAN
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FLOAT
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.LIST
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
@@ -20,7 +23,6 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
-import viewforge.model.scalarOrNull
 import viewforge.model.scalarValue
 
 /**
@@ -34,15 +36,23 @@ import viewforge.model.scalarValue
  * never evaluated (PF-4).
  */
 internal object StateEmitter {
-    /** The element `data class` for each list-of-record field (deduplicated by type name). Empty for a screen with no lists. */
-    fun recordTypes(state: List<StateField>): List<TypeSpec> = state.mapNotNull { field ->
-        (field.type as? StateType.ListOfRecord)?.let {
-            recordTypeName(field.name) to
-                it.fields
-        }
+    /**
+     * The element `data class` for every list-of-record type reachable from [state] — top-level fields **and**
+     * nested list fields (#255), collected transitively and deduplicated by type name (first shape wins; the
+     * fixture must pick field names that singularise uniquely). Empty for a screen with no lists.
+     */
+    fun recordTypes(state: List<StateField>): List<TypeSpec> {
+        val collected = LinkedHashMap<String, List<RecordField>>()
+        state.forEach { collectRecordTypes(it.name, it.type, collected) }
+        return collected.map { (name, fields) -> dataClass(name, fields) }
     }
-        .distinctBy { it.first }
-        .map { (name, fields) -> dataClass(name, fields) }
+
+    /** Depth-first collect: a list-of-record type contributes its own `data class`, then recurses into its fields. */
+    private fun collectRecordTypes(fieldName: String, type: StateType, out: MutableMap<String, List<RecordField>>) {
+        if (type !is StateType.ListOfRecord) return
+        out.putIfAbsent(recordTypeName(fieldName), type.fields)
+        type.fields.forEach { collectRecordTypes(it.name, it.type, out) }
+    }
 
     /**
      * The seeded state block: a `// TODO` line then one `val <name> = <sample>` per field, or null when the
@@ -66,21 +76,21 @@ internal object StateEmitter {
         .addModifiers(KModifier.DATA)
         .primaryConstructor(
             FunSpec.constructorBuilder()
-                .apply { fields.forEach { addParameter(it.name, scalarType(it.scalarOrThrow())) } }
+                .apply { fields.forEach { addParameter(it.name, fieldType(it)) } }
                 .build(),
         )
         .apply {
             fields.forEach { f ->
-                addProperty(
-                    PropertySpec.builder(f.name, scalarType(f.scalarOrThrow())).initializer("%N", f.name).build(),
-                )
+                addProperty(PropertySpec.builder(f.name, fieldType(f)).initializer("%N", f.name).build())
             }
         }
         .build()
 
-    /** The scalar type of a flat record field; nested list fields are emitted by #258, not this slice. */
-    private fun RecordField.scalarOrThrow(): ScalarType =
-        scalarOrNull ?: throw CodegenException("nested list record field '$name' is not yet emitted (#258)")
+    /** The Kotlin type of a record field: a scalar, or `List<Element>` for a nested list-of-record field (#255). */
+    private fun fieldType(field: RecordField): TypeName = when (val t = field.type) {
+        is StateType.Scalar -> scalarType(t.scalar)
+        is StateType.ListOfRecord -> LIST.parameterizedBy(ClassName("", recordTypeName(field.name)))
+    }
 
     /** The `val`'s initializer: a scalar literal, or `listOf(Type(field = …), …)` for a list-of-record field. */
     private fun sampleValue(field: StateField): CodeBlock = when (val type = field.type) {
@@ -99,15 +109,27 @@ internal object StateEmitter {
         return b.unindent().add(")").build()
     }
 
-    /** One record literal: `Member(name = "Ada", role = "Lead")`, args in declared field order. */
+    /** One record literal: `Member(name = "Ada", role = "Lead")`, args in declared field order (nested → `listOf(…)`). */
     private fun record(typeName: String, fields: List<RecordField>, row: Map<String, SampleValue>): CodeBlock {
         val args = fields.map { f ->
             val cell = row[f.name] ?: throw CodegenException("sample row for '$typeName' is missing field '${f.name}'")
-            val value = cell.scalarValue
-                ?: throw CodegenException("nested sample cell '${f.name}' is not yet emitted (#258)")
-            CodeBlock.of("%N = %L", f.name, scalarLiteral(f.scalarOrThrow(), value))
+            CodeBlock.of("%N = %L", f.name, cellValue(f, cell))
         }
         return CodeBlock.of("%L(%L)", typeName, args.joinToCode(", "))
+    }
+
+    /** A record field's sample: a scalar literal, or `listOf(Element(…), …)` for a nested list-of-record field (#255). */
+    private fun cellValue(field: RecordField, cell: SampleValue): CodeBlock = when (val t = field.type) {
+        is StateType.Scalar -> {
+            val value = cell.scalarValue
+                ?: throw CodegenException("scalar field '${field.name}' has a non-scalar sample cell")
+            scalarLiteral(t.scalar, value)
+        }
+        is StateType.ListOfRecord -> {
+            val rows = (cell as? SampleValue.Rows)?.rows
+                ?: throw CodegenException("nested list field '${field.name}' has a non-rows sample cell")
+            rowsValue(recordTypeName(field.name), t.fields, rows)
+        }
     }
 
     private fun scalarLiteral(type: ScalarType, value: JsonPrimitive): CodeBlock = when (type) {
