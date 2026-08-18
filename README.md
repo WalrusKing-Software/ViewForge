@@ -68,6 +68,11 @@ to 21 in `gradle/libs.versions.toml`; see `_docs/PROJECT_PLAN.md`).
 
 Installing a released build: [`_docs/INSTALL.md`](_docs/INSTALL.md).
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to build, test, and submit changes, and the branching
+and commit conventions.
+
 ## License
 
 [Apache License 2.0](LICENSE). © 2026 WalrusKing Software.
