@@ -12,6 +12,7 @@ import viewforge.model.StateField
 import viewforge.model.StateType
 import viewforge.model.resolveListSource
 import viewforge.model.resolveSampleScalar
+import viewforge.model.scalarValue
 
 /**
  * Design-time resolution of read-only screen state for the canvas (ADR-034, #21): a pure `Node -> Node`
@@ -81,7 +82,7 @@ private fun expandDropdown(node: Node, scope: BindingValueScope): Node {
     val fields = (listField.type as? StateType.ListOfRecord)?.fields.orEmpty()
     val labelField = Dropdown.labelFieldOf(node) ?: fields.firstOrNull()?.name
     val rows = (listField.sample as? SampleValue.Rows)?.rows.orEmpty()
-    val selected = labelField?.let { lf -> rows.firstOrNull()?.get(lf)?.content } ?: ""
+    val selected = labelField?.let { lf -> rows.firstOrNull()?.get(lf).scalarValue?.content } ?: ""
     return node.copy(
         modifiers = node.modifiers.map { it.copy(args = it.args.resolveBindings(scope)) },
         props = node.props + (DROPDOWN_SELECTED_PROP to PropValue.Literal(JsonPrimitive(selected))),

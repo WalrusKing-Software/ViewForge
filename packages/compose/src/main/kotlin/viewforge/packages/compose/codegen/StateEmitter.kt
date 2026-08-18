@@ -20,6 +20,8 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.scalarOrNull
+import viewforge.model.scalarValue
 
 /**
  * Codegen for a screen's read-only state (ADR-034, #21): a generated `data class` per list-of-record type
@@ -64,15 +66,21 @@ internal object StateEmitter {
         .addModifiers(KModifier.DATA)
         .primaryConstructor(
             FunSpec.constructorBuilder()
-                .apply { fields.forEach { addParameter(it.name, scalarType(it.scalar)) } }
+                .apply { fields.forEach { addParameter(it.name, scalarType(it.scalarOrThrow())) } }
                 .build(),
         )
         .apply {
             fields.forEach { f ->
-                addProperty(PropertySpec.builder(f.name, scalarType(f.scalar)).initializer("%N", f.name).build())
+                addProperty(
+                    PropertySpec.builder(f.name, scalarType(f.scalarOrThrow())).initializer("%N", f.name).build(),
+                )
             }
         }
         .build()
+
+    /** The scalar type of a flat record field; nested list fields are emitted by #258, not this slice. */
+    private fun RecordField.scalarOrThrow(): ScalarType =
+        scalarOrNull ?: throw CodegenException("nested list record field '$name' is not yet emitted (#258)")
 
     /** The `val`'s initializer: a scalar literal, or `listOf(Type(field = …), …)` for a list-of-record field. */
     private fun sampleValue(field: StateField): CodeBlock = when (val type = field.type) {
@@ -83,7 +91,7 @@ internal object StateEmitter {
     private fun rowsValue(
         typeName: String,
         fields: List<RecordField>,
-        rows: List<Map<String, JsonPrimitive>>,
+        rows: List<Map<String, SampleValue>>,
     ): CodeBlock {
         // `listOf` is a default (kotlin.collections) import, so it is emitted as a bare identifier — no import.
         val b = CodeBlock.builder().add("listOf(\n").indent()
@@ -92,10 +100,12 @@ internal object StateEmitter {
     }
 
     /** One record literal: `Member(name = "Ada", role = "Lead")`, args in declared field order. */
-    private fun record(typeName: String, fields: List<RecordField>, row: Map<String, JsonPrimitive>): CodeBlock {
+    private fun record(typeName: String, fields: List<RecordField>, row: Map<String, SampleValue>): CodeBlock {
         val args = fields.map { f ->
-            val value = row[f.name] ?: throw CodegenException("sample row for '$typeName' is missing field '${f.name}'")
-            CodeBlock.of("%N = %L", f.name, scalarLiteral(f.scalar, value))
+            val cell = row[f.name] ?: throw CodegenException("sample row for '$typeName' is missing field '${f.name}'")
+            val value = cell.scalarValue
+                ?: throw CodegenException("nested sample cell '${f.name}' is not yet emitted (#258)")
+            CodeBlock.of("%N = %L", f.name, scalarLiteral(f.scalarOrThrow(), value))
         }
         return CodeBlock.of("%L(%L)", typeName, args.joinToCode(", "))
     }
@@ -129,7 +139,7 @@ internal object StateEmitter {
     private fun scalarSample(field: StateField): JsonPrimitive = (field.sample as? SampleValue.Scalar)?.value
         ?: throw CodegenException("scalar state '${field.name}' has no scalar sample")
 
-    private fun rowsSample(field: StateField): List<Map<String, JsonPrimitive>> =
+    private fun rowsSample(field: StateField): List<Map<String, SampleValue>> =
         (field.sample as? SampleValue.Rows)?.rows
             ?: throw CodegenException("list state '${field.name}' has no rows sample")
 }

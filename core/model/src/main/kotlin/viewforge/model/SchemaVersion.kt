@@ -15,5 +15,12 @@ package viewforge.model
  * likewise forward-incompatible — a v2-only build would silently drop `state` (an unknown key) and
  * misrender every binding — so it too gets a bump. A v2 document carries no state and is already a
  * valid v3 document, so the 2->3 migration only stamps the version (M2to3).
+ *
+ * v4 (ADR-034 Amendment, #255) makes screen state **recursive** — a [RecordField] holds a full
+ * [StateType], so a record field may itself be a list-of-record (nested lists), and a sample cell is a
+ * [SampleValue] (scalar or nested rows). This changes the *serialized shape* of existing v3 record fields
+ * (`{name, scalar}` → `{name, type}`) and sample cells (a bare primitive → `{kind:"scalar", value}`), so
+ * unlike M1to2/M2to3 the 3->4 migration (M3to4) actually **transforms** the document, not just stamps it.
+ * (ADR-030 responsive, previously reserved for v4, slides to v5.)
  */
-const val SCHEMA_VERSION: Int = 3
+const val SCHEMA_VERSION: Int = 4

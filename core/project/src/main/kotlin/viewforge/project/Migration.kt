@@ -5,11 +5,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.SCHEMA_VERSION
 import viewforge.project.migrations.M1to2
 import viewforge.project.migrations.M2to3
+import viewforge.project.migrations.M3to4
 
 /**
  * One step in the schema upgrade chain (DATA_MODEL §10). Migrations operate on the raw [JsonObject],
  * never on deserialized data classes — otherwise every historical version of every class would have
- * to be kept alive forever. Steps are chained 1→2→3 and never skipped.
+ * to be kept alive forever. Steps are chained 1→2→3→4 and never skipped.
  */
 interface Migration {
     val fromVersion: Int
@@ -22,7 +23,7 @@ interface Migration {
 class MigrationException(message: String) : RuntimeException(message)
 
 /**
- * The registry and runner for schema migrations. Steps are chained 1->2->3 and selected by
+ * The registry and runner for schema migrations. Steps are chained 1->2->3->4 and selected by
  * [Migration.fromVersion]; registering a new step is a one-line addition to [ALL] plus a fixture.
  */
 object SchemaMigrations {
@@ -30,7 +31,7 @@ object SchemaMigrations {
     const val CURRENT: Int = SCHEMA_VERSION
 
     /** Registered migrations, in any order (the runner selects by [Migration.fromVersion]). */
-    val ALL: List<Migration> = listOf(M1to2, M2to3)
+    val ALL: List<Migration> = listOf(M1to2, M2to3, M3to4)
 
     /** Reads `schemaVersion` from a parsed document, or null if absent/non-numeric. */
     fun readVersion(document: JsonObject): Int? = (document["schemaVersion"] as? JsonPrimitive)?.content?.toIntOrNull()

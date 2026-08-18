@@ -7,6 +7,7 @@ import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
 import viewforge.model.isBindingIdentifier
+import viewforge.model.scalarOrNull
 
 /**
  * Pure, Compose-free logic behind the screen-state editor (ADR-034, #21): parsing typed sample literals,
@@ -50,13 +51,23 @@ internal fun reconcileRows(
 ): List<Map<String, JsonPrimitive>> = rows.map { row ->
     fields.associate {
         it.name to
-            (row[it.name] ?: scalarDefault(it.scalar))
+            (row[it.name] ?: scalarDefault(it.scalarOrNull ?: ScalarType.STRING))
     }
 }
 
 /** A fresh row with a default cell per record field. */
 internal fun emptyRow(fields: List<RecordField>): Map<String, JsonPrimitive> =
-    fields.associate { it.name to scalarDefault(it.scalar) }
+    fields.associate { it.name to scalarDefault(it.scalarOrNull ?: ScalarType.STRING) }
+
+/**
+ * The flat scalar-cell view of a list field's [sample] rows (nested cells dropped): slice-A editing is
+ * scalar-only, so the composable editor works over `Map<String, JsonPrimitive>` and re-wraps via
+ * [viewforge.model.scalarRows]. Nested-row editing arrives in #259 and will read the full [SampleValue] rows.
+ */
+internal fun scalarRowsView(sample: SampleValue): List<Map<String, JsonPrimitive>> =
+    (sample as? SampleValue.Rows)?.rows.orEmpty().map { row ->
+        row.mapNotNull { (k, v) -> (v as? SampleValue.Scalar)?.let { k to it.value } }.toMap()
+    }
 
 /**
  * Whether [name] is a legal, non-duplicate name for the state field at [index] among [fields] — a binding

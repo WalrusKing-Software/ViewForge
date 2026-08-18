@@ -31,6 +31,8 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.scalarOrNull
+import viewforge.model.scalarRows
 
 /**
  * The screen-state editor (ADR-034, #21): declare and edit a screen's read-only [StateField]s — the data
@@ -158,7 +160,7 @@ private fun ScalarTextField(
 
 @Composable
 private fun ListSample(state: EditorState, index: Int, field: StateField, type: StateType.ListOfRecord) {
-    val rows = (field.sample as? SampleValue.Rows)?.rows.orEmpty()
+    val rows = scalarRowsView(field.sample)
 
     // The record shape.
     Text(
@@ -178,20 +180,21 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
                             index,
                             field.copy(
                                 type = type.copy(fields = newFields),
-                                sample = SampleValue.Rows(reconcileRows(remapped, newFields)),
+                                sample = scalarRows(reconcileRows(remapped, newFields)),
                             ),
                         )
                     }
                 }
             }
             Box(Modifier.width(96.dp).padding(start = 6.dp)) {
-                ScalarTypeDropdown(rf.scalar) { picked ->
-                    val newFields = type.fields.toMutableList().apply { this[fi] = rf.copy(scalar = picked) }
+                ScalarTypeDropdown(rf.scalarOrNull ?: ScalarType.STRING) { picked ->
+                    val newFields =
+                        type.fields.toMutableList().apply { this[fi] = rf.copy(type = StateType.Scalar(picked)) }
                     state.updateStateField(
                         index,
                         field.copy(
                             type = type.copy(fields = newFields),
-                            sample = SampleValue.Rows(reconcileRows(rows, newFields)),
+                            sample = scalarRows(reconcileRows(rows, newFields)),
                         ),
                     )
                 }
@@ -203,7 +206,7 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
                         index,
                         field.copy(
                             type = type.copy(fields = newFields),
-                            sample = SampleValue.Rows(reconcileRows(rows, newFields)),
+                            sample = scalarRows(reconcileRows(rows, newFields)),
                         ),
                     )
                 }
@@ -215,7 +218,7 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
         val newFields = type.fields + RecordField(name, ScalarType.STRING)
         state.updateStateField(
             index,
-            field.copy(type = type.copy(fields = newFields), sample = SampleValue.Rows(reconcileRows(rows, newFields))),
+            field.copy(type = type.copy(fields = newFields), sample = scalarRows(reconcileRows(rows, newFields))),
         )
     }
 
@@ -230,14 +233,14 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
         Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             type.fields.forEach { rf ->
                 Box(Modifier.weight(1f).padding(end = 4.dp)) {
-                    if (rf.scalar == ScalarType.BOOL) {
+                    if (rf.scalarOrNull == ScalarType.BOOL) {
                         Switch(
                             checked = row[rf.name]?.content?.toBooleanStrictOrNull() ?: false,
                             onCheckedChange = { on ->
                                 state.updateStateField(
                                     index,
                                     field.copy(
-                                        sample = SampleValue.Rows(
+                                        sample = scalarRows(
                                             putCell(rows, ri, rf.name, kotlinx.serialization.json.JsonPrimitive(on)),
                                         ),
                                     ),
@@ -245,10 +248,10 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
                             },
                         )
                     } else {
-                        ScalarTextField(row[rf.name]?.content ?: "", rf.scalar) { cell ->
+                        ScalarTextField(row[rf.name]?.content ?: "", rf.scalarOrNull ?: ScalarType.STRING) { cell ->
                             state.updateStateField(
                                 index,
-                                field.copy(sample = SampleValue.Rows(putCell(rows, ri, rf.name, cell))),
+                                field.copy(sample = scalarRows(putCell(rows, ri, rf.name, cell))),
                             )
                         }
                     }
@@ -258,7 +261,7 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
                 state.updateStateField(
                     index,
                     field.copy(
-                        sample = SampleValue.Rows(
+                        sample = scalarRows(
                             rows.filterIndexed { i, _ ->
                                 i != ri
                             },
@@ -269,7 +272,7 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
         }
     }
     ActionText("+ row") {
-        state.updateStateField(index, field.copy(sample = SampleValue.Rows(rows + emptyRow(type.fields))))
+        state.updateStateField(index, field.copy(sample = scalarRows(rows + emptyRow(type.fields))))
     }
 }
 

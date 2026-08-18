@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 4,
-  "id": "01J8STATEBIND",
-  "name": "StateBinding",
+  "schemaVersion": 3,
+  "id": "01J8DASHBRD",
+  "name": "Dashboard",
   "framework": {
     "packageId": "compose-multiplatform",
     "packageVersion": "1.0.0"
@@ -11,11 +11,11 @@
       "id": "scr_dash",
       "name": "Dashboard",
       "root": {
-        "id": "n_col",
+        "id": "n_dash_col",
         "type": "compose.foundation.layout.Column",
         "children": [
           {
-            "id": "n_title",
+            "id": "n_dash_title",
             "type": "compose.material3.Text",
             "props": {
               "text": {
@@ -25,17 +25,7 @@
             }
           },
           {
-            "id": "n_slider",
-            "type": "compose.material3.Slider",
-            "props": {
-              "value": {
-                "kind": "binding",
-                "path": "progress"
-              }
-            }
-          },
-          {
-            "id": "n_repeat",
+            "id": "n_dash_repeat",
             "type": "vforge.repeat",
             "props": {
               "source": {
@@ -45,7 +35,7 @@
             },
             "children": [
               {
-                "id": "n_name",
+                "id": "n_dash_member",
                 "type": "compose.material3.Text",
                 "props": {
                   "text": {
@@ -53,21 +43,12 @@
                     "path": "item.name"
                   }
                 }
-              },
-              {
-                "id": "n_role",
-                "type": "compose.material3.Text",
-                "props": {
-                  "text": {
-                    "kind": "binding",
-                    "path": "item.role"
-                  }
-                }
               }
             ]
           }
         ]
       },
+      "previewProfile": "desktop_1280x800",
       "state": [
         {
           "name": "title",
@@ -81,14 +62,14 @@
           }
         },
         {
-          "name": "progress",
+          "name": "online",
           "type": {
             "kind": "scalar",
-            "scalar": "FLOAT"
+            "scalar": "BOOL"
           },
           "sample": {
             "kind": "scalar",
-            "value": 0.6
+            "value": true
           }
         },
         {
@@ -98,17 +79,11 @@
             "fields": [
               {
                 "name": "name",
-                "type": {
-                  "kind": "scalar",
-                  "scalar": "STRING"
-                }
+                "scalar": "STRING"
               },
               {
                 "name": "role",
-                "type": {
-                  "kind": "scalar",
-                  "scalar": "STRING"
-                }
+                "scalar": "STRING"
               }
             ]
           },
@@ -116,24 +91,12 @@
             "kind": "rows",
             "rows": [
               {
-                "name": {
-                  "kind": "scalar",
-                  "value": "Ada"
-                },
-                "role": {
-                  "kind": "scalar",
-                  "value": "Lead"
-                }
+                "name": "Ada",
+                "role": "Lead"
               },
               {
-                "name": {
-                  "kind": "scalar",
-                  "value": "Grace"
-                },
-                "role": {
-                  "kind": "scalar",
-                  "value": "Engineer"
-                }
+                "name": "Grace",
+                "role": "Engineer"
               }
             ]
           }

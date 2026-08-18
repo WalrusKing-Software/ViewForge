@@ -11,6 +11,7 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.scalarRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -25,7 +26,7 @@ class StateBindingTest {
         StateField(name, StateType.Scalar(type), SampleValue.Scalar(sample))
 
     private fun listField(name: String, fields: List<RecordField>, rows: List<Map<String, JsonPrimitive>>) =
-        StateField(name, StateType.ListOfRecord(fields), SampleValue.Rows(rows))
+        StateField(name, StateType.ListOfRecord(fields), scalarRows(rows))
 
     private fun text(id: String, binding: String) =
         Node(NodeId(id), "compose.material3.Text", props = mapOf("text" to PropValue.StateBinding(binding)))

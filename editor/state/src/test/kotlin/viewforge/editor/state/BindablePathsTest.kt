@@ -10,6 +10,7 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.scalarRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,7 +28,7 @@ class BindablePathsTest {
     private val users = StateField(
         "users",
         StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING), RecordField("age", ScalarType.INT))),
-        SampleValue.Rows(listOf(mapOf("name" to JsonPrimitive("Ada"), "age" to JsonPrimitive(36)))),
+        scalarRows(listOf(mapOf("name" to JsonPrimitive("Ada"), "age" to JsonPrimitive(36)))),
     )
     private val screenState = listOf(online, title, users)
 

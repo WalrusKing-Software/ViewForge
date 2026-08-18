@@ -9,6 +9,7 @@ import viewforge.model.ScalarType
 import viewforge.model.Screen
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.scalarRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -27,7 +28,7 @@ class ScreenStateCommandTest {
     private val users = StateField(
         name = "users",
         type = StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
-        sample = SampleValue.Rows(listOf(mapOf("name" to JsonPrimitive("Ada")))),
+        sample = scalarRows(listOf(mapOf("name" to JsonPrimitive("Ada")))),
     )
 
     private fun screen(id: String, name: String, state: List<StateField> = emptyList()) =

@@ -29,11 +29,11 @@ fun parseBindingPath(path: String): List<String>? {
 fun isBindingIdentifier(s: String): Boolean =
     s.isNotEmpty() && (s[0].isLetter() || s[0] == '_') && s.all { it.isLetterOrDigit() || it == '_' }
 
-/** The [StateField]s a binding can see at a point in the tree, plus the current repeat item's [ScalarType] shape. */
+/** The [StateField]s a binding can see at a point in the tree, plus the current repeat item's record shape. */
 data class BindingTypeScope(val fields: List<StateField>, val itemFields: List<RecordField>? = null)
 
 /** The [StateField]s in scope, plus the current repeat item's row of sample values (present inside a template). */
-data class BindingValueScope(val fields: List<StateField>, val itemRow: Map<String, JsonPrimitive>? = null)
+data class BindingValueScope(val fields: List<StateField>, val itemRow: Map<String, SampleValue>? = null)
 
 /**
  * The scalar type a [path] resolves to under [scope], or null if it does not resolve to a scalar — used to
@@ -45,7 +45,7 @@ fun resolveBindingType(path: String, scope: BindingTypeScope): ScalarType? {
     val segs = parseBindingPath(path) ?: return null
     return when {
         segs[0] == Repeater.ITEM_SCOPE ->
-            if (segs.size == 2) scope.itemFields?.firstOrNull { it.name == segs[1] }?.scalar else null
+            if (segs.size == 2) scope.itemFields?.firstOrNull { it.name == segs[1] }?.scalarOrNull else null
         segs.size == 1 -> (scope.fields.firstOrNull { it.name == segs[0] }?.type as? StateType.Scalar)?.scalar
         else -> null
     }
@@ -59,7 +59,7 @@ fun resolveBindingType(path: String, scope: BindingTypeScope): ScalarType? {
 fun resolveSampleScalar(path: String, scope: BindingValueScope): JsonPrimitive? {
     val segs = parseBindingPath(path) ?: return null
     return when {
-        segs[0] == Repeater.ITEM_SCOPE -> if (segs.size == 2) scope.itemRow?.get(segs[1]) else null
+        segs[0] == Repeater.ITEM_SCOPE -> if (segs.size == 2) scope.itemRow?.get(segs[1]).scalarValue else null
         segs.size == 1 -> (scope.fields.firstOrNull { it.name == segs[0] }?.sample as? SampleValue.Scalar)?.value
         else -> null
     }
@@ -75,4 +75,35 @@ fun resolveListSource(path: String, fields: List<StateField>): StateField? {
     if (segs.size != 1) return null
     val field = fields.firstOrNull { it.name == segs[0] } ?: return null
     return if (field.type is StateType.ListOfRecord) field else null
+}
+
+/**
+ * The record fields of the list a repeat `source` [path] names, in **either** scope (nested lists, #255): a
+ * single segment names a top-level [StateType.ListOfRecord] screen field; `item.<field>` names a nested list
+ * field of the enclosing repeat's record ([BindingTypeScope.itemFields]). Null when [path] does not name a list.
+ * The shape-side companion of [resolveListRows]; used by the renderer and inspector to build the `item` scope.
+ */
+fun resolveListShape(path: String, scope: BindingTypeScope): List<RecordField>? {
+    val segs = parseBindingPath(path) ?: return null
+    val type = when {
+        segs.size == 1 -> scope.fields.firstOrNull { it.name == segs[0] }?.type
+        segs.size == 2 && segs[0] == Repeater.ITEM_SCOPE -> scope.itemFields?.firstOrNull { it.name == segs[1] }?.type
+        else -> null
+    }
+    return (type as? StateType.ListOfRecord)?.fields
+}
+
+/**
+ * The sample rows of the list a repeat `source` [path] names, in **either** scope (nested lists, #255) — the
+ * value-side companion of [resolveListShape]. A top-level field's rows come from its [SampleValue.Rows] sample;
+ * `item.<field>` rows come from the current row's nested cell. Null when [path] does not resolve to list rows.
+ */
+fun resolveListRows(path: String, scope: BindingValueScope): List<Map<String, SampleValue>>? {
+    val segs = parseBindingPath(path) ?: return null
+    val sample = when {
+        segs.size == 1 -> scope.fields.firstOrNull { it.name == segs[0] }?.sample
+        segs.size == 2 && segs[0] == Repeater.ITEM_SCOPE -> scope.itemRow?.get(segs[1])
+        else -> null
+    }
+    return (sample as? SampleValue.Rows)?.rows
 }

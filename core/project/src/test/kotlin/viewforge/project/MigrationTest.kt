@@ -1,5 +1,6 @@
 package viewforge.project
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.SCHEMA_VERSION
@@ -88,6 +89,65 @@ class MigrationTest {
         val v3 = viewforge.project.migrations.M2to3.migrate(v2)
         assertEquals(3, SchemaMigrations.readVersion(v3))
         assertEquals(JsonPrimitive("x"), v3["id"])
+    }
+
+    @Test
+    fun `M3to4 rewrites record fields and sample cells to the recursive v4 shape`() {
+        // A v3 list-of-record state field: flat `{name, scalar}` record fields and bare-primitive sample cells.
+        val v3 = VforgeJson.parseToJsonElement(
+            """
+            {
+              "schemaVersion": 3,
+              "id": "x",
+              "screens": [
+                {
+                  "id": "s",
+                  "state": [
+                    {
+                      "name": "rows",
+                      "type": { "kind": "listOfRecord", "fields": [ { "name": "label", "scalar": "STRING" } ] },
+                      "sample": { "kind": "rows", "rows": [ { "label": "Ada" } ] }
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+        ) as JsonObject
+        val v4 = viewforge.project.migrations.M3to4.migrate(v3)
+
+        assertEquals(4, SchemaMigrations.readVersion(v4))
+        // The record field is now `{name, type:{kind:"scalar", scalar}}`; the cell is `{kind:"scalar", value}`.
+        val state = ((v4["screens"] as JsonArray)[0] as JsonObject)["state"] as JsonArray
+        val stateField = state[0] as JsonObject
+        val record = ((stateField["type"] as JsonObject)["fields"] as JsonArray)[0] as JsonObject
+        assertNull(record["scalar"], "the flat `scalar` key must be gone")
+        assertEquals("scalar", ((record["type"] as JsonObject)["kind"] as JsonPrimitive).content)
+        val rows = (stateField["sample"] as JsonObject)["rows"] as JsonArray
+        val cell = (rows[0] as JsonObject)["label"] as JsonObject
+        assertEquals("scalar", (cell["kind"] as JsonPrimitive).content)
+        assertEquals(JsonPrimitive("Ada"), cell["value"])
+    }
+
+    @Test
+    fun `M3to4 stamps a stateless document without altering it`() {
+        val v3 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(3), "id" to JsonPrimitive("x")))
+        val v4 = viewforge.project.migrations.M3to4.migrate(v3)
+        assertEquals(4, SchemaMigrations.readVersion(v4))
+        assertEquals(JsonPrimitive("x"), v4["id"])
+    }
+
+    @Test
+    fun `the frozen schema-3 Dashboard fixture migrates through the store and equals the in-code v4 model`() {
+        // Dashboard-v3.vforge is the pre-#256 committed serialization (flat record fields, bare cells). Loading
+        // it must run M3to4 and yield exactly the recursive in-code fixture, proving the migration is correct.
+        val v3 = javaClass.getResource("/migrations/Dashboard-v3.vforge")!!.readText()
+        val tmp = Files.createTempDirectory("vforge-3to4").resolve("Dashboard.vforge")
+        Files.writeString(tmp, v3)
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(Fixtures.stateProject(), result.project)
+        assertEquals(3, result.migratedFromVersion)
     }
 
     @Test

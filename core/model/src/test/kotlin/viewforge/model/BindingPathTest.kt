@@ -20,7 +20,7 @@ class BindingPathTest {
     private val items = StateField(
         "items",
         StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING), RecordField("qty", ScalarType.INT))),
-        SampleValue.Rows(
+        scalarRows(
             listOf(
                 mapOf("name" to JsonPrimitive("Apple"), "qty" to JsonPrimitive(3)),
                 mapOf("name" to JsonPrimitive("Pear"), "qty" to JsonPrimitive(1)),
