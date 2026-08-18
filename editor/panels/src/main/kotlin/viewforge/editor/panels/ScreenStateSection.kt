@@ -31,8 +31,6 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
-import viewforge.model.scalarOrNull
-import viewforge.model.scalarRows
 
 /**
  * The screen-state editor (ADR-034, #21): declare and edit a screen's read-only [StateField]s — the data
@@ -160,121 +158,239 @@ private fun ScalarTextField(
 
 @Composable
 private fun ListSample(state: EditorState, index: Int, field: StateField, type: StateType.ListOfRecord) {
-    val rows = scalarRowsView(field.sample)
+    val rows = (field.sample as? SampleValue.Rows)?.rows.orEmpty()
+    RecordEditor(type.fields, rows, depth = 0) { newFields, newRows ->
+        state.updateStateField(
+            index,
+            field.copy(type = type.copy(fields = newFields), sample = SampleValue.Rows(newRows)),
+        )
+    }
+}
 
-    // The record shape.
-    Text(
-        "record fields",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 4.dp),
-    )
-    type.fields.forEachIndexed { fi, rf ->
+/**
+ * A recursive record editor (nested lists, #255): the record's shape (each field a scalar **or** a nested
+ * list-of-record) and its sample rows, value-hoisted so it composes at any depth. Any edit emits the new
+ * (fields, rows), reconciled so the sample never drifts from the shape ([reconcileSampleRows]). A nested list
+ * field edits its sub-shape here and its per-row sub-data in [CellEditor].
+ */
+@Composable
+private fun RecordEditor(
+    fields: List<RecordField>,
+    rows: List<Map<String, SampleValue>>,
+    depth: Int,
+    onChange: (List<RecordField>, List<Map<String, SampleValue>>) -> Unit,
+) {
+    SubLabel("record fields")
+    fields.forEachIndexed { fi, rf ->
         Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 NameField(rf.name) { newName ->
-                    if (isBindingName(newName) && type.fields.none { it.name == newName }) {
-                        val newFields = type.fields.toMutableList().apply { this[fi] = rf.copy(name = newName) }
+                    if (isBindingName(newName) && fields.none { it.name == newName }) {
+                        val nf = fields.replaceAt(fi, rf.copy(name = newName))
                         val remapped = rows.map { r -> r.mapKeys { if (it.key == rf.name) newName else it.key } }
-                        state.updateStateField(
-                            index,
-                            field.copy(
-                                type = type.copy(fields = newFields),
-                                sample = scalarRows(reconcileRows(remapped, newFields)),
-                            ),
-                        )
+                        onChange(nf, reconcileSampleRows(remapped, nf))
                     }
                 }
             }
             Box(Modifier.width(96.dp).padding(start = 6.dp)) {
-                ScalarTypeDropdown(rf.scalarOrNull ?: ScalarType.STRING) { picked ->
-                    val newFields =
-                        type.fields.toMutableList().apply { this[fi] = rf.copy(type = StateType.Scalar(picked)) }
-                    state.updateStateField(
-                        index,
-                        field.copy(
-                            type = type.copy(fields = newFields),
-                            sample = scalarRows(reconcileRows(rows, newFields)),
-                        ),
-                    )
+                FieldTypePicker(rf.type) { newType ->
+                    val nf = fields.replaceAt(fi, RecordField(rf.name, newType))
+                    onChange(nf, reconcileSampleRows(rows, nf))
                 }
             }
-            if (type.fields.size > 1) {
+            if (fields.size > 1) {
                 ActionText("✕") {
-                    val newFields = type.fields.filterIndexed { i, _ -> i != fi }
-                    state.updateStateField(
-                        index,
-                        field.copy(
-                            type = type.copy(fields = newFields),
-                            sample = scalarRows(reconcileRows(rows, newFields)),
-                        ),
-                    )
+                    val nf = fields.filterIndexed { i, _ -> i != fi }
+                    onChange(nf, reconcileSampleRows(rows, nf))
+                }
+            }
+        }
+        // A nested list field edits its sub-shape one level in; its per-row data is edited in the rows below.
+        (rf.type as? StateType.ListOfRecord)?.let { sub ->
+            Column(Modifier.padding(start = 12.dp)) {
+                NestedShapeEditor(sub.fields, depth + 1) { subFields ->
+                    val nf = fields.replaceAt(fi, RecordField(rf.name, StateType.ListOfRecord(subFields)))
+                    onChange(nf, reconcileSampleRows(rows, nf))
                 }
             }
         }
     }
     ActionText("+ field") {
-        val name = uniqueRecordFieldName(type.fields)
-        val newFields = type.fields + RecordField(name, ScalarType.STRING)
-        state.updateStateField(
-            index,
-            field.copy(type = type.copy(fields = newFields), sample = scalarRows(reconcileRows(rows, newFields))),
-        )
+        val nf = fields + RecordField(uniqueRecordFieldName(fields), ScalarType.STRING)
+        onChange(nf, reconcileSampleRows(rows, nf))
     }
 
-    // The sample rows.
-    Text(
-        "sample rows",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 6.dp),
-    )
+    SubLabel("sample rows")
+    val scalarFields = fields.filter { it.type is StateType.Scalar }
+    val listFields = fields.filter { it.type is StateType.ListOfRecord }
     rows.forEachIndexed { ri, row ->
+        // Scalar cells sit in a compact row; nested-list cells render full-width beneath (they are sub-tables).
         Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            type.fields.forEach { rf ->
+            scalarFields.forEach { rf ->
                 Box(Modifier.weight(1f).padding(end = 4.dp)) {
-                    if (rf.scalarOrNull == ScalarType.BOOL) {
-                        Switch(
-                            checked = row[rf.name]?.content?.toBooleanStrictOrNull() ?: false,
-                            onCheckedChange = { on ->
-                                state.updateStateField(
-                                    index,
-                                    field.copy(
-                                        sample = scalarRows(
-                                            putCell(rows, ri, rf.name, kotlinx.serialization.json.JsonPrimitive(on)),
-                                        ),
-                                    ),
-                                )
-                            },
+                    CellEditor(rf, row[rf.name], depth) { cell ->
+                        onChange(
+                            fields,
+                            rows.replaceAt(
+                                ri,
+                                row + (rf.name to cell),
+                            ),
                         )
-                    } else {
-                        ScalarTextField(row[rf.name]?.content ?: "", rf.scalarOrNull ?: ScalarType.STRING) { cell ->
-                            state.updateStateField(
-                                index,
-                                field.copy(sample = scalarRows(putCell(rows, ri, rf.name, cell))),
-                            )
-                        }
                     }
                 }
             }
-            ActionText("✕") {
-                state.updateStateField(
-                    index,
-                    field.copy(
-                        sample = scalarRows(
-                            rows.filterIndexed { i, _ ->
-                                i != ri
-                            },
+            ActionText("✕") { onChange(fields, rows.filterIndexed { i, _ -> i != ri }) }
+        }
+        listFields.forEach { rf ->
+            Column(Modifier.padding(start = 12.dp)) {
+                MutedText("${rf.name} (row ${ri + 1})")
+                CellEditor(rf, row[rf.name], depth) { cell ->
+                    onChange(
+                        fields,
+                        rows.replaceAt(
+                            ri,
+                            row + (rf.name to cell),
                         ),
-                    ),
-                )
+                    )
+                }
             }
         }
     }
-    ActionText("+ row") {
-        state.updateStateField(index, field.copy(sample = scalarRows(rows + emptyRow(type.fields))))
+    ActionText("+ row") { onChange(fields, rows + emptySampleRow(fields)) }
+}
+
+/** The shape half of a nested list field (its sub-fields), edited without rows — data is edited per parent row. */
+@Composable
+private fun NestedShapeEditor(fields: List<RecordField>, depth: Int, onChange: (List<RecordField>) -> Unit) {
+    SubLabel("fields")
+    fields.forEachIndexed { fi, rf ->
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                NameField(rf.name) { newName ->
+                    if (isBindingName(newName) && fields.none { it.name == newName }) {
+                        onChange(fields.replaceAt(fi, rf.copy(name = newName)))
+                    }
+                }
+            }
+            Box(Modifier.width(96.dp).padding(start = 6.dp)) {
+                FieldTypePicker(rf.type) { newType -> onChange(fields.replaceAt(fi, RecordField(rf.name, newType))) }
+            }
+            if (fields.size > 1) ActionText("✕") { onChange(fields.filterIndexed { i, _ -> i != fi }) }
+        }
+        (rf.type as? StateType.ListOfRecord)?.let { sub ->
+            Column(Modifier.padding(start = 12.dp)) {
+                NestedShapeEditor(sub.fields, depth + 1) { subFields ->
+                    onChange(fields.replaceAt(fi, RecordField(rf.name, StateType.ListOfRecord(subFields))))
+                }
+            }
+        }
+    }
+    ActionText("+ field") { onChange(fields + RecordField(uniqueRecordFieldName(fields), ScalarType.STRING)) }
+}
+
+/** One sample cell: a scalar control, or — for a nested list field — a sub-rows editor over its sub-shape. */
+@Composable
+private fun CellEditor(field: RecordField, cell: SampleValue?, depth: Int, onChange: (SampleValue) -> Unit) {
+    when (val t = field.type) {
+        is StateType.Scalar -> {
+            val value = (cell as? SampleValue.Scalar)?.value
+            if (t.scalar == ScalarType.BOOL) {
+                Switch(
+                    checked = value?.content?.toBooleanStrictOrNull() ?: false,
+                    onCheckedChange = { onChange(SampleValue.Scalar(kotlinx.serialization.json.JsonPrimitive(it))) },
+                )
+            } else {
+                ScalarTextField(value?.content ?: "", t.scalar) { onChange(SampleValue.Scalar(it)) }
+            }
+        }
+        is StateType.ListOfRecord -> {
+            val sub = (cell as? SampleValue.Rows)?.rows.orEmpty()
+            SubRowsEditor(t.fields, sub, depth + 1) { onChange(SampleValue.Rows(it)) }
+        }
     }
 }
+
+/** The data half of a nested list cell: its sub-rows over a fixed sub-shape (recursing for deeper nesting). */
+@Composable
+private fun SubRowsEditor(
+    fields: List<RecordField>,
+    rows: List<Map<String, SampleValue>>,
+    depth: Int,
+    onChange: (List<Map<String, SampleValue>>) -> Unit,
+) {
+    val scalarFields = fields.filter { it.type is StateType.Scalar }
+    val listFields = fields.filter { it.type is StateType.ListOfRecord }
+    rows.forEachIndexed { ri, row ->
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            scalarFields.forEach { rf ->
+                Box(Modifier.weight(1f).padding(end = 4.dp)) {
+                    CellEditor(rf, row[rf.name], depth) { cell ->
+                        onChange(rows.replaceAt(ri, row + (rf.name to cell)))
+                    }
+                }
+            }
+            ActionText("✕") { onChange(rows.filterIndexed { i, _ -> i != ri }) }
+        }
+        listFields.forEach { rf ->
+            Column(Modifier.padding(start = 12.dp)) {
+                MutedText(rf.name)
+                CellEditor(rf, row[rf.name], depth) { cell -> onChange(rows.replaceAt(ri, row + (rf.name to cell))) }
+            }
+        }
+    }
+    ActionText("+ row") { onChange(rows + emptySampleRow(fields)) }
+}
+
+/** A field type picker: the scalar types plus **List** (a nested list-of-record), for building nested state (#255). */
+@Composable
+private fun FieldTypePicker(current: StateType, onPick: (StateType) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        FieldBox(onClick = { open = true }) {
+            Text(fieldTypeLabel(current), style = fieldStyle(), modifier = Modifier.fillMaxWidth())
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            ScalarType.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(scalarLabel(option), style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        onPick(StateType.Scalar(option))
+                        open = false
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("List", style = MaterialTheme.typography.bodySmall) },
+                onClick = {
+                    // A fresh nested list defaults to one String sub-field, mirroring `+ list` at the top level.
+                    if (current !is StateType.ListOfRecord) {
+                        onPick(StateType.ListOfRecord(listOf(RecordField("field", ScalarType.STRING))))
+                    }
+                    open = false
+                },
+            )
+        }
+    }
+}
+
+private fun fieldTypeLabel(type: StateType): String = when (type) {
+    is StateType.Scalar -> scalarLabel(type.scalar)
+    is StateType.ListOfRecord -> "List"
+}
+
+/** A muted section sub-label used inside a state card (record fields / sample rows). */
+@Composable
+private fun SubLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+/** Return a copy of this list with [index] replaced by [value]. */
+private fun <T> List<T>.replaceAt(index: Int, value: T): List<T> = toMutableList().apply { this[index] = value }
 
 // --- the vforge.repeat source picker --------------------------------------------------------------
 
@@ -285,8 +401,9 @@ private fun ListSample(state: EditorState, index: Int, field: StateField, type: 
 @Composable
 internal fun RepeaterSource(state: EditorState, node: Node) {
     val current = Repeater.sourceOf(node)
-    val lists = state.listStateFields
-    if (lists.isEmpty()) {
+    // Top-level list fields plus, when this repeat is nested inside another, the outer row's `item.<listField>`s.
+    val sources = state.listSourceChoices(node)
+    if (sources.isEmpty()) {
         MutedText("Declare a list field in Screen State first.")
         return
     }
@@ -309,15 +426,11 @@ internal fun RepeaterSource(state: EditorState, node: Node) {
                 )
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                lists.forEach { listField ->
+                sources.forEach { source ->
                     DropdownMenuItem(
-                        text = { Text(listField.name, style = MaterialTheme.typography.bodySmall) },
+                        text = { Text(source, style = MaterialTheme.typography.bodySmall) },
                         onClick = {
-                            state.setProp(
-                                node.id,
-                                Repeater.SOURCE_PROP,
-                                viewforge.model.PropValue.StateBinding(listField.name),
-                            )
+                            state.setProp(node.id, Repeater.SOURCE_PROP, viewforge.model.PropValue.StateBinding(source))
                             open = false
                         },
                     )
@@ -527,12 +640,3 @@ private fun uniqueRecordFieldName(fields: List<RecordField>): String {
     while ("field$n" in taken) n++
     return "field$n"
 }
-
-/** Set the cell [key] of row [ri] to [value], returning a new rows list. */
-private fun putCell(
-    rows: List<Map<String, kotlinx.serialization.json.JsonPrimitive>>,
-    ri: Int,
-    key: String,
-    value: kotlinx.serialization.json.JsonPrimitive,
-): List<Map<String, kotlinx.serialization.json.JsonPrimitive>> =
-    rows.mapIndexed { i, row -> if (i == ri) row + (key to value) else row }

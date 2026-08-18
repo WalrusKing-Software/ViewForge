@@ -42,19 +42,61 @@ class ScreenStateEditingTest {
     }
 
     @Test
-    fun `reconcileRows drops unknown keys and seeds missing cells with defaults`() {
+    fun `reconcileSampleRows drops unknown keys and seeds missing cells with defaults`() {
         val fields = listOf(RecordField("name", ScalarType.STRING), RecordField("age", ScalarType.INT))
-        val rows = listOf(mapOf("name" to JsonPrimitive("Ada"), "gone" to JsonPrimitive("x")))
+        val rows = listOf(
+            mapOf<String, SampleValue>(
+                "name" to SampleValue.Scalar(JsonPrimitive("Ada")),
+                "gone" to SampleValue.Scalar(JsonPrimitive("x")),
+            ),
+        )
         assertEquals(
-            listOf(mapOf("name" to JsonPrimitive("Ada"), "age" to JsonPrimitive(0))),
-            reconcileRows(rows, fields),
+            listOf(
+                mapOf<String, SampleValue>(
+                    "name" to SampleValue.Scalar(JsonPrimitive("Ada")),
+                    "age" to SampleValue.Scalar(JsonPrimitive(0)),
+                ),
+            ),
+            reconcileSampleRows(rows, fields),
         )
     }
 
     @Test
-    fun `emptyRow has a default cell per field`() {
+    fun `emptySampleRow has a default cell per field`() {
         val fields = listOf(RecordField("name", ScalarType.STRING), RecordField("on", ScalarType.BOOL))
-        assertEquals(mapOf("name" to JsonPrimitive(""), "on" to JsonPrimitive(false)), emptyRow(fields))
+        assertEquals(
+            mapOf<String, SampleValue>(
+                "name" to SampleValue.Scalar(JsonPrimitive("")),
+                "on" to SampleValue.Scalar(JsonPrimitive(false)),
+            ),
+            emptySampleRow(fields),
+        )
+    }
+
+    @Test
+    fun `reconcileSampleRows reconciles a nested list cell to its sub-shape (#255)`() {
+        val teams = RecordField("teams", StateType.ListOfRecord(listOf(RecordField("label", ScalarType.STRING))))
+        val fields = listOf(RecordField("name", ScalarType.STRING), teams)
+        val rows = listOf(
+            mapOf<String, SampleValue>(
+                "name" to SampleValue.Scalar(JsonPrimitive("Eng")),
+                "teams" to SampleValue.Rows(
+                    listOf(
+                        mapOf(
+                            "label" to SampleValue.Scalar(JsonPrimitive("Core")),
+                            "gone" to SampleValue.Scalar(JsonPrimitive("x")), // unknown sub-key → dropped
+                        ),
+                    ),
+                ),
+            ),
+            mapOf<String, SampleValue>("name" to SampleValue.Scalar(JsonPrimitive("Design"))), // no teams cell
+        )
+        val out = reconcileSampleRows(rows, fields)
+        assertEquals(
+            SampleValue.Rows(listOf(mapOf("label" to SampleValue.Scalar(JsonPrimitive("Core"))))),
+            out[0]["teams"],
+        )
+        assertEquals(SampleValue.Rows(emptyList()), out[1]["teams"]) // missing nested cell → empty sub-rows
     }
 
     @Test

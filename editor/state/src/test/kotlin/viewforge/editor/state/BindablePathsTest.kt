@@ -64,6 +64,30 @@ class BindablePathsTest {
     }
 
     @Test
+    fun `listSourceChoices offers top-level lists plus item dot listField inside an enclosing repeat (#255)`() {
+        // sections: List<{ title: String, rows: List<{ label: String }> }>
+        val sections = StateField(
+            "sections",
+            StateType.ListOfRecord(
+                listOf(
+                    RecordField("title", ScalarType.STRING),
+                    RecordField("rows", StateType.ListOfRecord(listOf(RecordField("label", ScalarType.STRING)))),
+                ),
+            ),
+            SampleValue.Rows(emptyList()),
+        )
+        val state = listOf(sections)
+        val innerRepeat = Repeater.node("nope", id = NodeId("innerRep"), template = listOf(leaf))
+        val outerRepeat = Repeater.node("sections", id = NodeId("outerRep"), template = listOf(innerRepeat))
+        val root = Node(NodeId("root"), "compose.foundation.layout.Column", children = listOf(outerRepeat))
+
+        // Inside the `sections` repeat, the inner repeat may bind the top-level list or the nested `item.rows`.
+        assertEquals(listOf("sections", "item.rows"), listSourceChoices(root, innerRepeat, state))
+        // The outer repeat sits in no enclosing repeat, so only the top-level list is offered.
+        assertEquals(listOf("sections"), listSourceChoices(root, outerRepeat, state))
+    }
+
+    @Test
     fun `isBindableProp accepts value-like scalars and rejects the rest`() {
         assertTrue(isBindableProp(PropType.String))
         assertTrue(isBindableProp(PropType.Dp))
