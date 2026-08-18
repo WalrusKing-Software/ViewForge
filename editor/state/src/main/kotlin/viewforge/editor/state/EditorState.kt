@@ -46,13 +46,15 @@ import viewforge.model.UserComponent
 import viewforge.model.findById
 import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
-import viewforge.model.referencedComponentIds
+import viewforge.model.reachableComponents
+import viewforge.model.remapComponentReferences
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
 import viewforge.prefs.EditorPreferences
 import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
+import viewforge.project.LibraryComponent
 import java.nio.file.Path
 
 /**
@@ -371,6 +373,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      */
     private var paletteDragComponentId: String? = null
 
+    /**
+     * The library id being dragged, when the drag source is a cross-project library entry (#234); null for a
+     * built-in or a document component. Rides beside [paletteDragComponentId] the same way: the canvas overlay
+     * treats the drag opaquely (geometry only), and its presence tells [dropPaletteDrag] to defer — a library
+     * drop copies a whole closure into the document (and may prompt for a name), which the shell commits via
+     * `LibraryController.dropDrag` at the [resolvedPaletteDropAddress], not this generic AddNode path.
+     */
+    private var paletteDragLibraryId: String? = null
+
     /** The canvas-resolved drop for the live palette drag; a plain field — only [dropPaletteDrag] reads it. */
     private var paletteDropAddress: ChildAddress? = null
 
@@ -454,10 +465,12 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * The cross-project component library (ADR-033, #209) — global user components surfaced in the palette
      * beside the built-ins and this document's own components. A transient snapshot loaded from the on-disk
      * `ComponentLibraryStore` at launch and after any library edit ([applyLibraryComponents]); the shell
-     * owns the store and persistence. Not document data — these live outside any `.vforge`, and dropping one
-     * into a document *copies* it into [document] (`insertLibraryComponent`), keeping the file self-contained.
+     * owns the store and persistence. Each entry is a [LibraryComponent] *bundle* — a primary plus, for a
+     * nested component, its dependency closure (#234). Not document data — these live outside any `.vforge`,
+     * and dropping one into a document *copies* the whole bundle into [document] (`insertLibraryComponent`),
+     * keeping the file self-contained.
      */
-    var libraryComponents: List<ComponentDef> by mutableStateOf(emptyList())
+    var libraryComponents: List<LibraryComponent> by mutableStateOf(emptyList())
         private set
 
     /**
@@ -777,7 +790,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         get() = catalog.palette + document.components.map {
             PaletteEntry(UserComponent.TYPE, it.name, USER_COMPONENTS_CATEGORY, componentId = it.id)
         } + libraryComponents.map {
-            PaletteEntry(UserComponent.TYPE, it.name, LIBRARY_CATEGORY, libraryId = it.id)
+            PaletteEntry(UserComponent.TYPE, it.component.name, LIBRARY_CATEGORY, libraryId = it.component.id)
         }
 
     /** A fresh node for a palette entry: an instance node for a user component, else a built-in. */
@@ -826,6 +839,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun beginPaletteDrag(entry: PaletteEntry) {
         paletteDragType = entry.type
         paletteDragComponentId = entry.componentId
+        paletteDragLibraryId = entry.libraryId
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
@@ -852,10 +866,28 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * The drop address resolved for the live palette drag — the tree's when the pointer is over the Layers
+     * panel (#164), else the canvas's — or null when the pointer isn't over a legal target. The shell reads
+     * this to commit a **library** drop ([insertLibraryComponent]) at the dropped position (#234), the way
+     * [dropPaletteDrag] commits a built-in/document-component drop internally.
+     */
+    val resolvedPaletteDropAddress: ChildAddress?
+        get() = treePaletteDropAddress ?: paletteDropAddress
+
+    /**
      * Commit the in-flight palette drag: insert a fresh node of the dragged type at the canvas-resolved
      * address and select it. A no-op when the pointer isn't over a legal target. Always clears the drag.
+     *
+     * A **library** drag is *not* committed here (its `type` is `userComponent` but it has no
+     * [paletteDragComponentId], so a generic AddNode would insert a broken null-reference instance): the shell
+     * routes a library drop through `LibraryController.dropDrag` instead, which copies the closure in (and may
+     * prompt for a name) at [resolvedPaletteDropAddress]. This guard makes a stray call a safe no-op.
      */
     fun dropPaletteDrag() {
+        if (paletteDragLibraryId != null) {
+            cancelPaletteDrag()
+            return
+        }
         val type = paletteDragType
         // Prefer the tree's resolution when the pointer is over the Layers panel (#164); the canvas
         // resolves null there, and vice versa, so the two never both hold a target for one pointer.
@@ -876,6 +908,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun cancelPaletteDrag() {
         paletteDragType = null
         paletteDragComponentId = null
+        paletteDragLibraryId = null
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
@@ -1460,23 +1493,22 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     // --- cross-project component library (ADR-033, #209) -------------------------------------------
 
-    /** Restore the library snapshot from the store (name-sorted for a stable palette order). */
-    fun applyLibraryComponents(list: List<ComponentDef>) {
-        libraryComponents = list.sortedBy { it.name.lowercase() }
+    /** Restore the library snapshot from the store (name-sorted by primary for a stable palette order). */
+    fun applyLibraryComponents(list: List<LibraryComponent>) {
+        libraryComponents = list.sortedBy { it.component.name.lowercase() }
     }
 
     /**
      * Why the document component [id] cannot be added to the cross-project library, or null if it can. It
-     * must resolve, and — this release — it must be **self-contained**: a component whose tree references
-     * other user components would dangle when copied alone into another project (its dependencies live in
-     * this document, not the library), so it is refused fail-loud rather than inserted broken (ADR-033).
-     * Bundling the transitive closure is a documented follow-up.
+     * must resolve, and its dependency **closure must be resolvable**: a component whose tree references
+     * another user component that no longer exists in this document is dangling and can't be bundled
+     * self-contained, so it is refused fail-loud (#234, ADR-033). A nested-but-resolvable component is
+     * *allowed* — its closure travels with it ([reachableComponents]); only a dangling reference is refused.
      */
     fun libraryAddBlockReason(id: String): String? {
-        val component = document.components.firstOrNull { it.id == id }
-            ?: return "That component no longer exists"
-        return if (component.root.referencedComponentIds().isNotEmpty()) {
-            "“${component.name}” uses other components; nested library components aren’t supported yet"
+        if (document.components.none { it.id == id }) return "That component no longer exists"
+        return if (document.reachableComponents(id) == null) {
+            "This component references another that no longer exists in the project"
         } else {
             null
         }
@@ -1501,7 +1533,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         return when {
             trimmed.isBlank() -> "Name cannot be empty"
             !catalog.isValidScreenName(trimmed) -> "Not a valid name (must be a legal Kotlin identifier)"
-            libraryComponents.any { it.id != excludingId && it.name == trimmed } ->
+            libraryComponents.any { it.component.id != excludingId && it.component.name == trimmed } ->
                 "A library component named “$trimmed” already exists"
             else -> null
         }
@@ -1509,7 +1541,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** [base] if free within the library, else `base2`, `base3`, … — a legal default when adding to the library. */
     fun uniqueLibraryName(base: String): String {
-        val taken = libraryComponents.mapTo(HashSet()) { it.name }
+        val taken = libraryComponents.mapTo(HashSet()) { it.component.name }
         if (base !in taken) return base
         var n = 2
         while ("$base$n" in taken) n++
@@ -1521,29 +1553,54 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         if (componentNameError(entry.label) == null) entry.label else uniqueComponentName()
 
     /**
-     * Insert library [entry] by copying its definition into [document] under [name] and dropping an instance
-     * at the current insertion point, in one undoable step (ADR-033). The copy takes a fresh document
-     * component id and fresh node ids ([withFreshIds]) so it never collides with anything already in the
-     * document, and the `.vforge` stays self-contained (ADR-024) — later edits to the library entry do not
-     * propagate to this copy. A no-op if the entry is unknown or [name] is invalid/duplicate.
+     * Insert library [entry] by copying its whole bundle — the primary plus any dependency closure (#234) —
+     * into [document] and dropping an instance of the primary, in one undoable step (ADR-033). Every def in
+     * the closure takes a fresh document-component id and fresh node ids ([Node.withFreshIds]), and the
+     * `componentId` references that wire them together are rewritten through the same id map
+     * ([Node.remapComponentReferences]), so the result never collides with anything already in the document
+     * and the `.vforge` stays self-contained (ADR-024) — later edits to the library entry do not propagate to
+     * this copy. The primary takes the (validated, unique) [name]; each dependency, a helper the user never
+     * named, is silently disambiguated. Inserts at [target] when given (a drag drop), else the current
+     * insertion point (a click). A no-op if the entry is unknown or [name] is invalid/duplicate.
      */
-    fun insertLibraryComponent(entry: PaletteEntry, name: String) {
+    fun insertLibraryComponent(entry: PaletteEntry, name: String, target: ChildAddress? = null) {
         val libraryId = entry.libraryId ?: return
-        val source = libraryComponents.firstOrNull { it.id == libraryId } ?: return
+        val bundle = libraryComponents.firstOrNull { it.component.id == libraryId } ?: return
         if (componentNameError(name) != null) return
         val rootId = activeEditRootId ?: return
-        val address = insertionAddress() ?: return
-        val newId = "cmp_${Ulid.next()}"
-        val copy = source.copy(id = newId, name = name.trim(), root = source.root.withFreshIds())
-        val instance = UserComponent.instance(newId)
+        val address = target ?: insertionAddress() ?: return
+
+        val primary = bundle.component
+        val defs = listOf(primary) + bundle.dependencies
+        val idMap = defs.associate { it.id to "cmp_${Ulid.next()}" }
+        // The primary gets the chosen name; each dependency is uniquified against the document and the names
+        // assigned earlier in this same insert, so two components never share a (composable) name (GC-3).
+        val taken = document.components.mapTo(HashSet()) { it.name }.apply { add(name.trim()) }
+        val copies = defs.map { def ->
+            val newName = if (def.id == primary.id) name.trim() else uniqueNameAmong(def.name, taken).also(taken::add)
+            def.copy(
+                id = idMap.getValue(def.id),
+                name = newName,
+                root = def.root.withFreshIds().remapComponentReferences(idMap),
+            )
+        }
+        val instance = UserComponent.instance(idMap.getValue(primary.id))
         execute(
             CompositeCommand(
-                commands = listOf(AddComponent(copy, index = Int.MAX_VALUE), AddNode(rootId, address, instance)),
+                commands = copies.map { AddComponent(it, index = Int.MAX_VALUE) } + AddNode(rootId, address, instance),
                 label = "Insert library component",
             ),
             selectAfter = instance.id,
         )
         noteRecentComponent(entry.key) // resurface it under "Recent" (P5a) — same key re-inserts via this path
+    }
+
+    /** [base] if free among [taken], else `base2`, `base3`, … — used to disambiguate closure dependency names. */
+    private fun uniqueNameAmong(base: String, taken: Set<String>): String {
+        if (base !in taken) return base
+        var n = 2
+        while ("$base$n" in taken) n++
+        return "$base$n"
     }
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------

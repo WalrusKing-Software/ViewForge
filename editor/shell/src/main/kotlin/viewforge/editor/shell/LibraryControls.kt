@@ -25,8 +25,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.PaletteEntry
+import viewforge.model.ChildAddress
 import viewforge.model.Ulid
+import viewforge.model.reachableComponents
 import viewforge.project.ComponentLibraryStore
+import viewforge.project.LibraryComponent
 import java.nio.file.Path
 
 /**
@@ -49,6 +52,13 @@ internal class LibraryController(private val state: EditorState, private val lib
     var insertPrompt by mutableStateOf<PaletteEntry?>(null)
         private set
 
+    /**
+     * Where the prompted insert should land: the resolved drop address for a drag ([dropDrag]), or null for a
+     * click (insert at the current selection). Stashed alongside [insertPrompt] so the drop position survives
+     * the name dialog — the drag itself is already cleared by the time the dialog opens (#234).
+     */
+    private var insertTarget: ChildAddress? = null
+
     /** Whether the Manage-Library dialog is open (Edit ▸ Manage Library…). */
     var showManager by mutableStateOf(false)
         private set
@@ -66,20 +76,45 @@ internal class LibraryController(private val state: EditorState, private val lib
     fun insert(entry: PaletteEntry) {
         when {
             entry.libraryId == null -> state.addFromPalette(entry)
-            state.libraryInsertNeedsName(entry) -> insertPrompt = entry
+            state.libraryInsertNeedsName(entry) -> prompt(entry, target = null)
             else -> state.insertLibraryComponent(entry, entry.label)
         }
+    }
+
+    /**
+     * Commit a drag of library [entry] onto the canvas or Layers tree at the drop position the surfaces
+     * resolved ([EditorState.resolvedPaletteDropAddress]) — copy-in directly, or open the name prompt carrying
+     * that position when it would collide (#234). Always consumes the in-flight drag. A no-op off a legal
+     * target or for a non-library entry (a built-in drag commits through [EditorState.dropPaletteDrag]).
+     */
+    fun dropDrag(entry: PaletteEntry) {
+        val address = state.resolvedPaletteDropAddress
+        state.cancelPaletteDrag() // consume the drag; the address is captured above and survives in insertTarget
+        if (entry.libraryId == null || address == null) return
+        if (state.libraryInsertNeedsName(entry)) {
+            prompt(entry, target = address)
+        } else {
+            state.insertLibraryComponent(entry, entry.label, address)
+        }
+    }
+
+    /** Open the name prompt for [entry], remembering where the eventual insert should land. */
+    private fun prompt(entry: PaletteEntry, target: ChildAddress?) {
+        insertTarget = target
+        insertPrompt = entry
     }
 
     /** Confirm the prompted insert with the chosen [name] (a no-op if it is still invalid/duplicate). */
     fun confirmInsert(name: String) {
         val entry = insertPrompt ?: return
-        state.insertLibraryComponent(entry, name)
+        state.insertLibraryComponent(entry, name, insertTarget)
         insertPrompt = null
+        insertTarget = null
     }
 
     fun cancelInsert() {
         insertPrompt = null
+        insertTarget = null
     }
 
     fun openManager() {
@@ -91,16 +126,21 @@ internal class LibraryController(private val state: EditorState, private val lib
     }
 
     /**
-     * Copy the document component [componentId] into the library (ADR-033). Refused for a component that
-     * references others ([EditorState.libraryAddBlockReason]) — a self-contained-only restriction this
-     * release (#234). The library copy takes a fresh global id and a within-library-unique name.
+     * Copy the document component [componentId] into the library (ADR-033), bundling its transitive dependency
+     * closure so a nested component travels self-contained (#234). Refused only when the closure can't be
+     * resolved — a dangling reference ([EditorState.libraryAddBlockReason]). The primary takes a fresh global
+     * id and a within-library-unique name; the dependency defs are stored with their origin-document ids
+     * intact (the bundle is internally consistent) and remapped on insert.
      */
     fun addToLibrary(componentId: String) {
         if (state.libraryAddBlockReason(componentId) != null) return
         val component = state.document.components.firstOrNull { it.id == componentId } ?: return
+        val dependencies = state.document.reachableComponents(componentId) ?: return
         val libId = "lib_${Ulid.next()}"
         val libName = state.uniqueLibraryName(component.name)
-        runCatching { ComponentLibraryStore.save(component.copy(id = libId, name = libName), libraryDir) }
+        val entry =
+            LibraryComponent(component = component.copy(id = libId, name = libName), dependencies = dependencies)
+        runCatching { ComponentLibraryStore.save(entry, libraryDir) }
         reload()
     }
 
@@ -113,8 +153,9 @@ internal class LibraryController(private val state: EditorState, private val lib
     /** Rename library component [libraryId] to [newName] (a no-op if unknown or the name is invalid/duplicate). */
     fun renameInLibrary(libraryId: String, newName: String) {
         if (state.libraryNameError(newName, excludingId = libraryId) != null) return
-        val current = state.libraryComponents.firstOrNull { it.id == libraryId } ?: return
-        runCatching { ComponentLibraryStore.save(current.copy(name = newName.trim()), libraryDir) }
+        val current = state.libraryComponents.firstOrNull { it.component.id == libraryId } ?: return
+        val renamed = current.copy(component = current.component.copy(name = newName.trim()))
+        runCatching { ComponentLibraryStore.save(renamed, libraryDir) }
         reload()
     }
 }
@@ -194,7 +235,8 @@ internal fun ManageLibraryDialog(controller: LibraryController, state: EditorSta
                 if (state.libraryComponents.isEmpty()) {
                     Muted("Your library is empty. Add a component from this project below.")
                 } else {
-                    state.libraryComponents.forEach { component ->
+                    state.libraryComponents.forEach { entry ->
+                        val component = entry.component
                         if (renamingId == component.id) {
                             Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                                 OutlinedTextField(

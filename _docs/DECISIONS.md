@@ -1308,6 +1308,54 @@ on insert) is a tracked follow-up (#234); until then insert is trivially correct
 stands alone. Drag-from-library onto the canvas is likewise deferred (click-to-insert only), since a mid-drag name
 prompt is the awkward gesture this ADR's collision decision already flagged.
 
+**Amendment (#234) — nested library components: bundle the transitive closure, and drag-from-library.**
+This lifts the two deferrals above. No `.vforge` schema change is owed (same reasoning as the original
+Rejected note — the library is a separately-versioned file), and the downstream story is unchanged: an
+inserted bundle still lands as ordinary `Project.components`, so render/cycle-validation/codegen/export/compile
+treat it identically.
+
+- **Storage: a library entry is now a *bundle*.** `LibraryComponent` gains a `dependencies: List<ComponentDef>`
+  beside its `component` (the *primary*), and `LIBRARY_VERSION` goes 1→2. The field is **additive with an
+  empty default**, so a self-contained entry writes no `dependencies` key (`VforgeJson` omits defaults) —
+  its file stays byte-identical to a v1 file — and any pre-existing v1 file loads as a bundle with empty
+  dependencies. `ComponentLibraryStore.list()` therefore returns `List<LibraryComponent>` (the whole bundle),
+  and the file name still derives from the *primary's* id. On **add to library**, the primary's transitive
+  closure is captured via `Project.reachableComponents(id)` (all user components reachable from its root,
+  transitively, via `referencedComponentIds()`); the dependency defs are stored **with their origin-document
+  ids intact** (internally consistent — nothing in the closure references the primary, since a cycle is
+  forbidden), and only the primary is relabelled to its fresh library id/name.
+- **Insert: copy the whole closure with a full id remap.** Every def in the bundle (primary + dependencies)
+  gets a fresh document-component id; a single old→new id map is built; each def's root is passed through
+  `withFreshIds()` (fresh node/modifier ids) **and** `Node.remapComponentReferences(map)` (rewrites the
+  `componentId` of every `userComponent` instance whose target is in the map). The result is self-contained
+  and collision-free, and one `CompositeCommand` (`AddComponent` per def + the referencing `AddNode`) keeps it
+  a single undo step. `libraryAddBlockReason` no longer refuses a nested component; it refuses only a
+  component whose closure **can't be resolved** — a dangling reference to a component that no longer exists in
+  the document, which cannot be made self-contained.
+- **Naming: the primary prompts, dependencies are uniquified silently.** The *primary* keeps the original
+  collision rule (a name clash with the document's components opens the name dialog, ADR-033 above), because
+  it is the thing the user is inserting and naming. **Dependency** components — transitively pulled helpers the
+  user never named — are auto-disambiguated against the target document (`Card` → `Card2`), the same
+  suffixing `uniqueComponentName` already uses, rather than surfacing a prompt per hidden dependency. This is a
+  deliberate, narrow departure from the prompt-only rule: prompting for names the user never chose would be
+  the friction this ADR set out to avoid, and codegen only needs the names to be *legal and unique* (distinct
+  composable functions), which the suffixing guarantees.
+- **Drag-from-library: drop first, prompt at the remembered position.** The awkward gesture the original
+  deferral flagged was prompting *mid-drag*. Instead the drag runs to completion using the existing
+  palette-drag machinery (the canvas/tree resolve a drop `ChildAddress` from geometry, agnostic to the entry
+  kind), and only *after* the drop does the collision prompt appear — if needed — carrying the resolved
+  address so the eventual insert lands where it was dropped, not at the selection. `insertLibraryComponent`
+  gains an optional explicit target address for exactly this (null = insert at the selection, the click path).
+  A clean drop inserts with no prompt.
+
+**Consequences of the amendment.** The honest gaps narrow but don't vanish: **library edits still don't
+propagate** to placed copies (unchanged, and now a whole closure is copied rather than one def); the **drag
+gesture itself remains non-headless** (covered by the pure `insertLibraryComponent(target=…)` seam, the
+closure/remap unit tests in `core/model`, the bundle round-trip in `ComponentLibraryStore`, and running the
+app), the same class of gap as prior drag work. The `libraryVersion` bump is the migration hook it was
+designed to be, used here for the first time; a v1 file needs no migration because empty dependencies is the
+correct reading of a self-contained entry.
+
 ---
 
 ## Template

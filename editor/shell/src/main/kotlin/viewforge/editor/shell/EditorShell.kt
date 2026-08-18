@@ -247,6 +247,7 @@ fun FrameWindowScope.EditorShell(
                             state,
                             prefs::toggleFavorite,
                             onInsert = library::insert,
+                            onDropLibrary = library::dropDrag,
                             Modifier.width(state.paletteWidth.dp).fillMaxHeight(),
                         )
                         ResizableDivider(onResize = state::resizePalette, onCommit = prefs::persist)
