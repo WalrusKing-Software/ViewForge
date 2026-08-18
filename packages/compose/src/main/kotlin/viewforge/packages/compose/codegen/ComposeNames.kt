@@ -66,6 +66,8 @@ internal object ComposeNames {
     val HorizontalDivider = MemberName("androidx.compose.material3", "HorizontalDivider")
     val Checkbox = MemberName("androidx.compose.material3", "Checkbox")
     val Switch = MemberName("androidx.compose.material3", "Switch")
+    val DropdownMenu = MemberName("androidx.compose.material3", "DropdownMenu")
+    val DropdownMenuItem = MemberName("androidx.compose.material3", "DropdownMenuItem")
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
     val Icon = MemberName("androidx.compose.material3", "Icon")

@@ -4,6 +4,7 @@ import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.MemberName
 import viewforge.model.Asset
 import viewforge.model.ComponentDef
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.Repeater
@@ -105,6 +106,7 @@ internal class ComponentEmitter(
             "compose.material3.Scaffold" -> scaffold(node, mod)
             UserComponent.TYPE -> userComponentCall(node, mod)
             Repeater.TYPE -> repeater(node, parentAllowsWeight)
+            Dropdown.TYPE -> dropdown(node, mod)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
     }
@@ -175,6 +177,45 @@ internal class ComponentEmitter(
                 .add("}")
                 .build()
         }
+    }
+
+    /**
+     * A `vforge.dropdown` populated (read-only) from a list-of-record state field (ADR-034 slice 2, #253): a
+     * `Box` holding a read-only anchor `OutlinedTextField` (showing the first row's label, mirroring the canvas
+     * preview) over a `DropdownMenu` whose items are `options.forEach { item -> DropdownMenuItem(...) }`. The
+     * options binding emits as member access ([CodegenValues.bindingPath]) reading the seeded state stub; the
+     * label field selects which record field is shown. Handlers are inert stubs (`expanded = false`, empty
+     * lambdas) — the same house style as the generated `Checkbox`/`Slider`: structure emitted, behavior left to
+     * the developer (read-only this release, no selection persisted; PF-4). Options/label absent → fail loud.
+     */
+    private fun dropdown(node: Node, mod: CodeBlock?): CodeBlock {
+        val source = Dropdown.optionsOf(node)?.takeIf { it.isNotBlank() }
+            ?: throw CodegenException("vforge.dropdown node '${node.id.value}' has no options binding")
+        val sourceRef = CodegenValues.bindingPath(source)
+        val label = Dropdown.labelFieldOf(node)
+            ?: throw CodegenException("vforge.dropdown node '${node.id.value}' has no label field")
+        val content = CodeBlock.builder()
+            .add("%M(\n", ComposeNames.OutlinedTextField).indent()
+            .add("value = %L.firstOrNull()?.%N.orEmpty(),\n", sourceRef, label)
+            .add("onValueChange = {},\n")
+            .add("readOnly = true,\n")
+            .add(
+                "trailingIcon = { %M(%T.%M, contentDescription = null) },\n",
+                ComposeNames.Icon,
+                ComposeNames.IconsFilled,
+                ComposeNames.iconMember("ArrowDropDown"),
+            )
+            .unindent().add(")\n")
+            .add("%M(expanded = false, onDismissRequest = {}) {\n", ComposeNames.DropdownMenu).indent()
+            .add("%L.forEach { %N ->\n", sourceRef, Repeater.ITEM_SCOPE).indent()
+            .add("%M(\n", ComposeNames.DropdownMenuItem).indent()
+            .add("text = { %M(%N.%N) },\n", ComposeNames.Text, Repeater.ITEM_SCOPE, label)
+            .add("onClick = {},\n")
+            .unindent().add(")\n")
+            .unindent().add("}\n")
+            .unindent().add("}\n")
+            .build()
+        return call(ComposeNames.Box, modifierArg(mod), content = content)
     }
 
     /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */
