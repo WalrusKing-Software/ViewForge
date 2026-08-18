@@ -119,4 +119,18 @@ class GoldenCodegenTest {
         assertGeneratedFile(files, "HomeScreen.kt", "ParameterizedComponent")
         assertGeneratedFile(files, "PrimaryButton.kt", "ParameterizedComponent.PrimaryButton")
     }
+
+    // Transitive component references (export completeness, #213): a screen instances InfoCard, which
+    // *itself* instances PrimaryButton. All three generated files must be emitted from the one document —
+    // codegen emits every `Project.components` entry, so a component used only through another component
+    // still ships — and the InfoCard file must contain the nested `PrimaryButton(...)` call. Guards against
+    // a future used-component pruning that could drop a transitively-referenced component from the export.
+    @Test
+    fun nestedComponent() {
+        val project = ProjectCodec.decode(resource("/golden/NestedComponent.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "HomeScreen.kt", "NestedComponent")
+        assertGeneratedFile(files, "InfoCard.kt", "NestedComponent.InfoCard")
+        assertGeneratedFile(files, "PrimaryButton.kt", "NestedComponent.PrimaryButton")
+    }
 }
