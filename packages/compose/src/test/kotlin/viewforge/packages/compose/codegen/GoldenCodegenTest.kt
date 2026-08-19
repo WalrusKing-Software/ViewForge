@@ -117,6 +117,11 @@ class GoldenCodegenTest {
     // over `item.teams` inside the outer repeat — `departments.forEach { item -> … item.teams.forEach { item -> … } }`.
     @Test fun nestedList() = assertGolden("NestedList")
 
+    // Interactive state & events (ADR-035, #277): a writable field emits `var count by remember { mutableStateOf(0) }`
+    // (vs a read-only `val heading`), and a Button/TextButton `onClick` handler lowers its closed `Action` list to a
+    // structural lambda — `Adjust`→`count += 1`, `Toggle`→`expanded = !expanded`, `SetState`→`count = 0`.
+    @Test fun interactive() = assertGolden("Interactive")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.

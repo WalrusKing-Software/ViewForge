@@ -192,13 +192,15 @@ class ComposeCodeGenerator : CodeGenerator {
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
     ): String {
-        val emitter = ComponentEmitter(theme, assets, components, recordSpans)
+        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
-        // Read-only screen state (ADR-034): seed a runnable stub declaring one `val` per StateField, so a
-        // bound prop reads it as member access. Omitted for a hidden root (no body) and for stateless
-        // screens/components, keeping their output byte-identical to before.
-        val stubs = if (body == null) null else StateEmitter.stubs(state)
+        // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as
+        // member access. A field written by a handler (a writable target, #277) is a `var … by remember {
+        // mutableStateOf(…) }`; a read-only field stays a `val`. Omitted for a hidden root (no body) and for
+        // stateless screens/components, keeping their output byte-identical to before.
+        val writableTargets = if (body == null) emptySet() else StateEmitter.writableTargets(root)
+        val stubs = if (body == null) null else StateEmitter.stubs(state, writableTargets)
         val function = FunSpec.builder(fnName)
             .apply {
                 // Emitting the body first sets the opt-in flag for any experimental API used (TopAppBar).
@@ -245,6 +247,12 @@ class ComposeCodeGenerator : CodeGenerator {
                 "Source: $sourceName.vforge (schema $schemaVersion)",
             )
             .indent("    ") // 4 spaces — Kotlin convention (KotlinPoet defaults to 2).
+            // The `var f by remember { mutableStateOf(…) }` delegation needs the property-delegate operators
+            // in scope; KotlinPoet can't infer them from a `%M`, so import them explicitly when a writable
+            // (handler-targeted) field exists (ADR-035, #277). No writable fields → no import, output unchanged.
+            .apply {
+                if (writableTargets.isNotEmpty()) addImport("androidx.compose.runtime", "getValue", "setValue")
+            }
             .addFunction(function)
             // A generated `data class` per list-of-record state type, after the composable (order is
             // irrelevant to the compiler); none for a screen without list state, so output is unchanged.

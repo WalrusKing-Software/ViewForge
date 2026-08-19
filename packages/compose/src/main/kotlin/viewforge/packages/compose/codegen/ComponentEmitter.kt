@@ -8,6 +8,7 @@ import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.Repeater
+import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.model.UserComponent
 
@@ -30,6 +31,7 @@ internal class ComponentEmitter(
     assets: List<Asset> = emptyList(),
     components: List<ComponentDef> = emptyList(),
     private val recordSpans: Boolean = false,
+    private val state: List<StateField> = emptyList(),
 ) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
@@ -371,7 +373,7 @@ internal class ComponentEmitter(
      */
     private fun button(callee: MemberName, node: Node, mod: CodeBlock?): CodeBlock {
         val args = buildList {
-            add(named("onClick", CodegenValues.lambda(node.props["onClick"])))
+            add(named("onClick", onClickArg(node)))
             if (mod != null) add(named("modifier", mod))
             node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
             node.props["shape"]?.let { add(named("shape", CodegenValues.shape(it, theme))) }
@@ -381,6 +383,22 @@ internal class ComponentEmitter(
             node.props["contentPadding"]?.let { add(named("contentPadding", CodegenValues.contentPadding(it))) }
         }
         return call(callee, args, content = body(node.slots["content"].orEmpty()))
+    }
+
+    /**
+     * A Button's `onClick` argument (ADR-035, #277): when the node carries an `onClick` [Node.handlers] slot, a
+     * structural `{ <lowered actions> }` lambda built from the closed [viewforge.model.Action] list ([StateEmitter.handlerBody])
+     * — real interactive code, not the inert stub. With no handler it falls back to the ADR-034 inert lambda
+     * (the static-preview/no-op path), so a handler-free button is byte-identical to before.
+     */
+    private fun onClickArg(node: Node): CodeBlock {
+        val handler = node.handlers["onClick"].orEmpty()
+        if (handler.isEmpty()) return CodegenValues.lambda(node.props["onClick"])
+        return CodeBlock.builder()
+            .add("{\n").indent()
+            .add(StateEmitter.handlerBody(handler, state))
+            .unindent().add("}")
+            .build()
     }
 
     /** `Slider`: value, onValueChange, modifier, enabled (order mirrors the renderer). */
