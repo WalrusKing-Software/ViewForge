@@ -2,6 +2,7 @@ package viewforge.packages.compose.render
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import viewforge.model.Action
 import viewforge.model.ComponentDef
 import viewforge.model.NodeId
 import viewforge.model.Theme
@@ -37,6 +38,11 @@ import viewforge.model.Theme
  * type, and toggle to feel the real UI. It defaults false, so codegen and the fidelity tests — which never
  * set it — are untouched; only the editor's live canvas opts in.
  *
+ * [dispatch] runs a widget's event handler in C13 [interactive] preview (ADR-035, #277): a Button's `onClick`
+ * hands its [Action] list here, and the [ComposeRenderer]'s run-mode holder applies it to the ephemeral state
+ * store (see [applyActions]) and redraws. It defaults to a no-op, so the static design canvas and every codegen
+ * path (which never set it) are untouched — only the live interactive canvas wires a real reducer.
+ *
  * [weightApplier] carries the current `RowScope`/`ColumnScope` so a `weight` modifier — a scope extension,
  * not a plain [Modifier] — can be applied to a direct child of a Row/Column (#158). It is non-null only
  * while rendering those direct children (set in `RenderRow`/`RenderColumn`, cleared for every other
@@ -56,6 +62,7 @@ data class RenderContext(
     val components: Map<String, ComponentDef> = emptyMap(),
     val expanding: Set<String> = emptySet(),
     val interactive: Boolean = false,
+    val dispatch: (List<Action>) -> Unit = {},
     val weightApplier: ((Modifier, Float) -> Modifier)? = null,
     val editorAffordances: Boolean = false,
 )
