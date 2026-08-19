@@ -5,6 +5,7 @@ import com.squareup.kotlinpoet.MemberName
 import viewforge.model.Asset
 import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
+import viewforge.model.EventSlots
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.Repeater
@@ -392,7 +393,7 @@ internal class ComponentEmitter(
      * (the static-preview/no-op path), so a handler-free button is byte-identical to before.
      */
     private fun onClickArg(node: Node): CodeBlock {
-        val handler = node.handlers["onClick"].orEmpty()
+        val handler = node.handlers[EventSlots.ON_CLICK].orEmpty()
         if (handler.isEmpty()) return CodegenValues.lambda(node.props["onClick"])
         return CodeBlock.builder()
             .add("{\n").indent()

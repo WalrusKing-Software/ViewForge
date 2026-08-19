@@ -1,6 +1,8 @@
 package viewforge.packages.compose.catalog
 
 import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.EventSlotDefinition
+import viewforge.model.EventSlots
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -23,7 +25,7 @@ import viewforge.model.Ulid
  * editor or on Compose UI types.
  */
 object ComposeComponents {
-    /** One catalog entry: palette metadata, container facts, an editable prop schema, and a factory. */
+    /** One catalog entry: palette metadata, container facts, an editable prop schema, event slots, and a factory. */
     data class Spec(
         val type: String,
         val label: String,
@@ -31,8 +33,12 @@ object ComposeComponents {
         val acceptsChildren: Boolean,
         val slots: List<String>,
         val props: List<PropDefinition> = emptyList(),
+        val eventSlots: List<EventSlotDefinition> = emptyList(),
         val create: () -> Node,
     )
+
+    /** The interactive `onClick` slot (ADR-035, #277), shared by the three button variants the renderer wires. */
+    private val ON_CLICK_SLOT = EventSlotDefinition(EventSlots.ON_CLICK, "On click")
 
     // These lists MUST match the enums the renderer parses in `render/Values.kt`; a mismatch would let
     // the inspector write a value the canvas silently ignores. Declared before `specs`, which uses them.
@@ -189,6 +195,7 @@ object ComposeComponents {
                 PropDefinition("contentPadding", PropType.Dp),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
+            eventSlots = listOf(ON_CLICK_SLOT),
         ) {
             Node(
                 id = NodeId.random(),
@@ -335,6 +342,7 @@ object ComposeComponents {
                 PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
+            eventSlots = listOf(ON_CLICK_SLOT),
         ) {
             buttonNode("compose.material3.OutlinedButton")
         },
@@ -348,6 +356,7 @@ object ComposeComponents {
                 PropDefinition("enabled", PropType.Bool, default = boolLiteral(true)),
                 PropDefinition("onClick", PropType.String, default = PropValue.RawExpression("{}"), advanced = true),
             ),
+            eventSlots = listOf(ON_CLICK_SLOT),
         ) {
             buttonNode("compose.material3.TextButton")
         },
