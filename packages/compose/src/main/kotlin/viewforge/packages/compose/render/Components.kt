@@ -357,13 +357,24 @@ private fun textOverflowOf(name: String): TextOverflow = when (textOverflowName(
     else -> TextOverflow.Clip
 }
 
+/**
+ * A button's `onClick` (ADR-035, #277): in C13 [RenderContext.interactive] preview it dispatches the node's
+ * `onClick` [handlers] to the run-mode reducer; otherwise a no-op, so the static canvas and codegen are inert.
+ * The handler is a closed [viewforge.model.Action] list applied by [applyActions] — never evaluated (PF-4).
+ */
+private fun onClickHandler(node: Node, ctx: RenderContext): () -> Unit = if (ctx.interactive) {
+    { ctx.dispatch(node.handlers[ON_CLICK].orEmpty()) }
+} else {
+    {}
+}
+
 @Composable
 private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    // `onClick` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    // Absent styling props pass Compose's own defaults explicitly, so the canvas matches codegen — which
-    // simply omits those args and thus gets the same defaults (TECHNICAL_NOTES §2).
+    // In C13 interactive preview `onClick` runs the node's structured handler actions (ADR-035); on the static
+    // canvas and in codegen it is inert. Absent styling props pass Compose's own defaults explicitly, so the
+    // canvas matches codegen — which simply omits those args and thus gets the same defaults (TECHNICAL_NOTES §2).
     Button(
-        onClick = {},
+        onClick = onClickHandler(node, ctx),
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,
         shape = resolveShape(node.props["shape"], ctx) ?: ButtonDefaults.shape,
@@ -399,14 +410,24 @@ private fun buttonColorsFor(node: Node, ctx: RenderContext): ButtonColors {
 
 @Composable
 private fun RenderOutlinedButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    OutlinedButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
+    OutlinedButton(
+        onClick = onClickHandler(node, ctx),
+        modifier = modifier,
+        enabled =
+        node.props["enabled"].literalBoolean() ?: true,
+    ) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
 
 @Composable
 private fun RenderTextButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    TextButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
+    TextButton(
+        onClick = onClickHandler(node, ctx),
+        modifier = modifier,
+        enabled =
+        node.props["enabled"].literalBoolean() ?: true,
+    ) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
