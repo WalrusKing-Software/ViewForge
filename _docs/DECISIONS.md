@@ -1612,12 +1612,13 @@ preserved — and gate it with a **light per-project acknowledgment** rather tha
   writable identifiers, values ride the existing `PropValue.Literal` trust boundary, and **no code-evaluation
   path is added** (PF-4 unchanged) — so the acknowledgment informs rather than guards against an evaluator that
   does not exist.
-- **Schema bumps 6 → 7.** Event-handler slots and the writable-state capability are new document semantics a
-  v6-only build would **silently drop** (it would load an interactive `.vforge`, discard every handler, and
+- **Schema bumps 5 → 6.** Event-handler slots and the writable-state capability are new document semantics a
+  v5-only build would **silently drop** (it would load an interactive `.vforge`, discard every handler, and
   render a dead UI) — the same "old builds discard a semantic capability" rule that justified every prior bump.
-  So the change claims **schema v7** with an `M6to7` migration (a v6 document carries no handlers and is a
-  structurally-valid v7, so a **stamp** like M2to3/M4to5), a real fixture in `samples/`, and the `NEWER_SCHEMA`
-  gate refusing v7 in older builds. **ADR-030 (responsive) consequently slides to v8/`M7to8`.**
+  So the change claims **schema v6** — the slot ADR-030 responsive currently reserves — with an `M5to6`
+  migration (a v5 document carries no handlers and is a structurally-valid v6, so a **stamp** like M2to3/M4to5),
+  a real fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v6 in older builds. **ADR-030 (responsive)
+  consequently slides to v7/`M6to7`.**
 
 **Rationale.** The key realization is that "mutable state + events" and "evaluate user code" are **separable**.
 The industry reflex — a handler is a code string you `eval` — is what forces a scripting engine and a hard
@@ -1664,15 +1665,15 @@ generated code; **C13-run-mode interactivity** — no live design-canvas mutatio
 not a hard gate. This spans several slices. Implementation work this ADR authorizes, to be filed as stacked
 sub-issues under epic #277 once accepted (issues are the source of truth), following the
 stack-sequential-branches practice: the sealed `Action` model + writable-target resolver + event-slot metadata
-in `core.model` (pure, no Compose); event-slot + `Action` serialization and the `M6to7` + fixture +
-`NEWER_SCHEMA` update (schema v7); the C13 run-mode reducer (renderer); codegen (`mutableStateOf` + structural
+in `core.model` (pure, no Compose); event-slot + `Action` serialization and the `M5to6` + fixture +
+`NEWER_SCHEMA` update (schema v6); the C13 run-mode reducer (renderer); codegen (`mutableStateOf` + structural
 handler lambdas) with **golden fixtures** (CLAUDE.md rule 5, real compile gate); the data-driven action editor
 in the inspector (no per-component UI); the **per-project acknowledgment + SECURITY `IA-*` section** (affirm no
 eval path added; action set closed/total; targets validated writable identifiers per GC-3; values under the
 `PropValue.Literal`/PF-2 bounds); and doc updates — DATA_MODEL (state now writable, event-slot + `Action`
 model), FEATURES §10 (carve interactive-with-closed-actions out of the non-feature list; free-form expression
 evaluation *stays* excluded), SECURITY (the `IA-*` section + a note that PF-4 is unchanged), and **ADR-030
-re-versioned to v8/`M7to8`**. Honest boundaries this ADR draws: **closed structured actions** (no user-authored
+re-versioned to v7/`M6to7`**. Honest boundaries this ADR draws: **closed structured actions** (no user-authored
 expressions — those remain a PF-4 non-goal), **run-mode-only interactivity** (static design canvas), and a
 **light acknowledgment** (no hard opt-in, because there is no evaluator to gate).
 
