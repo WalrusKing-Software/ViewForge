@@ -236,6 +236,13 @@ fun FrameWindowScope.EditorShell(
                 // breadcrumb back to the screen in its place (you don't switch screens inside a component).
                 if (state.editingComponentId != null) ComponentEditBar(state) else ScreenSwitcher(state)
                 HorizontalDivider()
+                // A light, one-time-per-project notice that generated code will now include mutable state and
+                // event handlers (ADR-035, #277). Informational, not a gate — nothing is blocked (the closed
+                // action model adds no evaluator, PF-4). Dismissing records it per project id (persisted).
+                if (state.needsInteractiveAcknowledgment) {
+                    InteractiveAcknowledgmentBanner(onDismiss = prefs::acknowledgeInteractive)
+                    HorizontalDivider()
+                }
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
                     // weight(1f) and is always shown, so hiding everything still leaves an edit surface.
@@ -274,6 +281,30 @@ fun FrameWindowScope.EditorShell(
         // The right-click context menu (#160), positioned at the window-space point the tree/canvas
         // recorded. A sibling of the content above so its anchor shares the same origin as those coords.
         ContextMenuOverlay(state)
+    }
+}
+
+/**
+ * The light interactive-code acknowledgment banner (ADR-035, #277): a one-line, dismissible notice shown once
+ * per project that contains an event handler, telling the user generated code will now include mutable state
+ * and event handlers. **Informational, not a gate** — the closed action model adds no evaluator (PF-4), so
+ * nothing is blocked; "Got it" records the acknowledgment per project id ([PreferencesController.acknowledgeInteractive]).
+ */
+@Composable
+private fun InteractiveAcknowledgmentBanner(onDismiss: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "This project uses interactivity — generated code will include mutable state and event handlers.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("Got it") }
+        }
     }
 }
 

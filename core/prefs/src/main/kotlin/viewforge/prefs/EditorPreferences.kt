@@ -37,6 +37,12 @@ import kotlinx.serialization.Serializable
  * @property lastProjectPath the `.vforge` file open when the editor last closed, restored on the next
  *   launch (#156); blank means there was none (a never-saved or File → New document), so the next launch
  *   opens a blank canvas. An absolute per-user config path, never committed, like [recentProjects].
+ * @property acknowledgedInteractive the ids of projects whose one-time **interactive-code acknowledgment**
+ *   (ADR-035, #277) the user has dismissed — so the light "generated code will now include mutable state and
+ *   event handlers" notice is shown once per project, not every session. Keyed by the project's stable ULID
+ *   (never a path), so it survives moves/renames; a per-user config record, never in the `.vforge`. It is an
+ *   informational acknowledgment, **not** a gate — the closed action model adds no evaluator (PF-4 unchanged),
+ *   so nothing is blocked when it is absent. De-duplicated and blank-dropped on load.
  */
 @Serializable
 data class EditorPreferences(
@@ -50,6 +56,7 @@ data class EditorPreferences(
     val favoriteComponents: List<String> = emptyList(),
     val hasLaunched: Boolean = false,
     val lastProjectPath: String = "",
+    val acknowledgedInteractive: List<String> = emptyList(),
 ) {
     /** Clamp any out-of-range values a hand-edited or older/newer file might carry (see [PanelLayout.sanitized]). */
     fun sanitized(): EditorPreferences = copy(
@@ -58,6 +65,7 @@ data class EditorPreferences(
         recentProjects = RecentProjects.sanitized(recentProjects),
         historyDepth = clampHistoryDepth(historyDepth),
         favoriteComponents = FavoriteComponents.sanitized(favoriteComponents),
+        acknowledgedInteractive = AcknowledgedInteractive.sanitized(acknowledgedInteractive),
     )
 
     companion object {
@@ -113,6 +121,20 @@ object FavoriteComponents {
     /** Toggle membership of [key]: remove it if already pinned, else append it (preserving starring order). */
     fun toggled(current: List<String>, key: String): List<String> =
         if (key in current) current.filterNot { it == key } else current + key
+
+    /** Drop blanks and duplicates — applied on load so a hand-edited file can't carry junk. */
+    fun sanitized(list: List<String>): List<String> = list.filter { it.isNotBlank() }.distinct()
+}
+
+/**
+ * Pure operations on the set of project ids whose interactive-code acknowledgment has been dismissed (ADR-035,
+ * #277). Shared by the persisted [EditorPreferences] and the editor's live copy so "already acknowledged"
+ * agrees on disk and in memory. Uncapped — an explicit per-project record, like [FavoriteComponents].
+ */
+object AcknowledgedInteractive {
+    /** [id] added to the acknowledged set (idempotent — acknowledging twice is one entry). */
+    fun acknowledged(current: List<String>, id: String): List<String> =
+        if (id.isBlank() || id in current) current else current + id
 
     /** Drop blanks and duplicates — applied on load so a hand-edited file can't carry junk. */
     fun sanitized(list: List<String>): List<String> = list.filter { it.isNotBlank() }.distinct()

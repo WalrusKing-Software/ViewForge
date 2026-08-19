@@ -109,6 +109,7 @@ private fun runEditor() {
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects)
     state.applyFavoriteComponents(prefs.favoriteComponents)
+    state.applyAcknowledgedInteractive(prefs.acknowledgedInteractive)
     state.applyPreferences(prefs)
     // Assets resolve from the open project's dir first (imported files, #141), then the classpath (the
     // bundled sample); the export service reads from the same source, so both key off the current path.
