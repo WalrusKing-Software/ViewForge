@@ -39,6 +39,12 @@ internal object ComposeNames {
     val sp = MemberName("androidx.compose.ui.unit", "sp")
     val Dp = ClassName("androidx.compose.ui.unit", "Dp")
 
+    // Interactive state (ADR-035, #277): `var f by remember { mutableStateOf(<sample>) }`. The `by`
+    // delegation additionally needs `androidx.compose.runtime.getValue`/`setValue` imported — added to the
+    // FileSpec in ComposeCodeGenerator when a screen/component declares any writable (handler-targeted) field.
+    val remember = MemberName("androidx.compose.runtime", "remember")
+    val mutableStateOf = MemberName("androidx.compose.runtime", "mutableStateOf")
+
     // Composables
     val Column = MemberName("androidx.compose.foundation.layout", "Column")
     val Row = MemberName("androidx.compose.foundation.layout", "Row")

@@ -1,7 +1,10 @@
 package viewforge.packages.compose.codegen
 
+import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.Action
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.PropValue
 import viewforge.model.RecordField
 import viewforge.model.Repeater
 import viewforge.model.ScalarType
@@ -60,6 +63,107 @@ class StateEmitterTest {
             "teams: kotlin.collections.List<Team>" in department,
             "nested field must be typed as a List of the element type, got:\n$department",
         )
+    }
+
+    // ---- Interactive handlers (ADR-035, #277): action lowering the golden doesn't isolate ----
+
+    private val scalarState = listOf(
+        StateField("label", StateType.Scalar(ScalarType.STRING), scalar("hi")),
+        StateField("count", StateType.Scalar(ScalarType.INT), scalar(0)),
+        StateField("ratio", StateType.Scalar(ScalarType.FLOAT), scalar(0)),
+        StateField("flag", StateType.Scalar(ScalarType.BOOL), scalar(false)),
+    )
+
+    private fun scalar(v: Any) = viewforge.model.SampleValue.Scalar(prim(v))
+
+    private fun prim(v: Any) = when (v) {
+        is String -> JsonPrimitive(v)
+        is Int -> JsonPrimitive(v)
+        is Boolean -> JsonPrimitive(v)
+        is Double -> JsonPrimitive(v)
+        else -> error("unsupported")
+    }
+
+    private fun lower(action: Action, state: List<StateField> = scalarState) =
+        StateEmitter.handlerBody(listOf(action), state).toString().trim()
+
+    @Test
+    fun `SetState lowers to a typed assignment, quoting strings and leaving numbers bare`() {
+        assertEquals("count = 5", lower(Action.SetState("count", PropValue.Literal(prim(5)))))
+        assertEquals("label = \"done\"", lower(Action.SetState("label", PropValue.Literal(prim("done")))))
+    }
+
+    @Test
+    fun `Toggle lowers to f = !f`() {
+        assertEquals("flag = !flag", lower(Action.Toggle("flag")))
+    }
+
+    @Test
+    fun `Adjust lowers to f += delta, typed by the target scalar (Float gets its f suffix)`() {
+        assertEquals("count += 1", lower(Action.Adjust("count", PropValue.Literal(prim(1)))))
+        assertEquals("ratio += 0.5f", lower(Action.Adjust("ratio", PropValue.Literal(prim(0.5)))))
+    }
+
+    @Test
+    fun `an action value that is a read binding emits member access, not a literal`() {
+        assertEquals("count = other", lower(Action.SetState("count", PropValue.StateBinding("other"))))
+    }
+
+    @Test
+    fun `AppendRow rebuilds the list with a new typed record element`() {
+        val state = listOf(
+            StateField(
+                "rows",
+                StateType.ListOfRecord(
+                    listOf(RecordField("name", ScalarType.STRING), RecordField("qty", ScalarType.INT)),
+                ),
+                scalarRows(emptyList()),
+            ),
+        )
+        val append = Action.AppendRow(
+            "rows",
+            mapOf("name" to PropValue.Literal(prim("Ada")), "qty" to PropValue.Literal(prim(2))),
+        )
+        assertEquals("rows = rows + Row(name = \"Ada\", qty = 2)", lower(append, state))
+    }
+
+    @Test
+    fun `RemoveRow rebuilds the list without the indexed row`() {
+        val state = listOf(
+            StateField(
+                "rows",
+                StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
+                scalarRows(emptyList()),
+            ),
+        )
+        assertEquals(
+            "rows = rows.filterIndexed { i, _ -> i != 0 }",
+            lower(Action.RemoveRow("rows", PropValue.Literal(prim(0))), state),
+        )
+    }
+
+    @Test
+    fun `Navigate emits a compilable TODO stub, since no nav host is generated yet (#214)`() {
+        assertEquals("// TODO(#214): navigate to screen \"home\"", lower(Action.Navigate("home")))
+    }
+
+    @Test
+    fun `writableTargets collects every handler target across children and slots, excluding Navigate`() {
+        val inner = Node(
+            NodeId("b2"),
+            "compose.material3.TextButton",
+            handlers = mapOf("onClick" to listOf(Action.Toggle("flag"))),
+        )
+        val outer = Node(
+            NodeId("b1"),
+            "compose.material3.Button",
+            handlers = mapOf(
+                "onClick" to listOf(Action.Adjust("count", PropValue.Literal(prim(1))), Action.Navigate("home")),
+            ),
+            slots = mapOf("content" to listOf(inner)),
+        )
+        val root = Node(NodeId("col"), "compose.foundation.layout.Column", children = listOf(outer))
+        assertEquals(setOf("count", "flag"), StateEmitter.writableTargets(root))
     }
 
     @Test

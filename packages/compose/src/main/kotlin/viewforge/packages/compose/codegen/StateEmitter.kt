@@ -18,12 +18,18 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
+import viewforge.model.Action
+import viewforge.model.Node
+import viewforge.model.PropValue
 import viewforge.model.RecordField
 import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.resolveWritableScalar
+import viewforge.model.resolveWritableTarget
 import viewforge.model.scalarValue
+import viewforge.model.targetPath
 
 /**
  * Codegen for a screen's read-only state (ADR-034, #21): a generated `data class` per list-of-record type
@@ -55,16 +61,118 @@ internal object StateEmitter {
     }
 
     /**
-     * The seeded state block: a `// TODO` line then one `val <name> = <sample>` per field, or null when the
-     * screen has no state (so a stateless screen's body is byte-identical to before). Prepended to the body.
+     * The seeded state block: a `// TODO` line then one declaration per field, or null when the screen has no
+     * state (so a stateless screen's body is byte-identical to before). Prepended to the body.
+     *
+     * A field named in [writableTargets] — i.e. written by some handler [Action] (ADR-035, #277) — becomes a
+     * mutable `var <name> by remember { mutableStateOf(<sample>) }`, so its handler assignments recompose the
+     * screen; a field only ever *read* stays the read-only `val <name> = <sample>` of ADR-034. With no writable
+     * fields (the pre-interactive case) every field is a `val`, keeping output byte-identical to before.
      */
-    fun stubs(state: List<StateField>): CodeBlock? {
+    fun stubs(state: List<StateField>, writableTargets: Set<String> = emptySet()): CodeBlock? {
         if (state.isEmpty()) return null
         val b = CodeBlock.builder()
         b.add("// TODO: replace with your real data source\n")
-        state.forEach { field -> b.add("val %N = %L\n", field.name, sampleValue(field)) }
+        state.forEach { field ->
+            if (field.name in writableTargets) {
+                b.add(
+                    "var %N by %M { %M(%L) }\n",
+                    field.name,
+                    ComposeNames.remember,
+                    ComposeNames.mutableStateOf,
+                    sampleValue(field),
+                )
+            } else {
+                b.add("val %N = %L\n", field.name, sampleValue(field))
+            }
+        }
         return b.build()
     }
+
+    /**
+     * The set of writable state field names in [root]'s tree — every [Action.targetPath] across every node's
+     * [Node.handlers] (ADR-035, #277), walking children and slots. Drives which [stubs] fields are `var`s. A
+     * `Navigate` action contributes nothing (its target is a screen, not state; [targetPath] is null).
+     */
+    fun writableTargets(root: Node): Set<String> {
+        val out = LinkedHashSet<String>()
+        fun walk(node: Node) {
+            node.handlers.values.forEach { actions -> actions.forEach { it.targetPath?.let(out::add) } }
+            node.children.forEach(::walk)
+            node.slots.values.forEach { it.forEach(::walk) }
+        }
+        walk(root)
+        return out
+    }
+
+    /**
+     * A handler slot's body (ADR-035, #277): its [actions] lowered to structural statements, one per line, for a
+     * `{ … }` lambda. Every action is a **named, typed, closed** operation built with the KotlinPoet API — no
+     * string concatenation (GC-1/GC-2), no evaluation (PF-4): `SetState`→ `f = v`, `Toggle`→ `f = !f`, `Adjust`→
+     * `f += by`, `AppendRow`/`RemoveRow`→ list rebuilds, `Navigate`→ a `// TODO` (#214, no nav host yet). Values
+     * are literals (typed via the target's declared [ScalarType]) or read [PropValue.StateBinding] member access.
+     */
+    fun handlerBody(actions: List<Action>, state: List<StateField>): CodeBlock {
+        val b = CodeBlock.builder()
+        actions.forEach { b.add(lowerAction(it, state)).add("\n") }
+        return b.build()
+    }
+
+    private fun lowerAction(action: Action, state: List<StateField>): CodeBlock = when (action) {
+        is Action.SetState ->
+            CodeBlock.of(
+                "%N = %L",
+                action.target,
+                actionValue(action.value, resolveWritableScalar(action.target, state)),
+            )
+
+        is Action.Toggle -> CodeBlock.of("%N = !%N", action.target, action.target)
+
+        is Action.Adjust ->
+            CodeBlock.of("%N += %L", action.target, actionValue(action.by, resolveWritableScalar(action.target, state)))
+
+        is Action.AppendRow -> {
+            val field = resolveWritableTarget(action.target, state)
+            val type = (field?.type as? StateType.ListOfRecord)
+                ?: throw CodegenException("AppendRow target '${action.target}' is not a list-of-record state field")
+            val typeName = recordTypeName(field.name)
+            val args = type.fields.map { f ->
+                val cell = action.row[f.name]
+                    ?: throw CodegenException("AppendRow row for '$typeName' is missing field '${f.name}'")
+                CodeBlock.of("%N = %L", f.name, actionValue(cell, (f.type as? StateType.Scalar)?.scalar))
+            }
+            val element = CodeBlock.of("%L(%L)", typeName, args.joinToCode(", "))
+            CodeBlock.of("%N = %N + %L", action.target, action.target, element)
+        }
+
+        is Action.RemoveRow ->
+            CodeBlock.of(
+                "%N = %N.filterIndexed { i, _ -> i != %L }",
+                action.target,
+                action.target,
+                actionValue(action.index, ScalarType.INT),
+            )
+
+        // No navigation host is generated yet (#214) — a compilable, honest no-op stub, mirroring ADR-034's
+        // seeded-data `// TODO`. Replaced with a real navigation call when screen nav lands.
+        is Action.Navigate -> CodeBlock.of("// TODO(#214): navigate to screen %S", action.screenId)
+    }
+
+    /**
+     * An action value: a [PropValue.Literal] as a typed literal (using the target's [scalar] type so `1`/`1f`/
+     * `"x"`/`true` are well-formed), or a read [PropValue.StateBinding] as member access. Any other kind is a
+     * codegen error — a handler value is only ever a literal or a read binding (ADR-035).
+     */
+    private fun actionValue(value: PropValue, scalar: ScalarType?): CodeBlock = when (value) {
+        is PropValue.Literal ->
+            if (scalar != null) scalarLiteral(scalar, value.value) else untypedLiteral(value.value)
+        is PropValue.StateBinding -> CodegenValues.bindingPath(value.path)
+        else -> throw CodegenException("Action value must be a literal or a state binding, got $value")
+    }
+
+    /** A literal with no declared target type (e.g. an AppendRow row cell of unknown shape): quote strings, emit the rest bare. */
+    private fun untypedLiteral(value: JsonPrimitive): CodeBlock =
+        if (value.isString) CodeBlock.of("%S", value.content) else CodeBlock.of("%L", value.content)
 
     /** The generated element type name for a list field: `members` → `Member` (naive singularise + capitalise). */
     fun recordTypeName(fieldName: String): String {
