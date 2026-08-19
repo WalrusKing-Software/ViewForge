@@ -419,6 +419,9 @@ changes.
 | **6** | Interactive state & events (ADR-035) — state becomes **writable** and `Node.handlers` maps an event slot to an ordered, closed `List<Action>` (§3, §5); additive, but a v5 build would silently drop every handler and render a dead UI, so it is treated as semantic. No evaluator is introduced (PF-4 / SECURITY IA-*). | `M5to6` (stamp; v5 docs carry no handlers and are already valid v6). |
 | **7** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M6to7`. |
 
+For which **app version** reads and writes which schema version, and the user-facing forward/backward
+compatibility policy, see [`COMPATIBILITY.md`](../COMPATIBILITY.md).
+
 ---
 
 ## 11. Worked example
