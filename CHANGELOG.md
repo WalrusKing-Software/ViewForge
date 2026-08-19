@@ -11,7 +11,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing after the first alpha yet._
+### Added
+- **macOS `.dmg` packaging** on the `macos-latest` CI runner — ViewForge now builds installers for all
+  three desktop platforms (Windows `.msi`/`.exe`, Linux `.deb`/`.rpm`, macOS `.dmg`). The alpha `.dmg`
+  is unsigned/un-notarized and uses jpackage's default icon; Developer ID signing/notarization and a
+  branded `.icns` are follow-ups (see [`_docs/INSTALL.md`](_docs/INSTALL.md)). (#291)
 
 ## [0.1.0-alpha-1] - 2026-08-17
 
