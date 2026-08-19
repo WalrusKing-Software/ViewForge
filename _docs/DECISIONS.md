@@ -1544,6 +1544,141 @@ separate, consent-gated ADR (this amendment adds **no** evaluation, mutation, or
 
 ---
 
+## ADR-035 — Interactive state & events: a closed structured action model, no evaluation, consent-acknowledged
+
+**Status:** Proposed (2026-08-18).
+
+**Context.** #21 always had two halves. ADR-034 shipped the first — **read-only** data binding — and was
+careful to draw the second as an explicit boundary it would *not* cross: "mutable state plus `onClick →
+setState` is what actually pushes toward evaluating user expressions and needs the SECURITY PF-4 threat model
+and consent gate" (ADR-034 Rejected), and SECURITY's PF-11 design note names the same line: "that gate becomes
+owed only when *mutable* state and event handlers arrive (the direct route toward evaluating user code), which
+is a separate, later ADR with its own threat model." This is that ADR. Everything ADR-034 and its amendments
+added stayed *safe by construction*: a binding is a structured path **looked up** in typed data, never an
+expression, so there is no evaluator to attack and PF-4 stays literally true. Interactivity threatens that
+invariant because the naïve design — let a handler run whatever the user types — is exactly a code-evaluation
+path: it would mean embedding a Kotlin scripting engine and executing untrusted code out of a `.vforge` file
+(the PF-4 nightmare, and the reason SECURITY's PF-4 design note reserves "its own threat model and an explicit,
+per-project user consent gate" for it). The forces: users legitimately need a button that changes state and a
+checkbox that flips a flag (the interactive half of #21, #214 navigation, #215 UX-path simulation all want it);
+ViewForge's whole identity is *offline, no-eval, generated-code-that-compiles*; and the honest reading is that
+"mutable state + events" does **not** actually require an evaluator if the set of things a handler may do is
+**closed and structured** rather than open and textual. Decided with the user via AskUserQuestion (2026-08-18).
+
+**Decision.** Ship interactivity as a **closed, structured action model** — no expression evaluation, PF-4
+preserved — and gate it with a **light per-project acknowledgment** rather than a hard opt-in. Concretely:
+
+- **State becomes writable, but the state model is unchanged.** The existing `Screen.state` and (schema-5,
+  Amendment #266) `ComponentDef.state` fields — the same `StateField`/`StateType`/`SampleValue` model — are the
+  mutable stores. Their `sample` is now both the design-time preview value **and** the initial runtime value.
+  No new state concept, no project-global state (rejected again, below).
+- **An event handler is a `List<Action>` from a sealed set — never an expression.** A handler is not text and
+  is never parsed. `Action` is a closed `core.model` hierarchy: `SetState(target, value)`,
+  `Toggle(boolTarget)`, `Adjust(numericTarget, delta)`, `AppendRow(listTarget, record)` / `RemoveRow(listTarget,
+  indexValue)`, and `Navigate(screenId)` (the structural hook for #214). A `target` is a **`StateBinding` path**
+  (the exact structural, no-eval identifier lookup ADR-034 already validates) that must resolve to a *writable*
+  declared state field of a compatible type; a `value`/`delta` is an ordinary `PropValue` (`Literal` or a
+  read `StateBinding`). Dispatch at every layer is a `when` over the sealed `Action` type — **there is no
+  evaluator, no parser, no scripting engine; PF-4 stays literally true**, for the same reason a binding path
+  does: the handler is a list of *named, typed, closed operations*, looked up and applied, never interpreted.
+  An action whose `target` does not resolve to a writable field renders/marks the node unverified (PF-6
+  discipline: unknown → placeholder, never dynamic dispatch), exactly as an unresolved binding does.
+- **Events are closed named slots on catalog components, data-driven.** A component declares which event slots
+  it exposes (`onClick`, `onCheckedChange`, `onValueChange`, …) the same way it declares `PropDefinition`s —
+  from catalog metadata, **no per-component inspector UI** (the standing anti-pattern). Each slot holds a
+  `List<Action>`; the inspector edits them with a data-driven action editor (pick action kind → pick a writable
+  target from declared state → pick a literal/binding value), never free text.
+- **Interaction runs in C13 run-mode only; the design canvas stays static.** The editing canvas keeps
+  previewing `sample` data read-only, preserving the "canvas shows static sample data" invariant. The existing
+  C13 interactive-preview run mode (#120), which already operates the *real* Compose widgets ephemerally, now
+  actually applies actions to an ephemeral copy of the state — a `when(action)` reducer over `remember`ed state,
+  nothing persisted to IR. Because the action set is closed and total, running it live is safe by construction;
+  live *design-canvas* mutation was considered and rejected (below) to keep the default surface eval-free.
+- **Codegen emits real interactive Compose — not the inert stubs** of the generated `Checkbox`/`Slider`/
+  dropdown. A mutable field emits `var field by remember { mutableStateOf(<sample>) }`; a handler slot emits a
+  lambda whose body is the action list lowered structurally — `SetState`→ assignment, `Toggle`→ `f = !f`,
+  `Adjust`→ `f += delta`, `Navigate`→ the navigation call (#214) — each built with the **KotlinPoet structural
+  API** (GC-1/GC-2), never string-concatenated. The result compiles and runs; the sample seeds the initial
+  value and the interactions are live. Golden fixtures per new node/handler shape (CLAUDE.md rule 5), compiled
+  for real (the CI compile gate).
+- **Consent is a light, per-project one-time acknowledgment**, not a hard opt-in. Because the model introduces
+  **no evaluator**, the heavy eval-consent gate the PF-4 design note reserves is **not owed** — but generating
+  code that *mutates state and reacts to input* is a genuine capability step beyond "renders static data," so
+  the promise the docs made ("a consent gate") is discharged **proportionally**: the first time a project adds
+  an interactive node (or on first open of a project that contains one), ViewForge shows an explicit,
+  dismissible acknowledgment that generated code will now include mutable state and event handlers bounded to
+  the closed action set, recorded per-project so it is asked once. This is documented in a new SECURITY section
+  (proposed **IA-1…IA-n**, "interactive actions"): the action set is closed and total, targets are validated
+  writable identifiers, values ride the existing `PropValue.Literal` trust boundary, and **no code-evaluation
+  path is added** (PF-4 unchanged) — so the acknowledgment informs rather than guards against an evaluator that
+  does not exist.
+- **Schema bumps 5 → 6.** Event-handler slots and the writable-state capability are new document semantics a
+  v5-only build would **silently drop** (it would load an interactive `.vforge`, discard every handler, and
+  render a dead UI) — the same "old builds discard a semantic capability" rule that justified every prior bump.
+  So the change claims **schema v6** — the slot ADR-030 responsive currently reserves — with an `M5to6`
+  migration (a v5 document carries no handlers and is a structurally-valid v6, so a **stamp** like M2to3/M4to5),
+  a real fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v6 in older builds. **ADR-030 (responsive)
+  consequently slides to v7/`M6to7`.**
+
+**Rationale.** The key realization is that "mutable state + events" and "evaluate user code" are **separable**.
+The industry reflex — a handler is a code string you `eval` — is what forces a scripting engine and a hard
+consent gate; but the interactions #21 actually needs (set a field, toggle a flag, nudge a number, add/remove a
+row, go to a screen) form a *small closed set of structured operations*. Modelling them as a sealed `Action`
+type reuses the exact machinery ADR-034 built — structural path resolution, typed `PropValue`s, `when`-based
+dispatch — so interactivity lands **entirely inside the existing no-eval trust model**: PF-4 stays literally
+true, and the feared scripting-engine threat model simply never materializes. That in turn makes the *light*
+consent posture the honest one — a hard opt-in gate implies a danger (arbitrary code execution) that the closed
+model does not contain, while "no gate at all" understates the real step up in generated-code capability; a
+one-time per-project acknowledgment is proportionate to what actually changed. Keeping live interaction in C13
+run-mode preserves the "canvas previews static sample data" invariant that hit-testing, selection, and the
+inspector all rely on, while still giving a real try-it-out surface. Reusing `Screen.state`/`ComponentDef.state`
+as the mutable stores means no second state concept and no second codegen owner.
+
+**Rejected.** **Free-form expression / `RawExpression` handlers** (`onClick = "count = item.qty * 2"`) — the
+maximally flexible option and the one every "visual builder" reaches for, but it embeds a Kotlin evaluator,
+**breaks PF-4's "no code-evaluation path,"** and mandates the full threat model + hard consent gate; it
+contradicts the entire ADR-034 lineage and is exactly what this ADR is designed to avoid. Complex per-handler
+logic is instead served by editing the generated code (ViewForge emits, the user extends). **A hard,
+off-by-default consent gate** (no interactive node may be added or generated until the project opts in) — the
+literal reading of the docs' "consent gate," but disproportionate once the model provably contains no
+evaluator; it adds friction against a threat that isn't present. **No consent surface at all** — defensible on
+pure PF-4 grounds (a closed action set adds no eval surface, like the read-only amendments), but it understates
+that generated code now *mutates and reacts*, and it silently drops the explicit promise the PF-4/PF-11 design
+notes made; the light acknowledgment keeps that promise proportionally. **Live mutation in the design canvas** —
+more immediate WYSIWYG, but it blurs the "canvas previews static sample data" invariant and puts a running
+reducer under the selection/hit-testing surface; C13 run-mode already exists for exactly this and keeps the
+editing surface static. **Project-global mutable state** — rejected again for the same reason ADR-034 rejected
+it: it couples screens and blurs which composable owns a generated store; screen/component owners keep one
+clear owner per generated function. **An open/extensible action registry** ("plugins add action kinds") —
+premature generalization (the ADR-007 anti-pattern); one closed set until a real second consumer exists.
+
+**Consequences.** ViewForge gains genuine interactivity while staying **offline, no-eval, and
+generated-code-that-compiles**: state declared for read-only binding becomes writable, catalog components expose
+closed event slots, handlers are structured action lists resolved and dispatched (never parsed), C13 run-mode
+operates them live and ephemerally, and codegen emits real `remember { mutableStateOf(…) }` + structural
+handler lambdas. PF-4 is unchanged — there is still no evaluator anywhere in the pipeline — so the security cost
+is a **light per-project acknowledgment**, not a scripting sandbox. What becomes harder: the action editor is a
+real piece of data-driven inspector UI (kind/target/value pickers with type-compatibility checks), and codegen
+now has a second, non-inert lowering path (handlers) that must stay structural. What we accept: **closed action
+set only** — logic outside `SetState`/`Toggle`/`Adjust`/`Append`/`RemoveRow`/`Navigate` means editing the
+generated code; **C13-run-mode interactivity** — no live design-canvas mutation; and a **light acknowledgment**,
+not a hard gate. This spans several slices. Implementation work this ADR authorizes, to be filed as stacked
+sub-issues under epic #277 once accepted (issues are the source of truth), following the
+stack-sequential-branches practice: the sealed `Action` model + writable-target resolver + event-slot metadata
+in `core.model` (pure, no Compose); event-slot + `Action` serialization and the `M5to6` + fixture +
+`NEWER_SCHEMA` update (schema v6); the C13 run-mode reducer (renderer); codegen (`mutableStateOf` + structural
+handler lambdas) with **golden fixtures** (CLAUDE.md rule 5, real compile gate); the data-driven action editor
+in the inspector (no per-component UI); the **per-project acknowledgment + SECURITY `IA-*` section** (affirm no
+eval path added; action set closed/total; targets validated writable identifiers per GC-3; values under the
+`PropValue.Literal`/PF-2 bounds); and doc updates — DATA_MODEL (state now writable, event-slot + `Action`
+model), FEATURES §10 (carve interactive-with-closed-actions out of the non-feature list; free-form expression
+evaluation *stays* excluded), SECURITY (the `IA-*` section + a note that PF-4 is unchanged), and **ADR-030
+re-versioned to v7/`M6to7`**. Honest boundaries this ADR draws: **closed structured actions** (no user-authored
+expressions — those remain a PF-4 non-goal), **run-mode-only interactivity** (static design canvas), and a
+**light acknowledgment** (no hard opt-in, because there is no evaluator to gate).
+
+---
+
 ## Template
 
 ```markdown
