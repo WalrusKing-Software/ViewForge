@@ -128,6 +128,18 @@ class GoldenCodegenTest {
         assertGeneratedFile(files, "PrimaryButton.kt", "ReusableComponent.PrimaryButton")
     }
 
+    // Component-local state (ADR-034 Amendment, #269): a component carries BOTH a parameter and its own
+    // state, so ProfileCard.kt emits `title: String` as a fn arg *and* seeds `heading`/`badges` locals with a
+    // `data class Badge`, its repeat lowered to `badges.forEach { item -> … }` — params and StateBindings
+    // coexisting. The screen emits the instance call `ProfileCard(title = "Team")`.
+    @Test
+    fun componentState() {
+        val project = ProjectCodec.decode(resource("/golden/ComponentState.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "Directory.kt", "ComponentState")
+        assertGeneratedFile(files, "ProfileCard.kt", "ComponentState.ProfileCard")
+    }
+
     // A component with parameters (parameters slice 2, ADR-028): the component emits typed fn params
     // (String + a defaulted Boolean) with ParamRef bodies (`text = label`, `enabled = enabled`), and the
     // screen emits calls passing argument values — including one instance that omits the defaulted arg.

@@ -121,6 +121,10 @@ class ComposeCodeGenerator : CodeGenerator {
     /**
      * Generates the source text for a single user [component] — the same `@Composable fun Name(modifier)`
      * shape as a screen (D7). Instances reference it by a call, so this one definition backs every use.
+     * A component's own read-only state (ADR-034 Amendment, component-local state) is emitted exactly as a
+     * screen's — its seeded stub `val`s in the body, its record `data class`es in the file — coexisting with
+     * the component's [parameters][ComponentDef.parameters]: params become function arguments, state becomes
+     * body locals, and both are read from the tree without collision.
      */
     fun generateComponent(
         component: ComponentDef,
@@ -138,6 +142,7 @@ class ComposeCodeGenerator : CodeGenerator {
         assets,
         components,
         component.parameters,
+        component.state,
     )
 
     /**
@@ -162,6 +167,7 @@ class ComposeCodeGenerator : CodeGenerator {
             assets,
             components,
             component.parameters,
+            component.state,
             recordSpans = true,
         ),
     )
