@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -32,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -117,7 +115,9 @@ private fun ColorsSection(state: EditorState) {
 @Composable
 private fun HexField(current: String, modifier: Modifier, onCommit: (String) -> Unit) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Swatch(hexToArgb(current))
+        // Clicking the swatch opens the shared visual picker (#293); it commits the same normalized hex the
+        // text field does, so light/dark token edits stay a single undoable step.
+        ColorSwatchButton(hexToArgb(current), current) { onCommit(it) }
         var text by remember { mutableStateOf(current) }
         var invalid by remember { mutableStateOf(false) }
         var focused by remember { mutableStateOf(false) }
@@ -145,16 +145,6 @@ private fun HexField(current: String, modifier: Modifier, onCommit: (String) -> 
             )
         }
     }
-}
-
-@Composable
-private fun Swatch(argb: Long?) {
-    Box(
-        Modifier
-            .size(16.dp)
-            .background(if (argb != null) Color(argb) else Color.Transparent)
-            .border(1.dp, MaterialTheme.colorScheme.outline),
-    )
 }
 
 // --- typography ----------------------------------------------------------------------------------
