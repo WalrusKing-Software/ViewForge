@@ -99,4 +99,21 @@ class ScreenStateCommandTest {
     fun `SetStateField at an out-of-range index inverts to a no-op`() {
         assertTrue(SetStateField("s1", index = 5, field = online).invert(doc(listOf(online))) is NoOp)
     }
+
+    @Test
+    fun `state commands target a component owner, leaving screens untouched (ADR-034 Amendment)`() {
+        // Component-local state: the same owner-agnostic commands transform a ComponentDef.state when the
+        // ownerId names a component (screen and component ids are disjoint), and never touch a screen.
+        val before = Fixtures.projectWithComponent().copy(screens = listOf(screen("s1", "Home")))
+        val add = AddStateField(Fixtures.COMPONENT, online)
+        val after = add.apply(before)
+        assertEquals(listOf(online), after.components.first { it.id == Fixtures.COMPONENT }.state)
+        assertTrue(after.screens.all { it.state.isEmpty() }, "no screen should gain the field")
+
+        // Edit in place, then invert the add — both resolve against the component owner.
+        val renamed = SetStateField(Fixtures.COMPONENT, 0, online.copy(name = "connected")).apply(after)
+        assertEquals("connected", renamed.components.first { it.id == Fixtures.COMPONENT }.state[0].name)
+        val restored = add.invert(before).apply(after)
+        assertEquals(before.components, restored.components)
+    }
 }
