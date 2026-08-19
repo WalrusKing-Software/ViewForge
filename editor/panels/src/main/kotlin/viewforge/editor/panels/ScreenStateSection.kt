@@ -33,30 +33,35 @@ import viewforge.model.StateField
 import viewforge.model.StateType
 
 /**
- * The screen-state editor (ADR-034, #21): declare and edit a screen's read-only [StateField]s — the data
- * its props bind to. Shown in the inspector when nothing is selected, so it is screen-scoped (a node's own
- * props are the inspector's other mode). Every edit runs an undoable command through [EditorState]; there is
- * no per-component code here, matching the rest of the inspector.
+ * The state editor (ADR-034, #21 + the component-local state Amendment): declare and edit the read-only
+ * [StateField]s of the **active edit surface** — the open component's own state when one is being edited, else
+ * the active screen's — the data its props bind to. Shown in the inspector when nothing is selected (a node's
+ * own props are the inspector's other mode). Every edit runs an undoable, owner-agnostic command through
+ * [EditorState], so there is no per-surface code here, matching the rest of the inspector.
  *
  * Scalars get a type + one typed sample literal; a list-of-record gets an editable record shape and sample
  * rows (what a `vforge.repeat` iterates). Samples are typed literals only, never expressions (PF-4).
  */
 @Composable
 internal fun ScreenStateSection(state: EditorState) {
-    val screen = state.activeScreen
+    val isComponent = state.editingComponentId != null
     PanelColumn(Modifier.padding(bottom = 12.dp)) {
-        SectionLabel("Screen State")
-        if (screen == null) {
-            MutedText("No screen to hold data.")
+        SectionLabel(if (isComponent) "Component State" else "Screen State")
+        if (state.activeEditRootId == null) {
+            MutedText("No surface to hold data.")
             return@PanelColumn
         }
         Text(
-            "Read-only data this screen's props can bind to.",
+            if (isComponent) {
+                "Read-only data this component's props can bind to."
+            } else {
+                "Read-only data this screen's props can bind to."
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
         )
-        val fields = screen.state
+        val fields = state.activeScreenStateForRender
         if (fields.isEmpty()) MutedText("No data declared.")
         fields.forEachIndexed { index, field -> StateFieldCard(state, index, field, fields) }
         Row(Modifier.padding(top = 6.dp)) {
@@ -404,7 +409,7 @@ internal fun RepeaterSource(state: EditorState, node: Node) {
     // Top-level list fields plus, when this repeat is nested inside another, the outer row's `item.<listField>`s.
     val sources = state.listSourceChoices(node)
     if (sources.isEmpty()) {
-        MutedText("Declare a list field in Screen State first.")
+        MutedText("Declare a list field in State first.")
         return
     }
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -499,7 +504,7 @@ internal fun DropdownSource(state: EditorState, node: Node) {
     val current = Dropdown.optionsOf(node)?.takeIf { it.isNotEmpty() }
     val lists = state.listStateFields
     if (lists.isEmpty()) {
-        MutedText("Declare a list field in Screen State first.")
+        MutedText("Declare a list field in State first.")
         return
     }
     StatePickerRow("options", current ?: "—") { open ->

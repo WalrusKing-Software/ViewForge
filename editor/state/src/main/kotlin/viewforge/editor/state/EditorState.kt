@@ -764,9 +764,9 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val activeScreenStateForRender: List<StateField>
         get() = editingComponent?.state ?: activeScreen?.state.orEmpty()
 
-    /** The active screen's list-of-record fields (ADR-034) — the `source`s a `vforge.repeat` can bind to. */
+    /** The active edit surface's list-of-record fields (ADR-034) — the `source`s a `vforge.repeat` can bind to. */
     val listStateFields: List<StateField>
-        get() = activeScreen?.state.orEmpty().filter { it.type is StateType.ListOfRecord }
+        get() = activeScreenStateForRender.filter { it.type is StateType.ListOfRecord }
 
     /** Every read-only state path [node] can bind a prop to on the active edit surface (ADR-034). */
     fun bindablePaths(node: Node): List<BindingChoice> = bindablePaths(activeEditRoot, node, activeScreenStateForRender)
@@ -775,36 +775,40 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun listSourceChoices(node: Node): List<String> =
         listSourceChoices(activeEditRoot, node, activeScreenStateForRender)
 
-    /** Declare a fresh scalar state field on the active screen (ADR-034), seeded with an empty String sample. */
+    /**
+     * Declare a fresh scalar state field on the **active edit surface** (ADR-034) — the open component's own
+     * state when one is being edited (component-local state, Amendment), else the active screen's — seeded with
+     * an empty String sample. The command is owner-agnostic ([AddStateField]), so this one path serves both.
+     */
     fun addScalarStateField() {
-        val screen = activeScreen ?: return
-        val name = uniqueStateName("field", screen.state)
+        val ownerId = activeEditRootId ?: return
+        val name = uniqueStateName("field", activeScreenStateForRender)
         val field = StateField(name, StateType.Scalar(ScalarType.STRING), SampleValue.Scalar(JsonPrimitive("")))
-        execute(AddStateField(screen.id, field))
+        execute(AddStateField(ownerId, field))
     }
 
-    /** Declare a fresh list-of-record state field on the active screen (ADR-034), seeded with one `name` field. */
+    /** Declare a fresh list-of-record state field on the active edit surface (ADR-034), seeded with one `name` field. */
     fun addListStateField() {
-        val screen = activeScreen ?: return
-        val name = uniqueStateName("items", screen.state)
+        val ownerId = activeEditRootId ?: return
+        val name = uniqueStateName("items", activeScreenStateForRender)
         val field = StateField(
             name,
             StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
             scalarRows(listOf(mapOf("name" to JsonPrimitive("")))),
         )
-        execute(AddStateField(screen.id, field))
+        execute(AddStateField(ownerId, field))
     }
 
-    /** Replace the state field at [index] on the active screen with [field] — rename, retype, or sample edit. */
+    /** Replace the state field at [index] on the active edit surface with [field] — rename, retype, or sample edit. */
     fun updateStateField(index: Int, field: StateField) {
-        val screen = activeScreen ?: return
-        execute(SetStateField(screen.id, index, field))
+        val ownerId = activeEditRootId ?: return
+        execute(SetStateField(ownerId, index, field))
     }
 
-    /** Remove the state field named [name] from the active screen (ADR-034). Undoable. */
+    /** Remove the state field named [name] from the active edit surface (ADR-034). Undoable. */
     fun removeStateField(name: String) {
-        val screen = activeScreen ?: return
-        execute(RemoveStateField(screen.id, name))
+        val ownerId = activeEditRootId ?: return
+        execute(RemoveStateField(ownerId, name))
     }
 
     /** The first `<base><n>` name not already a state field name — always a legal binding identifier (GC-3). */
