@@ -22,5 +22,12 @@ package viewforge.model
  * (`{name, scalar}` → `{name, type}`) and sample cells (a bare primitive → `{kind:"scalar", value}`), so
  * unlike M1to2/M2to3 the 3->4 migration (M3to4) actually **transforms** the document, not just stamps it.
  * (ADR-030 responsive, previously reserved for v4, slides to v5.)
+ *
+ * v5 (ADR-034 Amendment, component-local state) adds [ComponentDef.state] — a component gets its own
+ * read-only screen-style [StateField]s, resolved against itself (never the enclosing screen). Additive: a
+ * v4 document has no component state and is already a valid v5 document, so the 4->5 migration only stamps
+ * the version (M4to5). The bump exists for the same reason as M2to3 — a v4-only build would silently drop
+ * component `state` and misrender every component-local binding — so a v5 file must be refused cleanly by
+ * older builds (ProjectStore NEWER_SCHEMA gate). (ADR-030 responsive consequently slides to v6/M5to6.)
  */
-const val SCHEMA_VERSION: Int = 4
+const val SCHEMA_VERSION: Int = 5

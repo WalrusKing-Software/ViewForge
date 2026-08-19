@@ -48,6 +48,14 @@ object UserComponent {
  * A reusable, user-defined composable (DATA_MODEL §4). Instances reference it via a node of type
  * [UserComponent.TYPE]. A component must never contain itself directly or transitively — cycle
  * detection runs on load, not just on edit (PF-3).
+ *
+ * [state] is the component's own read-only, design-time data (ADR-034 Amendment, component-local state):
+ * the named [StateField]s its internal tree binds to via [PropValue.StateBinding], exactly as a [Screen]
+ * does. It is resolved against *this* component's own state — never the enclosing screen's — so an instance
+ * is self-contained. Distinct from [parameters], which are supplied by the instance ([PropValue.ParamRef]);
+ * inside a component root a prop may reference either, and they never collide (distinct [PropValue] members).
+ * Additive and defaulted — a component without data serializes identically to before — though populating it
+ * is what claims schema v5 (a v4 build would silently drop it and misrender every component-local binding).
  */
 @Serializable
 data class ComponentDef(
@@ -55,6 +63,7 @@ data class ComponentDef(
     val name: String,
     val parameters: List<Parameter> = emptyList(),
     val root: Node,
+    val state: List<StateField> = emptyList(),
 )
 
 /**

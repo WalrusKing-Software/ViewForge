@@ -138,6 +138,43 @@ class MigrationTest {
     }
 
     @Test
+    fun `M4to5 stamps the version and leaves the rest of the document untouched`() {
+        // Component-local state (ADR-034 Amendment) is purely additive — a v4 document has no component
+        // `state`, so the 4->5 step only stamps the version, exactly like M1to2/M2to3.
+        val v4 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(4), "id" to JsonPrimitive("x")))
+        val v5 = viewforge.project.migrations.M4to5.migrate(v4)
+        assertEquals(5, SchemaMigrations.readVersion(v5))
+        assertEquals(JsonPrimitive("x"), v5["id"])
+    }
+
+    @Test
+    fun `a schema-4 document with a component migrates through the store and loads at the current version`() {
+        // A v4 file carries no component state, so the 4->5 step is a pure version stamp (M4to5): the
+        // document is already a valid v5 and its component must load unchanged, reporting its on-disk version.
+        val tmp = Files.createTempDirectory("vforge-4to5").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 4,
+              "id": "01LEGACYCMP",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+              "components": [
+                { "id": "cmp_1", "name": "Bare", "root": { "id": "n_1", "type": "compose.foundation.layout.Box" } }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(4, result.migratedFromVersion)
+        // The component loads with a defaulted empty state (component-local state is opt-in).
+        assertTrue(result.project.components.single().state.isEmpty())
+    }
+
+    @Test
     fun `the frozen schema-3 Dashboard fixture migrates through the store and equals the in-code v4 model`() {
         // Dashboard-v3.vforge is the pre-#256 committed serialization (flat record fields, bare cells). Loading
         // it must run M3to4 and yield exactly the recursive in-code fixture, proving the migration is correct.
