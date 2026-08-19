@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
 **Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
-**Schema version:** 4 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; see §10 version history)
+**Schema version:** 5 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; v5 = component-local state, ADR-034 Amendment #266; see §10 version history)
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -88,9 +88,10 @@ to (#21). Each `StateField` is `(name, type, sample)`:
   sample value, so a nested-list cell holds its own rows (recursive, mirroring `type`). The canvas renders the
   sample and codegen seeds the generated stub from it (ADR-034).
 
-A `vforge.repeat` node iterates a list field (§12.2); a scalar field feeds a scalar `StateBinding`. State is
-screen-scoped and read-only this release — component-local state, mutation, and events are deferred. Adding
-`state` claimed **schema v3** (§10): a v2-only build would silently drop it and misrender every binding.
+A `vforge.repeat` node iterates a list field (§12.2); a scalar field feeds a scalar `StateBinding`. The
+**same `StateField` model** also lives on `ComponentDef.state` (§4, component-local state, Amendment #266), so a
+reusable component owns data too — resolved against itself. State stays read-only this release; mutation and
+events are deferred. Adding `Screen.state` claimed **schema v3** (§10); component `state` later claimed **v5**.
 
 ---
 
@@ -106,7 +107,8 @@ A user-defined composable, reusable across screens.
     { "name": "label", "type": "String", "default": { "kind": "literal", "value": "Click" } },
     { "name": "onClick", "type": "Function0<Unit>", "default": null }
   ],
-  "root": { /* Node */ }
+  "root": { /* Node */ },
+  "state": [ /* StateField[] — component-local state (schema 5), ADR-034 Amendment #266; omitted when empty */ ]
 }
 ```
 
@@ -127,6 +129,16 @@ instance-`props` side needs no schema change, only `ParamRef` does. Codegen emit
 render resolves each `ParamRef` against the instance's args, falling back to `Parameter.default`.
 *(Codegen — typed fn params + call args — ships in slice 2; render-time resolution and inspector arg
 editing land in later slices of the parameters epic.)*
+
+**Component-local state (schema 5, ADR-034 Amendment #266).** A `ComponentDef` may carry its own
+`state: List<StateField>` — the *same* model `Screen.state` uses (§3) — so a component's internal tree can
+`StateBinding`-bind, `vforge.repeat`, and populate a `vforge.dropdown` from data it owns, resolved against
+**itself**, never the enclosing screen. An instance stays self-contained: at render the definition's bindings
+resolve against its own `sample` data before the tree is drawn in the instance's place; at codegen the state
+becomes body locals + record `data class`es private to the component's `@Composable fun`, coexisting with its
+`parameters` (a prop inside the root may be a `ParamRef` *or* a `StateBinding` — distinct `PropValue` members,
+never ambiguous). Additive and omitted when empty, so a stateless component is byte-identical to before; the
+bump to schema 5 is the same "old builds silently drop it" reasoning as `Screen.state` (§10).
 
 **Cycle detection is required.** A user component must not, directly or transitively, contain
 itself. It is validated on load (`ProjectValidator`) and guarded again at render time
@@ -216,8 +228,9 @@ an additive optional field it is forward-incompatible and needs a version bump (
 
 ### `StateBinding` — read-only data binding (schema 3, ADR-034)
 
-Binds a prop to a screen's declared **read-only** state (§3, `Screen.state`) — the design-time answer to
-#21's "data-driven content" without any evaluation. `path` is a **dotted identifier path** resolved by
+Binds a prop to the declared **read-only** state of its owner — a `Screen.state` (§3) or, since schema 5, a
+`ComponentDef.state` (§4, ADR-034 Amendment #266), resolved against whichever surface the prop lives in — the
+design-time answer to #21's "data-driven content" without any evaluation. `path` is a **dotted identifier path** resolved by
 *structural lookup*, never parsed or evaluated as Kotlin (grammar: `identifier ('.' identifier)*` — no
 indexing, calls, or operators). A single segment names a scalar `StateField` (`progress`); inside a
 `vforge.repeat` template the reserved `item` root names the current record (`item.title`). `item` always names
@@ -387,7 +400,8 @@ changes.
 | **2** | `PropValue.ParamRef` — a new member of the *closed* `PropValue` union (§6), forward-incompatible (ADR-028). | `M1to2` (stamp). |
 | **3** | `Screen.state` read-only data binding (§3, ADR-034) — an additive field, but a v2 build would silently drop it and misrender every `StateBinding`/`vforge.repeat`, so it is treated as semantic. | `M2to3` (stamp; v2 docs carry no state and are already valid v3). |
 | **4** | Nested lists (ADR-034 Amendment #255) — `RecordField` carries a full `StateType` and a sample cell is a `SampleValue`, so a record field may be a nested list. Changes the serialized shape of v3 record fields/cells, so a *transforming* migration (not a stamp). | `M3to4` (transforms `{name,scalar}`→`{name,type}` and cell primitive→`{kind:"scalar",value}`; frozen v3 fixture). |
-| **5** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M4to5`. |
+| **5** | Component-local state (ADR-034 Amendment #266) — `ComponentDef` gains its own `state: List<StateField>` (§3, §4), the same model `Screen.state` carries; additive, but a v4 build would silently drop it and misrender every component-local binding, so it is treated as semantic. | `M4to5` (stamp; v4 docs carry no component state and are already valid v5). |
+| **6** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M5to6`. |
 
 ---
 
@@ -515,17 +529,19 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    runnable stub. Slice 2 (ADR-034 Amendments) added a `LazyColumn` layout for the repeat (#251), a
    `vforge.dropdown` node whose `options` bind to a list field (#253), and **nested lists** (#255, schema 4) —
    a record field may itself be a list, and a repeat may bind `source = item.<listField>`, with `item`
-   shadowing the innermost element.
+   shadowing the innermost element. **Component-local state** (#266, schema 5) then gave `ComponentDef` its own
+   `state` (§4), so all of the above work inside a reusable component against data it owns, not just on a screen.
 3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
    overrides live **on the node** as an additive optional field
    `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
    base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
    strings to `core` and defined by the framework package's target (Material window size classes —
    `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
-   Introducing the field will bump the schema **4 → 5** (an `M4to5` stamp) because it is a semantic
+   Introducing the field will bump the schema **5 → 6** (an `M5to6` stamp) because it is a semantic
    capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). (Originally
-   scoped to v3; ADR-034 read-only data binding claimed v3, then its nested-lists amendment (#255) claimed
-   v4, so responsive slides to v5.) A separate node-id-keyed override layer was rejected — see ADR-030.
+   scoped to v3; ADR-034 read-only data binding claimed v3, its nested-lists amendment (#255) claimed v4,
+   and its component-local-state amendment (#266) claimed v5, so responsive slides to v6.) A separate
+   node-id-keyed override layer was rejected — see ADR-030.
 4. **Interaction/navigation.** *Partially resolved (ADR-034):* `StateBinding` is now live for **read-only**
    data binding (§6). Mutable state, event handlers, and navigation remain out of scope for v1 — a later,
    separately consent-gated ADR.
