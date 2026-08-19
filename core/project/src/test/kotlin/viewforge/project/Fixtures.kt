@@ -1,6 +1,7 @@
 package viewforge.project
 
 import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.Action
 import viewforge.model.ColorPair
 import viewforge.model.ComponentDef
 import viewforge.model.FrameworkRef
@@ -250,6 +251,76 @@ object Fixtures {
                             listOf(
                                 mapOf("label" to JsonPrimitive("Ada")),
                                 mapOf("label" to JsonPrimitive("Grace")),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    /**
+     * A schema-v6 project exercising **interactive state & events** (ADR-035, #277): a screen declaring a
+     * writable scalar `count` (Int) and `expanded` (Bool), and a Button whose `onClick` [Node.handlers] slot
+     * holds an ordered [Action] list — [Action.Adjust] the counter and [Action.Toggle] the flag. It exercises
+     * the closed action model, a handler map on a node, and a scalar [PropValue.StateBinding] reading the state,
+     * all serialized under the `kind` discriminator. No evaluator is involved (PF-4).
+     */
+    fun interactiveProject(): Project = Project(
+        id = "01J8INTERACT",
+        name = "Interactive",
+        framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+        targets = listOf("desktop"),
+        screens =
+        listOf(
+            Screen(
+                id = "scr_counter",
+                name = "Counter",
+                state =
+                listOf(
+                    StateField(
+                        name = "count",
+                        type = StateType.Scalar(ScalarType.INT),
+                        sample = SampleValue.Scalar(JsonPrimitive(0)),
+                    ),
+                    StateField(
+                        name = "expanded",
+                        type = StateType.Scalar(ScalarType.BOOL),
+                        sample = SampleValue.Scalar(JsonPrimitive(false)),
+                    ),
+                ),
+                root =
+                Node(
+                    id = NodeId("n_int_col"),
+                    type = "compose.foundation.layout.Column",
+                    children =
+                    listOf(
+                        Node(
+                            id = NodeId("n_int_label"),
+                            type = "compose.material3.Text",
+                            props = mapOf("text" to PropValue.StateBinding("count")),
+                        ),
+                        Node(
+                            id = NodeId("n_int_button"),
+                            type = "compose.material3.Button",
+                            handlers =
+                            mapOf(
+                                "onClick" to
+                                    listOf(
+                                        Action.Adjust("count", PropValue.Literal(JsonPrimitive(1))),
+                                        Action.Toggle("expanded"),
+                                    ),
+                            ),
+                            slots =
+                            mapOf(
+                                "content" to
+                                    listOf(
+                                        Node(
+                                            id = NodeId("n_int_btext"),
+                                            type = "compose.material3.Text",
+                                            props = mapOf("text" to PropValue.Literal(JsonPrimitive("Increment"))),
+                                        ),
+                                    ),
                             ),
                         ),
                     ),

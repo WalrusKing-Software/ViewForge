@@ -29,5 +29,13 @@ package viewforge.model
  * the version (M4to5). The bump exists for the same reason as M2to3 — a v4-only build would silently drop
  * component `state` and misrender every component-local binding — so a v5 file must be refused cleanly by
  * older builds (ProjectStore NEWER_SCHEMA gate). (ADR-030 responsive consequently slides to v6/M5to6.)
+ *
+ * v6 (ADR-035, #277) adds **interactive state & events**: a [Node] gains [Node.handlers] — event slots (e.g.
+ * "onClick") each holding a `List<Action>` from the closed [Action] set — and screen/component [StateField]s
+ * become writable *targets* of those actions. No evaluator is introduced (an [Action] is a structured operation
+ * dispatched by `when`, never parsed — PF-4). Populating handlers is forward-incompatible — a v5-only build
+ * would silently drop `handlers` and render a dead UI — so it claims v6 with an `M5to6` **stamp** migration (a
+ * v5 document carries no handlers and is already a valid v6 document, like M2to3/M4to5). This takes the slot
+ * ADR-030 responsive had reserved, so responsive slides to v7/M6to7.
  */
-const val SCHEMA_VERSION: Int = 5
+const val SCHEMA_VERSION: Int = 6

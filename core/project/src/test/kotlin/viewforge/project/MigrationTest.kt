@@ -148,6 +148,43 @@ class MigrationTest {
     }
 
     @Test
+    fun `M5to6 stamps the version and leaves the rest of the document untouched`() {
+        // Interactive state & events (ADR-035) is purely additive — a v5 document has no node `handlers`,
+        // so the 5->6 step only stamps the version, exactly like M1to2/M2to3/M4to5.
+        val v5 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(5), "id" to JsonPrimitive("x")))
+        val v6 = viewforge.project.migrations.M5to6.migrate(v5)
+        assertEquals(6, SchemaMigrations.readVersion(v6))
+        assertEquals(JsonPrimitive("x"), v6["id"])
+    }
+
+    @Test
+    fun `a schema-5 document with no handlers migrates through the store and loads at the current version`() {
+        // A v5 file carries no node handlers, so the 5->6 step is a pure version stamp (M5to6): the document
+        // is already a valid v6 and its node must load unchanged, reporting its on-disk version for backup.
+        val tmp = Files.createTempDirectory("vforge-5to6").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 5,
+              "id": "01LEGACYINT",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+              "screens": [
+                { "id": "s", "name": "S", "root": { "id": "n_1", "type": "compose.foundation.layout.Box" } }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(5, result.migratedFromVersion)
+        // The node loads with defaulted empty handlers (interactivity is opt-in).
+        assertTrue(result.project.screens.single().root.handlers.isEmpty())
+    }
+
+    @Test
     fun `a schema-4 document with a component migrates through the store and loads at the current version`() {
         // A v4 file carries no component state, so the 4->5 step is a pure version stamp (M4to5): the
         // document is already a valid v5 and its component must load unchanged, reporting its on-disk version.

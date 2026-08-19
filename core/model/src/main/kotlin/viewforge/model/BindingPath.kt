@@ -78,6 +78,26 @@ fun resolveListSource(path: String, fields: List<StateField>): StateField? {
 }
 
 /**
+ * The **writable** state field a mutating [Action]'s [path] names (ADR-035, #277), or null if it does not name a
+ * declared field. A target is a single top-level identifier naming a [StateField] in the owner's state — an
+ * `item.*` path is *not* writable (a repeat row is design-time sample data, not a store). Purely structural, no
+ * evaluation (PF-4): the shared authority the reducer, generator, and inspector use to validate a handler target.
+ */
+fun resolveWritableTarget(path: String, fields: List<StateField>): StateField? {
+    val segs = parseBindingPath(path) ?: return null
+    if (segs.size != 1) return null
+    return fields.firstOrNull { it.name == segs[0] }
+}
+
+/**
+ * The scalar type an assignable target [path] names (for [Action.SetState] / [Action.Toggle] / [Action.Adjust]),
+ * or null when [path] does not name a top-level *scalar* field. A list-of-record target (for [Action.AppendRow] /
+ * [Action.RemoveRow]) yields null here — resolve it with [resolveWritableTarget] and check for [StateType.ListOfRecord].
+ */
+fun resolveWritableScalar(path: String, fields: List<StateField>): ScalarType? =
+    (resolveWritableTarget(path, fields)?.type as? StateType.Scalar)?.scalar
+
+/**
  * The record fields of the list a repeat `source` [path] names, in **either** scope (nested lists, #255): a
  * single segment names a top-level [StateType.ListOfRecord] screen field; `item.<field>` names a nested list
  * field of the enclosing repeat's record ([BindingTypeScope.itemFields]). Null when [path] does not name a list.
