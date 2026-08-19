@@ -64,13 +64,39 @@ a nested list and a sample cell may hold nested rows — still typed literals lo
 paths, with the per-repeat row cap applying at every nesting level, so the recursion introduces no new eval
 surface. **Component-local state** (#266) likewise only relocates the *same* structure onto a `ComponentDef`:
 identical typed-literal samples and structurally-navigated identifier paths, resolved against the component
-instead of a screen, so it too adds no evaluator, mutation, or event path. That gate becomes owed only when
-*mutable* state and event handlers arrive (the direct route toward evaluating user code), which is a separate,
-later ADR with its own threat model.
+instead of a screen, so it too adds no evaluator, mutation, or event path. Mutable state and event handlers
+arrive with **ADR-035** (schema 6) — and, crucially, still without an evaluator: they are modelled as a closed,
+structured action set, not user code. See the **Interactive actions** requirements (IA-1…IA-6) below.
 
 **Design note on PF-4:** users will eventually ask for a live-evaluating expression field. That
 would mean embedding a Kotlin scripting engine and executing untrusted code from project files. If
-it's ever built, it needs its own threat model and an explicit, per-project user consent gate.
+it's ever built, it needs its own threat model and an explicit, per-project user consent gate. Note that
+interactivity (ADR-035, below) deliberately does **not** cross this line: it ships mutation and events as a
+closed action model precisely so no evaluator is introduced.
+
+### Interactive actions (ADR-035, schema 6)
+
+Interactivity — mutable state and event handlers — is the capability the PF-11 note reserved a gate for. It
+arrives as a **closed, structured action model, still with no evaluator**: an event handler is a `List<Action>`
+from a sealed set, never text and never parsed. Handlers ride in the untrusted `.vforge` document, so PF-1…PF-8
+apply to them unchanged; these requirements are what keeps the new capability inside the existing no-eval model.
+
+| ID | Requirement |
+|---|---|
+| IA-1 | An event handler is a **closed, sealed `Action` list** — `SetState` / `Toggle` / `Adjust` / `AppendRow` / `RemoveRow` / `Navigate` — dispatched by a `when` at every layer (the C13 reducer, codegen, the inspector). There is **no parser, no scripting engine, no evaluator**, so PF-4 stays literally true. Free-form / expression handlers are rejected (ADR-035). |
+| IA-2 | An action `target` is a **writable `StateBinding` identifier** resolved by structural lookup (`resolveWritableTarget`) to a declared, type-compatible `Screen.state` / `ComponentDef.state` field — a single top-level segment; an `item.*` repeat path is **not** writable. An unresolved target marks the node unverified (PF-6 discipline), never dynamic dispatch. Identifiers are validated as legal Kotlin (GC-3). |
+| IA-3 | An action `value` / `delta` / `index` / row cell rides the existing `PropValue` trust boundary — a typed `Literal` or a *read* `StateBinding` — bounded by the same file/size limits as any document (PF-2). Never executable. |
+| IA-4 | Interaction runs **only in the C13 run-mode preview**, over an *ephemeral* copy of the sample state; the design canvas stays static and nothing is persisted to the IR by running a handler. Because the action set is closed and total, running it live is safe by construction. |
+| IA-5 | Generated interactive code (`remember { mutableStateOf(...) }` + structural handler lambdas) is built with the **KotlinPoet structural API** (GC-1 / GC-2), never string-concatenated. |
+| IA-6 | Because the model adds **no evaluator**, the heavy consent gate PF-4 reserves is **not owed**. The genuine step up in generated-code capability (mutation + events) is discharged proportionally by a **light, one-time per-project acknowledgment** — recorded per project id in editor preferences, informational, **not a gate**: nothing is blocked when it is absent, and it never travels in a `.vforge`. |
+
+**Design note on IA-* (interactive actions, ADR-035):** the key security property is that "mutable state +
+events" and "evaluate user code" are **separable**. Modelling handlers as a sealed `Action` type — structural
+path resolution, typed `PropValue`s, `when`-based dispatch — lands interactivity **entirely inside the existing
+no-eval trust model**: PF-4 is unchanged, the feared scripting-engine threat never materializes, and the
+acknowledgment therefore *informs* rather than *guards against* an evaluator that does not exist. A hard,
+off-by-default gate would imply a danger the closed model does not contain; the light acknowledgment keeps the
+docs' promise proportionally.
 
 **Design note on PF-9 (re-open own output, ADR-032):** this is deliberately *not* a Kotlin parser and
 must never grow into one. The `.kt` is an entry point; the manifest is the ownership authority; the

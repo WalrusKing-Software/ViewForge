@@ -56,6 +56,7 @@ import viewforge.model.TypographyToken
 import viewforge.model.Ulid
 import viewforge.model.UserComponent
 import viewforge.model.findById
+import viewforge.model.hasInteractiveNodes
 import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
 import viewforge.model.reachableComponents
@@ -63,6 +64,7 @@ import viewforge.model.remapComponentReferences
 import viewforge.model.scalarRows
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
+import viewforge.prefs.AcknowledgedInteractive
 import viewforge.prefs.EditorPreferences
 import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
@@ -463,6 +465,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * persists it. Per-user chrome, never document data — like [recentProjects].
      */
     var favoriteComponents: List<String> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * Project ids whose one-time interactive-code acknowledgment (ADR-035, #277) the user has dismissed.
+     * Applied from prefs at launch ([applyAcknowledgedInteractive]); the shell persists it. Per-user chrome
+     * keyed by the project's stable ULID, never document data — like [favoriteComponents].
+     */
+    var acknowledgedInteractive: List<String> by mutableStateOf(emptyList())
         private set
 
     /**
@@ -1562,6 +1572,26 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** Pin or unpin [entry] as a favorite (P5a); the shell persists the updated list. */
     fun toggleFavorite(entry: PaletteEntry) {
         favoriteComponents = FavoriteComponents.toggled(favoriteComponents, entry.key)
+    }
+
+    // --- interactive-code acknowledgment (ADR-035, #277) ------------------------------------------
+
+    /** Restore the persisted acknowledged-project ids at startup; re-sanitized defensively. */
+    fun applyAcknowledgedInteractive(ids: List<String>) {
+        acknowledgedInteractive = AcknowledgedInteractive.sanitized(ids)
+    }
+
+    /**
+     * Whether the light interactive-code acknowledgment (ADR-035) should be shown: the open document contains
+     * at least one event handler AND this project has not been acknowledged before. It is an informational
+     * notice, not a gate — nothing is blocked while it is true (the closed action model adds no evaluator, PF-4).
+     */
+    val needsInteractiveAcknowledgment: Boolean
+        get() = document.hasInteractiveNodes() && document.id !in acknowledgedInteractive
+
+    /** Record that the current project's interactive-code notice has been dismissed; the shell persists it. */
+    fun acknowledgeInteractive() {
+        acknowledgedInteractive = AcknowledgedInteractive.acknowledged(acknowledgedInteractive, document.id)
     }
 
     /** Record a just-inserted entry [key] as most-recently-used (P5a): to the front, de-duplicated, capped. */
