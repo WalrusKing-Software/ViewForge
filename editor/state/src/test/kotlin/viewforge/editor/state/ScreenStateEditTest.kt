@@ -114,11 +114,46 @@ class ScreenStateEditTest {
     }
 
     @Test
-    fun `activeScreenStateForRender is empty while a component is open for in-place editing`() {
+    fun `a stateless component previews no state while open, never the screen's (ADR-034 Amendment)`() {
+        // The screen has state, but c1 (the open component) declares none — so the render surface shows no
+        // state and offers no bindable paths. A component edit must never preview the screen's data.
         val s = state()
         s.addScalarStateField()
         s.openComponent("c1")
         assertEquals(emptyList(), s.activeScreenStateForRender)
         assertEquals(emptyList(), s.bindablePaths(Node(NodeId("c-root"), "compose.foundation.layout.Box")))
+    }
+
+    @Test
+    fun `activeScreenStateForRender is the open component's own state, not the screen's (ADR-034 Amendment)`() {
+        // A component that declares component-local state: opening it makes that state — never the active
+        // screen's — the render/preview surface, filling the #243-deferred gap (component-local state, slice B).
+        val heading = viewforge.model.StateField(
+            name = "heading",
+            type = StateType.Scalar(viewforge.model.ScalarType.STRING),
+            sample = SampleValue.Scalar(JsonPrimitive("Members")),
+        )
+        val s = EditorState(
+            Project(
+                id = "p",
+                name = "P",
+                framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+                screens = listOf(Screen("s1", "Home", Node(NodeId("root"), "compose.foundation.layout.Column"))),
+                components = listOf(
+                    viewforge.model.ComponentDef(
+                        id = "c2",
+                        name = "Card",
+                        root = Node(NodeId("c2-root"), "compose.foundation.layout.Column"),
+                        state = listOf(heading),
+                    ),
+                ),
+            ),
+            FakeCatalog(),
+        )
+        // On the screen, the surface state is the screen's (here empty); opening c2 switches it to c2's state.
+        s.addScalarStateField()
+        assertEquals(s.activeScreen!!.state, s.activeScreenStateForRender)
+        s.openComponent("c2")
+        assertEquals(listOf(heading), s.activeScreenStateForRender)
     }
 }

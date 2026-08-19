@@ -1,9 +1,11 @@
 package viewforge.packages.compose.render
 
 import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Parameter
 import viewforge.model.PropValue
 import viewforge.model.RecordField
 import viewforge.model.Repeater
@@ -11,6 +13,7 @@ import viewforge.model.SampleValue
 import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.StateType
+import viewforge.model.UserComponent
 import viewforge.model.scalarRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -287,6 +290,52 @@ class StateBindingTest {
             (child.props[PLACEHOLDER_MESSAGE_PROP] as PropValue.Literal).value.content.contains("nope"),
             "placeholder should name the unbound options source, got ${child.props}",
         )
+    }
+
+    @Test
+    fun `a component instance inlines its own component-local state alongside its parameters (ADR-034 Amendment)`() {
+        // A component carrying BOTH a parameter and its own state: heading (scalar) + rows (list). Its root
+        // shows a ParamRef, binds the component scalar, and repeats the component list. Inlining an instance is
+        // exactly bindParameters (ADR-028) then expandScreenState(def.state) — the composition RenderUserComponent
+        // performs — proving params and component-local StateBindings coexist and never collide.
+        val def = ComponentDef(
+            id = "card",
+            name = "Card",
+            parameters = listOf(Parameter("title", "String")),
+            root = Node(
+                NodeId("c-col"),
+                "compose.foundation.layout.Column",
+                children = listOf(
+                    Node(NodeId("c-t"), "compose.material3.Text", props = mapOf("text" to PropValue.ParamRef("title"))),
+                    text("c-heading", "heading"),
+                    Repeater.node("rows", id = NodeId("c-rep"), template = listOf(text("c-row", "item.label"))),
+                ),
+            ),
+            state = listOf(
+                scalarField("heading", ScalarType.STRING, JsonPrimitive("Members")),
+                listField(
+                    "rows",
+                    listOf(RecordField("label", ScalarType.STRING)),
+                    rows = listOf(mapOf("label" to JsonPrimitive("Ada")), mapOf("label" to JsonPrimitive("Grace"))),
+                ),
+            ),
+        )
+        val instance = Node(
+            NodeId("inst"),
+            UserComponent.TYPE,
+            props = mapOf(UserComponent.COMPONENT_ID_PROP to lit("card"), "title" to lit("Team")),
+        )
+
+        val inlined = expandScreenState(bindParameters(def, instance), def.state)
+        val kids = inlined.children
+        // The parameter resolved to the instance's argument.
+        assertEquals(PropValue.Literal(JsonPrimitive("Team")), kids[0].props["text"])
+        // The component-local scalar binding resolved to the component's own sample — not any screen's.
+        assertEquals(PropValue.Literal(JsonPrimitive("Members")), boundText(kids[1]))
+        // The repeat expanded over the component's own list: two spliced rows, no repeat node left.
+        assertTrue(kids.none { it.type == Repeater.TYPE })
+        assertEquals(PropValue.Literal(JsonPrimitive("Ada")), boundText(kids[2]))
+        assertEquals(PropValue.Literal(JsonPrimitive("Grace")), boundText(kids[3]))
     }
 
     @Test

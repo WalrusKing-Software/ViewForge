@@ -755,13 +755,14 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     // --- read-only screen state (ADR-034, #21) ----------------------------------------------------
 
     /**
-     * The active screen's declared state (ADR-034) as it should feed the renderer and code preview — the
-     * screen's fields when a **screen** is the edit surface, but empty while a component is open for
-     * in-place editing (a component has no screen state; its `item`/screen bindings never resolve). The
-     * canvas seam and the code panel both read this, so a component edit never previews screen data.
+     * The declared state (ADR-034) of the active edit surface, as it should feed the renderer and code
+     * preview: the **opened component's** own state when one is open for in-place editing (component-local
+     * state, ADR-034 Amendment), else the active **screen's** state. Follows [activeEditRoot] exactly — the
+     * state always matches the tree being edited, so a binding resolves against the surface it lives in and a
+     * component edit never previews screen data (nor vice versa). Empty when the surface declares no state.
      */
     val activeScreenStateForRender: List<StateField>
-        get() = if (editingComponentId == null) activeScreen?.state.orEmpty() else emptyList()
+        get() = editingComponent?.state ?: activeScreen?.state.orEmpty()
 
     /** The active screen's list-of-record fields (ADR-034) — the `source`s a `vforge.repeat` can bind to. */
     val listStateFields: List<StateField>
