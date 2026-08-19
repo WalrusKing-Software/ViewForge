@@ -1,5 +1,6 @@
 package viewforge.editor.state
 
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.PropDefinition
@@ -64,6 +65,13 @@ interface ComponentCatalog {
 
     /** The editable prop schema for [type] — drives the data-driven inspector (M5, I1). Empty if unknown. */
     fun propsFor(type: String): List<PropDefinition>
+
+    /**
+     * The closed event slots [type] exposes (ADR-035, #277) — e.g. a Button → `onClick`. Drives the inspector's
+     * data-driven action editor, so a component's handlers need no per-component UI (I1 anti-pattern). Empty for
+     * a component with no events; defaults to empty so non-interactive test doubles need no override.
+     */
+    fun eventSlotsOf(type: String): List<EventSlotDefinition> = emptyList()
 
     /** Every modifier the inspector may add, with its arg schema (the renderer-supported set). */
     val modifierCatalog: List<ModifierDefinition>

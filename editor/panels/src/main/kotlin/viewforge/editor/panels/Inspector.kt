@@ -123,6 +123,15 @@ private fun InspectorBody(state: EditorState, node: Node) {
             }
         }
 
+        // Event handlers (ADR-035, #277): a data-driven action editor for every event slot the catalog declares
+        // for this component (e.g. a Button's onClick). No per-component UI — the section is generated from the
+        // slot metadata, exactly like the prop rows above.
+        val eventSlots = state.eventSlots(node)
+        if (eventSlots.isNotEmpty()) {
+            SectionLabel("Events")
+            EventSlotsEditor(state, node, eventSlots)
+        }
+
         // A repeat expands in place at render/codegen, so it never draws a container of its own — modifiers on
         // it would be meaningless. Every other node type gets the ordered modifier chain (ADR-005).
         if (node.type != Repeater.TYPE) {

@@ -23,6 +23,7 @@ import viewforge.editor.state.ProjectExportService
 import viewforge.editor.state.RegenerationReport
 import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
@@ -284,6 +285,11 @@ private object ComposeCatalog : ComponentCatalog {
     override fun slotsOf(type: String): List<String> = ComposeComponents.specFor(type)?.slots ?: emptyList()
 
     override fun propsFor(type: String): List<PropDefinition> = ComposeComponents.specFor(type)?.props ?: emptyList()
+
+    // Event slots (ADR-035, #277) come straight from the package spec, like props/slots — so a component's
+    // handlers stay data-driven and the inspector's action editor needs no per-component code.
+    override fun eventSlotsOf(type: String): List<EventSlotDefinition> =
+        ComposeComponents.specFor(type)?.eventSlots ?: emptyList()
 
     override val modifierCatalog: List<ModifierDefinition> = ComposeModifiers.definitions
 

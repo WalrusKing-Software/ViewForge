@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import viewforge.model.Action
+import viewforge.model.EventSlots
 import viewforge.model.PropValue
 import viewforge.model.SampleValue
 import viewforge.model.StateField
@@ -23,8 +24,8 @@ import viewforge.model.StateField
  * whose target/value doesn't resolve is a no-op (PF-6 discipline — never a crash, never dynamic dispatch).
  */
 
-/** The event-slot key a Button fires (ADR-035). Promoted to catalog-declared slot metadata in the inspector slice. */
-internal const val ON_CLICK: String = "onClick"
+/** The event-slot key a Button fires (ADR-035) — the shared [EventSlots.ON_CLICK] name the catalog/codegen also use. */
+internal const val ON_CLICK: String = EventSlots.ON_CLICK
 
 /** The initial run-mode state: each declared field seeded from its design-time [StateField.sample]. */
 internal fun initialInteractiveState(state: List<StateField>): Map<String, SampleValue> =

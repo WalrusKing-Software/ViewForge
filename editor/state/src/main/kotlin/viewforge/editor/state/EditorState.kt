@@ -18,6 +18,7 @@ import viewforge.command.RemoveStateField
 import viewforge.command.RenameNode
 import viewforge.command.RenameScreen
 import viewforge.command.RenameThemeToken
+import viewforge.command.SetHandler
 import viewforge.command.SetModifierArg
 import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
@@ -29,10 +30,12 @@ import viewforge.command.extractComponent
 import viewforge.command.importAsset
 import viewforge.command.promoteScreenToComponent
 import viewforge.command.promoteToParameter
+import viewforge.model.Action
 import viewforge.model.Asset
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
 import viewforge.model.ComponentDef
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -1273,6 +1276,22 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun resetProp(nodeId: NodeId, def: PropDefinition) {
         setProp(nodeId, def.name, def.default)
     }
+
+    /** The event slots [node]'s component type exposes (ADR-035) — the handler points the action editor offers. */
+    fun eventSlots(node: Node): List<EventSlotDefinition> = catalog.eventSlotsOf(node.type)
+
+    /**
+     * Set node [nodeId]'s event-handler [slot] to the ordered [actions] (ADR-035) — the one undoable command
+     * behind add/remove/reorder/edit of a slot's actions; an empty list clears the slot. Targets the active edit
+     * surface (screen or component), like [setProp].
+     */
+    fun setHandler(nodeId: NodeId, slot: String, actions: List<Action>) {
+        val rootId = activeEditRootId ?: return
+        execute(SetHandler(rootId, nodeId, slot, actions), selectAfter = selectedId)
+    }
+
+    /** The screens a `Navigate` action may target (all screens — navigating to the current one is allowed). */
+    fun navigableScreens(): List<Screen> = document.screens
 
     /**
      * Request importing an image from disk into node [nodeId]'s resource prop [propName] (ADR-021). The
