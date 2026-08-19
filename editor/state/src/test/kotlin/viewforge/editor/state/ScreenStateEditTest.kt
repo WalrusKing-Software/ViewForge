@@ -125,6 +125,23 @@ class ScreenStateEditTest {
     }
 
     @Test
+    fun `state mutators target the open component, not the screen (ADR-034 Amendment)`() {
+        // Opening a component makes it the edit surface, so declaring/editing/removing state lands on the
+        // component — the mutators are owner-agnostic (they target activeEditRootId), like the commands.
+        val s = state()
+        s.openComponent("c1")
+        s.addScalarStateField()
+        // The component's state gained a field; the underlying screen stayed empty.
+        assertEquals(1, s.activeScreenStateForRender.size)
+        assertEquals(emptyList(), s.activeScreen!!.state)
+        // Edit + remove operate on that same surface.
+        s.updateStateField(0, s.activeScreenStateForRender[0].copy(name = "renamed"))
+        assertEquals("renamed", s.activeScreenStateForRender[0].name)
+        s.removeStateField("renamed")
+        assertEquals(emptyList(), s.activeScreenStateForRender)
+    }
+
+    @Test
     fun `activeScreenStateForRender is the open component's own state, not the screen's (ADR-034 Amendment)`() {
         // A component that declares component-local state: opening it makes that state — never the active
         // screen's — the render/preview surface, filling the #243-deferred gap (component-local state, slice B).
