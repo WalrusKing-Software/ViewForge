@@ -49,7 +49,7 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 5")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 6")
     }
 
     @Test
@@ -87,13 +87,38 @@ class RoundTripTest {
     }
 
     @Test
-    fun `the committed schema-5 Dashboard_vforge fixture loads and equals the in-code model`() {
+    fun `the committed schema-6 Dashboard_vforge fixture loads and equals the in-code model`() {
         // Dashboard.vforge is the ADR-034 read-only-state fixture: screen state (scalar + list-of-record),
         // a StateBinding prop, and a vforge.repeat template. It is current-schema, so it loads without
         // migration and must decode to exactly the in-code fixture (DATA_MODEL rule 3).
         val result = ProjectStore.load(Paths.get(samplesDir(), "Dashboard.vforge"))
         assertTrue(result is LoadResult.Success, "expected Success but got $result")
         assertEquals(Fixtures.stateProject(), result.project)
+    }
+
+    @Test
+    fun `interactive handlers and the closed Action set survive a round-trip (ADR-035)`() {
+        // A screen with writable state and a Button whose onClick handler holds a closed Action list
+        // (Adjust + Toggle) must round-trip losslessly and carry the `kind` discriminators for each action.
+        val project = Fixtures.interactiveProject()
+        val json = ProjectCodec.encode(project)
+        assertContains(json, "\"kind\": \"adjust\"") // Action.Adjust
+        assertContains(json, "\"kind\": \"toggle\"") // Action.Toggle
+        assertContains(json, "\"onClick\"") // the event-slot key
+        assertEquals(project, ProjectCodec.decode(json))
+
+        // The fixture is meaningful: the button carries an ordered onClick action list against writable state.
+        val decoded = ProjectCodec.decode(json)
+        val button = decoded.screens.single().root.children.single { it.type == "compose.material3.Button" }
+        assertEquals(2, button.handlers.getValue("onClick").size)
+        assertEquals(listOf("count", "expanded"), decoded.screens.single().state.map { it.name })
+    }
+
+    @Test
+    fun `a node with no handlers omits the handlers field from the serialized form (encodeDefaults=false)`() {
+        // A non-interactive node must serialize exactly as before the v6 bump — the defaulted empty `handlers`
+        // map is omitted, so existing projects and goldens are byte-identical.
+        assertTrue(!ProjectCodec.encode(Fixtures.demoProject()).contains("\"handlers\""))
     }
 
     @Test
