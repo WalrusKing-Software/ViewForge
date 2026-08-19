@@ -192,14 +192,16 @@ Recorded so they're decisions, not oversights:
 - Round-trip parsing of hand-written Compose (see `PROJECT_PLAN.md` §7.1). *Exception:* re-opening
   output ViewForge itself generated is sanctioned separately — carried as an IR sidecar, recognised by
   ownership, never parsed (ADR-032, #22).
-- Visual state management / data binding. *Exception:* **read-only** data binding is sanctioned and
-  shipped (ADR-034, #21) — a screen declares typed, sample-backed `state`, props bind to it by structural
-  path (`PropValue.StateBinding`), and a `vforge.repeat` node repeats a template per row. Slice 2 extends the
-  read-only surface with a populated `vforge.dropdown` (#253) and **nested lists** (#255) — a record field may
-  itself be a list, repeated by an inner repeat over `item.<listField>` — and **component-local state** (#266),
-  which gives a reusable `ComponentDef` its own `state` so the same binding/repeat/dropdown work inside a
-  component against data it owns. Still excluded: **mutable** state, event handlers, and any expression
-  evaluation (a later, separately consent-gated ADR).
+- Visual state management / data binding. *Exception:* data binding **and** closed-action interactivity are
+  sanctioned and shipped (ADR-034 + ADR-035, #21). Read-only binding (ADR-034): a screen or component declares
+  typed, sample-backed `state`, props bind to it by structural path (`PropValue.StateBinding`), a `vforge.repeat`
+  repeats a template per row, a `vforge.dropdown` (#253) binds `options` to a list, and **nested lists** (#255)
+  let a record field itself be a list. Interactivity (ADR-035, schema v6): state is **writable** and a node's
+  event slots (`onClick`) hold an ordered, **closed `Action` list** — `SetState`/`Toggle`/`Adjust`/`AppendRow`/
+  `RemoveRow`/`Navigate` — that mutates declared state; C13 run-mode operates it live, and codegen emits real
+  `remember { mutableStateOf(...) }` + structural handler lambdas. Still excluded: **free-form / expression
+  evaluation** of handlers — a handler is a named, typed operation, never user-authored Kotlin (PF-4 / SECURITY
+  IA-*); complex logic is served by editing the generated code.
 - Navigation graph editing
 - Backend, API, or database integration
 - Real-time collaboration
