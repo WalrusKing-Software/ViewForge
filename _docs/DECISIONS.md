@@ -1055,9 +1055,9 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
 
-**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v6 / `M5to6`** after
-ADR-034 claimed v3 for read-only data binding, its nested-lists amendment (#255) claimed v4, and its
-component-local-state amendment claimed v5 (2026-08-18).
+**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v7 / `M6to7`** after
+ADR-034 claimed v3–v5 (read-only data binding, its nested-lists amendment #255, and its component-local-state
+amendment #266) and **ADR-035** claimed v6 for interactive state & events (2026-08-19).
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
@@ -1076,10 +1076,10 @@ the framework package's `TargetDefinition` (the Android target uses Material **w
 `compact` < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp). Render resolves the active breakpoint's
 overrides over the base props before dispatch (the same shape as `bindParameters`, ADR-028/#76); codegen
 emits the base value in Phase-2 M13, with window-size-class branching a later slice (M14). Introducing
-the field **bumps the schema 5 → 6** with an `M5to6` version stamp and a committed migration fixture
+the field **bumps the schema 6 → 7** with an `M6to7` version stamp and a committed migration fixture
 (DATA_MODEL §10), even though the field itself is additive. (Originally scoped to v3/`M2to3`; ADR-034's
-read-only data binding took v3, its nested-lists amendment (#255) took v4, and its component-local-state
-amendment took v5, so responsive slides to v6.)
+read-only data binding took v3, its nested-lists amendment (#255) took v4, its component-local-state
+amendment took v5, and ADR-035's interactive state & events took v6, so responsive slides to v7.)
 
 **Rationale.** Keeping overrides on the node keeps a node's full state in one place: selection, undo,
 copy/paste, extract-to-component, and structural-sharing rebuilds all already operate on a node and its
@@ -1087,9 +1087,9 @@ root-to-node path, so overrides ride along for free with no second structure to 
 identity. It also diffs cleanly (the overrides sit next to the props they modify) and needs no new
 cross-reference integrity rule. Opaque breakpoint strings keep `core` framework-agnostic — the same
 reason `Node.type` and theme tokens are strings — so a future non-Compose package can define its own
-breakpoint set. The 5 → 6 bump is deliberately conservative: a v5-only build silently ignoring a
+breakpoint set. The 6 → 7 bump is deliberately conservative: a v6-only build silently ignoring a
 populated `responsive` field would render/emit only base props, a fidelity loss, so this is a *semantic*
-change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M5to6` as
+change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M6to7` as
 the marker that lets an older build hit the `NEWER_SCHEMA` gate cleanly.
 
 **Rejected.** **A separate screen-level override layer keyed by node id** — duplicates node identity into
@@ -1102,9 +1102,9 @@ additive field with no version bump** — technically allowed by the additive po
 data-loss on old builds makes it a semantic change; bumping is the honest, safe call.
 
 **Consequences.** Phase 2 gains responsive layouts without disturbing any existing prop reader — render
-and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 6 with a
-one-line `M5to6` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
-(the field holds ordinary `PropValue`s). Costs accepted: a sixth schema version to carry forward, and a
+and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 7 with a
+one-line `M6to7` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
+(the field holds ordinary `PropValue`s). Costs accepted: a seventh schema version to carry forward, and a
 node can now hold prop values that only apply at some widths — the inspector must make the active
 breakpoint obvious so an edit's scope is never ambiguous (a Phase-2 UX task, M13).
 
@@ -1534,7 +1534,8 @@ structural lookup regardless of whose state it is (PF-4 unchanged — no evaluat
 Like slice 1 (and unlike the dropdown/`LazyColumn` amendments) populating component state is forward-incompatible
 — a v4-only build would silently drop it and misrender every component-local binding — so it **claims schema v5**
 with an `M4to5` **stamp** migration (a v4 document has no component state and is already a valid v5 document, like
-M2to3), a fixture, and the `NEWER_SCHEMA` gate. **ADR-030 responsive consequently slides to v6/`M5to6`.** The
+M2to3), a fixture, and the `NEWER_SCHEMA` gate. **ADR-030 responsive consequently slides to v6/`M5to6`** (and
+later to **v7/`M6to7`** once ADR-035 interactive state & events claimed v6). The
 inspector reuses the screen-state editor against the *active edit surface* — the open component's state when one
 is being edited, else the screen's — via owner-agnostic state commands (a screen id or a component id both name a
 "state owner"), so there is no per-surface UI. **Rejected here** (again): *project-global state* — it couples
@@ -1546,7 +1547,8 @@ separate, consent-gated ADR (this amendment adds **no** evaluation, mutation, or
 
 ## ADR-035 — Interactive state & events: a closed structured action model, no evaluation, consent-acknowledged
 
-**Status:** Proposed (2026-08-18).
+**Status:** Accepted (2026-08-19). Implemented across stacked slices #279–#284 (model+schema v6, renderer/C13
+reducer, codegen, inspector action editor, per-project acknowledgment + SECURITY IA-*, docs).
 
 **Context.** #21 always had two halves. ADR-034 shipped the first — **read-only** data binding — and was
 careful to draw the second as an explicit boundary it would *not* cross: "mutable state plus `onClick →

@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
 **Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
-**Schema version:** 5 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; v5 = component-local state, ADR-034 Amendment #266; see §10 version history)
+**Schema version:** 6 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; v5 = component-local state, ADR-034 Amendment #266; v6 = interactive state & events, ADR-035; see §10 version history)
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -90,8 +90,12 @@ to (#21). Each `StateField` is `(name, type, sample)`:
 
 A `vforge.repeat` node iterates a list field (§12.2); a scalar field feeds a scalar `StateBinding`. The
 **same `StateField` model** also lives on `ComponentDef.state` (§4, component-local state, Amendment #266), so a
-reusable component owns data too — resolved against itself. State stays read-only this release; mutation and
-events are deferred. Adding `Screen.state` claimed **schema v3** (§10); component `state` later claimed **v5**.
+reusable component owns data too — resolved against itself. Since **ADR-035** (schema v6, interactive state &
+events), this state is also **writable**: an event handler's action mutates a declared field, and its `sample`
+is both the design-time preview value *and* the initial runtime value. There is still no new state concept and
+no evaluator — a handler is a closed, structured `Action` list, never an expression (see §5 `Node.handlers` and
+§6). Adding `Screen.state` claimed **schema v3** (§10); component `state` later claimed **v5**; making state
+writable + event handlers claimed **v6**.
 
 ---
 
@@ -159,7 +163,8 @@ data class Node(
     val children: List<Node> = emptyList(),
     val slots: Map<String, List<Node>> = emptyMap(),
     val locked: Boolean = false,                 // editor-only: protects this node (per-node, not its subtree)
-    val hidden: Boolean = false                  // editor-only: excluded from render AND codegen
+    val hidden: Boolean = false,                 // editor-only: excluded from render AND codegen
+    val handlers: Map<String, List<Action>> = emptyMap()  // event slot -> ordered actions (ADR-035); omitted when empty
 )
 ```
 
@@ -178,6 +183,16 @@ Keeping them separate avoids encoding slot identity into child ordering, which w
 
 **`hidden`** — deliberately excludes the node from *both* render and codegen. A "visible in editor
 but not in output" state would be a fidelity lie.
+
+**`handlers`** — event slots the component exposes (a Button's `onClick`), each mapped to an **ordered
+`List<Action>`** run top-to-bottom (ADR-035, schema v6). An `Action` is a closed, sealed operation —
+`SetState` / `Toggle` / `Adjust` / `AppendRow` / `RemoveRow` / `Navigate` — **never an expression**: a mutating
+action names a *writable* `StateBinding` target (a declared `Screen.state` / `ComponentDef.state` field of a
+compatible type) and carries typed `PropValue` operands, so dispatch is a `when` at every layer (the C13
+run-mode reducer, codegen, the inspector) with **no evaluator anywhere** (PF-4 stays literally true; see
+SECURITY IA-*). The map is omitted when empty, so a handler-free node serializes exactly as before. Which slots
+a component exposes is catalog metadata (`EventSlotDefinition`), not persisted — the same data-driven source
+that describes its props.
 
 **`locked`** — editor-only protection (T4), scoped **per-node, not to the subtree**: a locked node is
 non-selectable (canvas click, marquee, tree click), non-draggable, cannot receive dropped children (a
@@ -401,7 +416,8 @@ changes.
 | **3** | `Screen.state` read-only data binding (§3, ADR-034) — an additive field, but a v2 build would silently drop it and misrender every `StateBinding`/`vforge.repeat`, so it is treated as semantic. | `M2to3` (stamp; v2 docs carry no state and are already valid v3). |
 | **4** | Nested lists (ADR-034 Amendment #255) — `RecordField` carries a full `StateType` and a sample cell is a `SampleValue`, so a record field may be a nested list. Changes the serialized shape of v3 record fields/cells, so a *transforming* migration (not a stamp). | `M3to4` (transforms `{name,scalar}`→`{name,type}` and cell primitive→`{kind:"scalar",value}`; frozen v3 fixture). |
 | **5** | Component-local state (ADR-034 Amendment #266) — `ComponentDef` gains its own `state: List<StateField>` (§3, §4), the same model `Screen.state` carries; additive, but a v4 build would silently drop it and misrender every component-local binding, so it is treated as semantic. | `M4to5` (stamp; v4 docs carry no component state and are already valid v5). |
-| **6** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M5to6`. |
+| **6** | Interactive state & events (ADR-035) — state becomes **writable** and `Node.handlers` maps an event slot to an ordered, closed `List<Action>` (§3, §5); additive, but a v5 build would silently drop every handler and render a dead UI, so it is treated as semantic. No evaluator is introduced (PF-4 / SECURITY IA-*). | `M5to6` (stamp; v5 docs carry no handlers and are already valid v6). |
+| **7** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M6to7`. |
 
 ---
 
@@ -537,11 +553,13 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
    strings to `core` and defined by the framework package's target (Material window size classes —
    `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
-   Introducing the field will bump the schema **5 → 6** (an `M5to6` stamp) because it is a semantic
+   Introducing the field will bump the schema **6 → 7** (an `M6to7` stamp) because it is a semantic
    capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). (Originally
    scoped to v3; ADR-034 read-only data binding claimed v3, its nested-lists amendment (#255) claimed v4,
-   and its component-local-state amendment (#266) claimed v5, so responsive slides to v6.) A separate
-   node-id-keyed override layer was rejected — see ADR-030.
-4. **Interaction/navigation.** *Partially resolved (ADR-034):* `StateBinding` is now live for **read-only**
-   data binding (§6). Mutable state, event handlers, and navigation remain out of scope for v1 — a later,
-   separately consent-gated ADR.
+   its component-local-state amendment (#266) claimed v5, and ADR-035 interactive state & events claimed v6,
+   so responsive slides to v7.) A separate node-id-keyed override layer was rejected — see ADR-030.
+4. **Interaction/navigation.** *Resolved (ADR-035, schema v6):* state is now **writable** and a node's
+   `handlers` map event slots to ordered, closed `Action` lists (§5) — `SetState`/`Toggle`/`Adjust`/
+   `AppendRow`/`RemoveRow`/`Navigate` — dispatched by a `when`, never evaluated (PF-4 / SECURITY IA-*).
+   `Navigate` is the structural hook for screen-to-screen navigation (#214, no generated host yet). Free-form
+   expression handlers stay **out of scope** — complex logic is served by editing the generated code.
