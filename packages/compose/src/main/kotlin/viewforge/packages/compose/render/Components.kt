@@ -220,10 +220,16 @@ private fun RenderUserComponent(node: Node, modifier: Modifier, ctx: RenderConte
         is InstanceResolution.Missing -> ErrorPlaceholder("Unresolved component:\n${resolution.id ?: "?"}", modifier)
         is InstanceResolution.Cycle -> ErrorPlaceholder("Component cycle:\n${resolution.def.name}", modifier)
         is InstanceResolution.Resolved -> Box(modifier) {
-            // Resolve the definition's parameters against this instance's arguments (ADR-028) before
-            // rendering, so a ParamRef in the body draws the instance's value (or the parameter default).
+            // Resolve the definition's parameters against this instance's arguments (ADR-028), then expand the
+            // definition's own component-local state (ADR-034 Amendment): its StateBindings resolve to *its*
+            // sample data and its repeats expand — against the component's state, never the enclosing screen's,
+            // so an instance is self-contained. Params first, so a ParamRef inside a repeat template is bound
+            // before the template is duplicated per row. Stateless components keep the zero-copy fast path.
             // Keyed on the instance and definition so the substitution recomputes only when either changes.
-            val bound = remember(node, resolution.def) { bindParameters(resolution.def, node) }
+            val bound = remember(node, resolution.def) {
+                val params = bindParameters(resolution.def, node)
+                if (resolution.def.state.isEmpty()) params else expandScreenState(params, resolution.def.state)
+            }
             // The internals are not the active tree's nodes: suppress per-node instrumentation so a click
             // selects the instance (the Box above), and mark this id as expanding to break any cycle.
             RenderNode(
