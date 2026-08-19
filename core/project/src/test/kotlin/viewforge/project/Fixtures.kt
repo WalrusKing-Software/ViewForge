@@ -105,7 +105,7 @@ object Fixtures {
         Project(id = "01MIN", name = "Min", framework = FrameworkRef("compose-multiplatform", "1.0.0"))
 
     /**
-     * A schema-v4 project exercising ADR-034 read-only screen state: a scalar [StateField] and a
+     * A schema-v5 project exercising ADR-034 read-only screen state: a scalar [StateField] and a
      * list-of-record one, a scalar [PropValue.StateBinding], and a [Repeater] whose template binds an
      * `item.*` path. The byte-identical serialization is committed as `samples/Dashboard.vforge`; the
      * two are kept in lockstep by a test (as Gallery is with the app's sample), so this is the single
@@ -173,6 +173,83 @@ object Fixtures {
                                     type = "compose.material3.Text",
                                     props = mapOf("text" to PropValue.StateBinding("item.name")),
                                 ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    /**
+     * A schema-v5 project exercising **component-local state** (ADR-034 Amendment): a [ComponentDef] carrying
+     * its own [Screen]-style [state] — a scalar `heading` and a list-of-record `rows` — whose internal tree
+     * binds the scalar and repeats over the list. A screen instantiates it but declares no state of its own,
+     * so the component's state is self-contained (resolved against the component, never the screen).
+     */
+    fun componentStateProject(): Project = Project(
+        id = "01J8COMPSTATE",
+        name = "ComponentState",
+        framework = FrameworkRef("compose-multiplatform", "1.0.0"),
+        targets = listOf("desktop"),
+        screens =
+        listOf(
+            Screen(
+                id = "scr_host",
+                name = "Host",
+                root =
+                Node(
+                    id = NodeId("n_host_col"),
+                    type = "compose.foundation.layout.Column",
+                    children = listOf(userComponentInstance("cmp_member_card").copy(id = NodeId("n_host_inst"))),
+                ),
+            ),
+        ),
+        components =
+        listOf(
+            ComponentDef(
+                id = "cmp_member_card",
+                name = "MemberCard",
+                root =
+                Node(
+                    id = NodeId("n_card_col"),
+                    type = "compose.foundation.layout.Column",
+                    children =
+                    listOf(
+                        Node(
+                            id = NodeId("n_card_heading"),
+                            type = "compose.material3.Text",
+                            props = mapOf("text" to PropValue.StateBinding("heading")),
+                        ),
+                        Repeater.node(
+                            sourcePath = "rows",
+                            id = NodeId("n_card_repeat"),
+                            template =
+                            listOf(
+                                Node(
+                                    id = NodeId("n_card_row"),
+                                    type = "compose.material3.Text",
+                                    props = mapOf("text" to PropValue.StateBinding("item.label")),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                state =
+                listOf(
+                    StateField(
+                        name = "heading",
+                        type = StateType.Scalar(ScalarType.STRING),
+                        sample = SampleValue.Scalar(JsonPrimitive("Members")),
+                    ),
+                    StateField(
+                        name = "rows",
+                        type = StateType.ListOfRecord(listOf(RecordField("label", ScalarType.STRING))),
+                        sample =
+                        scalarRows(
+                            listOf(
+                                mapOf("label" to JsonPrimitive("Ada")),
+                                mapOf("label" to JsonPrimitive("Grace")),
                             ),
                         ),
                     ),

@@ -49,7 +49,7 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 4")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 5")
     }
 
     @Test
@@ -87,13 +87,48 @@ class RoundTripTest {
     }
 
     @Test
-    fun `the committed schema-4 Dashboard_vforge fixture loads and equals the in-code model`() {
+    fun `the committed schema-5 Dashboard_vforge fixture loads and equals the in-code model`() {
         // Dashboard.vforge is the ADR-034 read-only-state fixture: screen state (scalar + list-of-record),
         // a StateBinding prop, and a vforge.repeat template. It is current-schema, so it loads without
         // migration and must decode to exactly the in-code fixture (DATA_MODEL rule 3).
         val result = ProjectStore.load(Paths.get(samplesDir(), "Dashboard.vforge"))
         assertTrue(result is LoadResult.Success, "expected Success but got $result")
         assertEquals(Fixtures.stateProject(), result.project)
+    }
+
+    @Test
+    fun `component-local state survives a round-trip and resolves against the component (ADR-034 Amendment)`() {
+        // A ComponentDef carrying its own screen-style state: a scalar and a list-of-record field, a scalar
+        // StateBinding, and a vforge.repeat over the component's own list. It must round-trip losslessly and
+        // stay distinct from any screen's state (component-local state, schema v5).
+        val project = Fixtures.componentStateProject()
+        val json = ProjectCodec.encode(project)
+        assertContains(json, "\"kind\": \"binding\"") // PropValue.StateBinding inside the component
+        assertContains(json, "\"kind\": \"listOfRecord\"") // the component's list-of-record field
+        assertEquals(project, ProjectCodec.decode(json))
+
+        // The state lives on the component, not on any screen.
+        val component = ProjectCodec.decode(json).components.single()
+        assertEquals(listOf("heading", "rows"), component.state.map { it.name })
+        assertTrue(project.screens.all { it.state.isEmpty() }, "component state must not leak onto a screen")
+    }
+
+    @Test
+    fun `an empty component state is omitted from the serialized form (encodeDefaults=false)`() {
+        // A stateless component must serialize exactly as before the v5 bump — the defaulted empty `state`
+        // list is omitted, so existing projects and goldens are byte-identical.
+        val json = ProjectCodec.encode(
+            Fixtures.minimalProject().copy(
+                components = listOf(
+                    viewforge.model.ComponentDef(
+                        id = "cmp_bare",
+                        name = "Bare",
+                        root = viewforge.model.Node(viewforge.model.NodeId("n_bare"), "compose.foundation.layout.Box"),
+                    ),
+                ),
+            ),
+        )
+        assertTrue(!json.contains("\"state\""), "an empty component state must not be serialized")
     }
 
     @Test
