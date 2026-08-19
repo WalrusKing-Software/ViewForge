@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 5,
+  "id": "01J8CMPSTATE",
+  "name": "ComponentState",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_dir",
+      "name": "Directory",
+      "root": {
+        "id": "n_dir_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_dir_inst",
+            "type": "vforge.userComponent",
+            "props": {
+              "componentId": {
+                "kind": "literal",
+                "value": "cmp_profile"
+              },
+              "title": {
+                "kind": "literal",
+                "value": "Team"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_profile",
+      "name": "ProfileCard",
+      "parameters": [
+        {
+          "name": "title",
+          "type": "String"
+        }
+      ],
+      "root": {
+        "id": "n_pc_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_pc_title",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "param",
+                "param": "title"
+              }
+            }
+          },
+          {
+            "id": "n_pc_heading",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "heading"
+              }
+            }
+          },
+          {
+            "id": "n_pc_rep",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "badges"
+              }
+            },
+            "children": [
+              {
+                "id": "n_pc_badge",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.label"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "heading",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Members"
+          }
+        },
+        {
+          "name": "badges",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "label",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": {
+                  "kind": "scalar",
+                  "value": "Ada"
+                }
+              },
+              {
+                "label": {
+                  "kind": "scalar",
+                  "value": "Grace"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
