@@ -1,5 +1,6 @@
 package viewforge.project
 
+import kotlinx.serialization.json.JsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.test.Test
@@ -49,7 +50,7 @@ class RoundTripTest {
 
     @Test
     fun `schemaVersion is always emitted even though it has a default`() {
-        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 6")
+        assertContains(ProjectCodec.encode(Fixtures.minimalProject()), "\"schemaVersion\": 7")
     }
 
     @Test
@@ -66,6 +67,33 @@ class RoundTripTest {
         assertContains(json, "\"kind\": \"param\"")
         assertContains(json, "\"param\": \"label\"")
         assertEquals(project, ProjectCodec.decode(json))
+    }
+
+    @Test
+    fun `responsive per-breakpoint overrides survive a round-trip (ADR-030)`() {
+        // A node with a base prop and an `expanded`-breakpoint override for it must round-trip losslessly,
+        // carrying the breakpoint id and the overriding value (schema v7, #221).
+        val node = viewforge.model.Node(
+            id = viewforge.model.NodeId("n_resp"),
+            type = "compose.material3.Text",
+            props = mapOf("text" to viewforge.model.PropValue.Literal(JsonPrimitive("Base"))),
+            responsive = mapOf(
+                "expanded" to mapOf("text" to viewforge.model.PropValue.Literal(JsonPrimitive("Wide"))),
+            ),
+        )
+        val project = Fixtures.minimalProject().copy(
+            screens = listOf(viewforge.model.Screen(id = "s", name = "S", root = node)),
+        )
+        val json = ProjectCodec.encode(project)
+        assertContains(json, "\"responsive\"")
+        assertContains(json, "\"expanded\"")
+        assertEquals(project, ProjectCodec.decode(json))
+    }
+
+    @Test
+    fun `a node with no responsive overrides omits the field (encodeDefaults=false)`() {
+        // A non-responsive node must serialize exactly as before the v7 bump — the defaulted empty map is omitted.
+        assertTrue(!ProjectCodec.encode(Fixtures.demoProject()).contains("\"responsive\""))
     }
 
     @Test
@@ -87,7 +115,7 @@ class RoundTripTest {
     }
 
     @Test
-    fun `the committed schema-6 Dashboard_vforge fixture loads and equals the in-code model`() {
+    fun `the committed schema-7 Dashboard_vforge fixture loads and equals the in-code model`() {
         // Dashboard.vforge is the ADR-034 read-only-state fixture: screen state (scalar + list-of-record),
         // a StateBinding prop, and a vforge.repeat template. It is current-schema, so it loads without
         // migration and must decode to exactly the in-code fixture (DATA_MODEL rule 3).
