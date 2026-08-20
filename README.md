@@ -10,10 +10,12 @@ simulation — and export clean, idiomatic Kotlin source you own and can hand-ed
 
 ## Status
 
-**v0.1.0-alpha-1 — first public alpha (Phase 1, Compose Desktop).** The editor builds, edits, themes,
-and exports a non-trivial Compose Desktop screen, and ships an **unsigned** Windows installer
-(`.msi`/`.exe`) — a downloaded build may show a SmartScreen prompt. Early software: expect rough edges,
-and the `.vforge` schema (v2) may still evolve behind migrations. Phase 2 (Android) is planned — see
+**v0.2.0-alpha-1 — second alpha (Phase 1, Compose Desktop).** The editor builds, edits, themes, and
+exports a non-trivial Compose Desktop screen, now with read-only **data binding** and interactive
+**state & events**, a cross-project component library, and re-opening of ViewForge-generated Kotlin. It
+ships **unsigned** installers for Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and macOS (`.dmg`) — a
+downloaded build may show a SmartScreen/Gatekeeper prompt. Early software: expect rough edges, and the
+`.vforge` schema (v6) may still evolve behind migrations. Phase 2 (Android) is planned — see
 [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
 ## Why this exists
@@ -31,7 +33,7 @@ open without over-designing for it.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| 1 | Compose Desktop (JVM) | **Feature-complete (v0.1.0-alpha-1)** |
+| 1 | Compose Desktop (JVM) | **Feature-complete (latest: v0.2.0-alpha-1)** |
 | 2 | + Android | Planned (next) |
 | 3 | + iOS | Blocked on macOS hardware |
 | 4 | + Web (Kotlin/Wasm) | Planned, experimental |
