@@ -134,6 +134,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         get() = editingComponent?.name
 
     /**
+     * Whether a component is genuinely open for in-place editing — i.e. [editingComponentId] resolves to a real
+     * component. The UI (breadcrumb, inspector state scope) must key on **this**, not the raw [editingComponentId],
+     * so a stale id — a component deleted or undone away while open — falls back to the screen surface instead of
+     * stranding the inspector in "Component State" over screen data (#299). Mirrors the [activeEditRoot] fallback.
+     */
+    val isEditingComponent: Boolean
+        get() = editingComponent != null
+
+    /**
      * What the code preview should show (G3, #69): the open component when one is being edited in place,
      * else the active screen. Null only for an empty project with no screen. Follows [activeEditRoot].
      */
@@ -890,7 +899,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * caught at render (loud placeholder) and load (validation), but the editor refuses to *create* one:
      * the palette greys such entries out and paste is disabled. Screen editing never cycles.
      */
-    fun wouldInsertingCycle(node: Node): Boolean = document.insertionWouldCycle(editingComponentId, node)
+    fun wouldInsertingCycle(node: Node): Boolean = document.insertionWouldCycle(editingComponent?.id, node)
 
     /**
      * Whether adding palette [entry] here would form a cycle (#70) — always false for a framework
@@ -1151,7 +1160,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * component is open for in-place editing (its definition is the edit surface), only for a value-like
      * [PropType] (`ParameterType.isPromotable`), and only when the prop is not already bound to a parameter.
      */
-    fun canPromoteToParameter(node: Node, def: PropDefinition): Boolean = editingComponentId != null &&
+    fun canPromoteToParameter(node: Node, def: PropDefinition): Boolean = isEditingComponent &&
         ParameterType.isPromotable(def.type) &&
         node.props[def.name] !is PropValue.ParamRef
 
@@ -1162,7 +1171,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * in one undoable step. A no-op unless a component is open and the prop is promotable.
      */
     fun promotePropToParameter(nodeId: NodeId, propName: String) {
-        val componentId = editingComponentId ?: return
+        val componentId = editingComponent?.id ?: return
         val node = activeEditRoot?.findById(nodeId) ?: return
         val def = catalog.propsFor(node.type).firstOrNull { it.name == propName } ?: return
         if (!canPromoteToParameter(node, def)) return
