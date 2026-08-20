@@ -35,6 +35,7 @@ import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
+import viewforge.packages.compose.targets.COMPOSE_PREVIEW_PROFILES
 import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.packages.compose.targets.MultiplatformExporter
 import viewforge.prefs.ConfigDir
@@ -90,7 +91,9 @@ private fun runEditor() {
     // at last close, or a blank canvas. The sample also supplies the framework a blank document inherits,
     // so it is always the base; the branch below reshapes it. Crash recovery (#54) still overlays this in
     // the shell — its Restore prompt wins over whatever is seeded here.
-    val state = EditorState(sampleProject(), ComposeCatalog)
+    // The Compose package's targets contribute the canvas device-preview frames (desktop windows + Android
+    // devices, #220); the editor names no framework, so the app injects them (ADR-026 Phase-2 amendment).
+    val state = EditorState(sampleProject(), ComposeCatalog, previewProfiles = COMPOSE_PREVIEW_PROFILES)
     when (val seed = resolveStartupSeed(prefs)) {
         StartupSeed.FirstRunSample -> Unit // keep the sample the state was constructed with
         StartupSeed.Blank -> state.newDocument()
