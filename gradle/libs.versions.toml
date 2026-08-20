@@ -11,7 +11,20 @@ jdk = "21"                      # PROJECT_PLAN §3.1 / TECHNICAL_NOTES §12: 17+
 
 # Kotlin / Compose
 kotlin = "2.1.20"
-compose = "1.7.3"               # Compose Multiplatform (desktop/JVM target in Phase 1)
+compose = "1.7.3"               # Compose Multiplatform (desktop/JVM in Phase 1; Android target in Phase 2)
+
+# Android (Phase 2 — pinned per ADR-036/ADR-038; kickoff #217 declarations only, nothing applies
+# these yet. Values are CANDIDATES: the ecosystem moves fast and can't be verified offline — confirm
+# each resolves before the #218/#219 merge. Compose-Android reuses `compose` (1.7.3) via the compose
+# plugin's Android target, so there is no separate androidx Compose BOM here.
+agp = "8.7.3"                   # Android Gradle Plugin (generated Android scaffold; Kotlin 2.1.x-compatible)
+androidMinSdk = "24"            # ADR-036 minSdk
+androidCompileSdk = "35"        # ADR-036 compileSdk
+androidTargetSdk = "35"         # ADR-036 targetSdk
+activityCompose = "1.9.3"       # androidx.activity:activity-compose — Android entry-point (setContent)
+# In-process Android compile gate (ADR-038, #219): an android.jar stub on the kctfork test classpath,
+# NO Android SDK. Exact android-all build is confirmed/replaced by the #219 spike.
+robolectricAndroidAll = "14-robolectric-10818077"
 
 # Core libraries
 kotlinpoet = "2.1.0"            # ADR-010: 2.x structural API only
@@ -56,6 +69,12 @@ compose-desktop = { module = "org.jetbrains.compose.desktop:desktop", version.re
 # --- Codegen (packages/compose only) ---
 kotlinpoet = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
 
+# --- Android (Phase 2; ADR-036/ADR-038 — declared at #217, consumed at #218/#219) ---
+# The Android entry-point dependency for the generated `androidMain` (and its compile-gate fixture).
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+# android.jar stub for the in-process Android compile gate (ADR-038) — test classpath only, no SDK.
+robolectric-android-all = { module = "org.robolectric:android-all", version.ref = "robolectricAndroidAll" }
+
 # --- Logging ---
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -84,3 +103,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+# Android (Phase 2; ADR-036) — applied by the generated KMP scaffold and, when #218 wires it, an
+# Android module of ViewForge's own build. Inert until then (an unapplied alias has no build effect).
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
