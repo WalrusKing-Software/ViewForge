@@ -105,3 +105,14 @@ internal fun hexToArgb(text: String): Long? {
     val full = if (h.length == 6) "FF$h" else h
     return full.toLongOrNull(16)
 }
+
+/**
+ * Formats ARGB byte components (each clamped to `0..255`) as a normalized hex string — `#RRGGBB` when
+ * fully opaque, `#AARRGGBB` otherwise. The inverse of [hexToArgb]; its output is always accepted by
+ * [normalizeHex], so a color picked with these components round-trips through the same literal the hex
+ * field commits.
+ */
+internal fun argbToHex(a: Int, r: Int, g: Int, b: Int): String {
+    fun byte(v: Int) = v.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
+    return if (a >= 255) "#${byte(r)}${byte(g)}${byte(b)}" else "#${byte(a)}${byte(r)}${byte(g)}${byte(b)}"
+}

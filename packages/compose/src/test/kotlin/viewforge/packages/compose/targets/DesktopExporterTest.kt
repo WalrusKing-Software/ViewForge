@@ -38,6 +38,17 @@ class DesktopExporterTest {
     }
 
     @Test
+    fun `screenPaths maps each screen's gradle source path to its id`() {
+        val project = demoProject()
+        val screen = project.screens.single()
+        val map = DesktopExporter.screenPaths(project)
+        assertEquals(mapOf("src/main/kotlin/HomeScreen.kt" to screen.id), map)
+        // Every mapped path is a real file the gradle bundle emits, so re-open (ADR-032) can resolve it.
+        val bundlePaths = DesktopExporter.gradleProject(project).map { it.path }.toSet()
+        assertTrue(map.keys.all { it in bundlePaths })
+    }
+
+    @Test
     fun `gradle project has the expected file layout`() {
         val files = DesktopExporter.gradleProject(demoProject())
         assertEquals(

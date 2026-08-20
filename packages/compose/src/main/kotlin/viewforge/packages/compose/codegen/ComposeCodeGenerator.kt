@@ -10,6 +10,7 @@ import viewforge.model.Node
 import viewforge.model.Parameter
 import viewforge.model.Project
 import viewforge.model.Screen
+import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.spi.CodeGenerator
 import viewforge.spi.GeneratedFile
@@ -37,6 +38,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.schemaVersion,
                     project.assets,
                     project.components,
+                    screen.state,
                 ),
             )
         }
@@ -77,6 +79,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(screen.name),
         screen.root,
@@ -85,6 +88,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion,
         assets,
         components,
+        state = state,
     )
 
     /**
@@ -99,6 +103,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
     ): GeneratedSource = SourceSpans.strip(
         generateComposable(
             KotlinIdentifiers.requireFunctionName(screen.name),
@@ -108,6 +113,7 @@ class ComposeCodeGenerator : CodeGenerator {
             schemaVersion,
             assets,
             components,
+            state = state,
             recordSpans = true,
         ),
     )
@@ -115,6 +121,10 @@ class ComposeCodeGenerator : CodeGenerator {
     /**
      * Generates the source text for a single user [component] — the same `@Composable fun Name(modifier)`
      * shape as a screen (D7). Instances reference it by a call, so this one definition backs every use.
+     * A component's own read-only state (ADR-034 Amendment, component-local state) is emitted exactly as a
+     * screen's — its seeded stub `val`s in the body, its record `data class`es in the file — coexisting with
+     * the component's [parameters][ComponentDef.parameters]: params become function arguments, state becomes
+     * body locals, and both are read from the tree without collision.
      */
     fun generateComponent(
         component: ComponentDef,
@@ -132,6 +142,7 @@ class ComposeCodeGenerator : CodeGenerator {
         assets,
         components,
         component.parameters,
+        component.state,
     )
 
     /**
@@ -156,6 +167,7 @@ class ComposeCodeGenerator : CodeGenerator {
             assets,
             components,
             component.parameters,
+            component.state,
             recordSpans = true,
         ),
     )
@@ -177,11 +189,18 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset>,
         components: List<ComponentDef>,
         parameters: List<Parameter> = emptyList(),
+        state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
     ): String {
-        val emitter = ComponentEmitter(theme, assets, components, recordSpans)
+        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
+        // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as
+        // member access. A field written by a handler (a writable target, #277) is a `var … by remember {
+        // mutableStateOf(…) }`; a read-only field stays a `val`. Omitted for a hidden root (no body) and for
+        // stateless screens/components, keeping their output byte-identical to before.
+        val writableTargets = if (body == null) emptySet() else StateEmitter.writableTargets(root)
+        val stubs = if (body == null) null else StateEmitter.stubs(state, writableTargets)
         val function = FunSpec.builder(fnName)
             .apply {
                 // Emitting the body first sets the opt-in flag for any experimental API used (TopAppBar).
@@ -212,7 +231,11 @@ class ComposeCodeGenerator : CodeGenerator {
                     .build(),
             )
             .apply {
-                if (body != null) addCode("%L\n", body)
+                if (body != null) {
+                    // Stubs (if any) precede the tree so a binding's `val` is in scope where it is read.
+                    if (stubs != null) addCode(stubs)
+                    addCode("%L\n", body)
+                }
             }
             .build()
 
@@ -224,7 +247,16 @@ class ComposeCodeGenerator : CodeGenerator {
                 "Source: $sourceName.vforge (schema $schemaVersion)",
             )
             .indent("    ") // 4 spaces — Kotlin convention (KotlinPoet defaults to 2).
+            // The `var f by remember { mutableStateOf(…) }` delegation needs the property-delegate operators
+            // in scope; KotlinPoet can't infer them from a `%M`, so import them explicitly when a writable
+            // (handler-targeted) field exists (ADR-035, #277). No writable fields → no import, output unchanged.
+            .apply {
+                if (writableTargets.isNotEmpty()) addImport("androidx.compose.runtime", "getValue", "setValue")
+            }
             .addFunction(function)
+            // A generated `data class` per list-of-record state type, after the composable (order is
+            // irrelevant to the compiler); none for a screen without list state, so output is unchanged.
+            .apply { StateEmitter.recordTypes(state).forEach { addType(it) } }
             .build()
             .toString()
     }

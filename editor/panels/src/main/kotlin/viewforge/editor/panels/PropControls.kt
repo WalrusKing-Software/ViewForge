@@ -1,18 +1,24 @@
 package viewforge.editor.panels
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -28,11 +34,15 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import viewforge.model.Asset
 import viewforge.model.PropType
 import viewforge.model.PropValue
 import viewforge.model.Theme
+import kotlin.math.roundToInt
 
 /**
  * The typed, data-driven inspector controls (M5, I2). Each [PropType] maps to exactly one control —
@@ -67,6 +77,12 @@ internal fun ValueControl(
     // the instance's argument, edited on the instance, not here. Undo unbinds it (a promote is one step).
     if (value is PropValue.ParamRef) {
         ParamRefChip(value.param)
+        return
+    }
+    // A prop bound to read-only screen state (ADR-034) likewise shows its path read-only — the value is the
+    // field's sample at design time and its member access at codegen. The inspector's "unbind" action clears it.
+    if (value is PropValue.StateBinding) {
+        StateBindingChip(value.path)
         return
     }
     when (type) {
@@ -249,11 +265,22 @@ private fun ColorControl(value: PropValue?, theme: Theme, themeable: Boolean, on
     val token = value.themeToken()
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Swatch(previewArgb(value, theme))
-            Box(Modifier.weight(1f).padding(start = 6.dp)) {
-                if (token != null) {
+            if (token != null) {
+                // Bound to a theme token: the swatch is a preview only — editing happens via the token menu,
+                // so clicking it must not silently overwrite the binding with a literal.
+                Swatch(previewArgb(value, theme))
+                Box(Modifier.weight(1f).padding(start = 6.dp)) {
                     Text("→ $token", style = fieldStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                } else {
+                }
+            } else {
+                // Literal (or unset): the swatch opens the visual picker (#293), committing the same hex the
+                // field would, so the two controls are interchangeable and both route through the same command.
+                ColorSwatchButton(
+                    argb = previewArgb(value, theme),
+                    current = value.literalText().orEmpty(),
+                    onPick = { onChange(stringValue(it)) },
+                )
+                Box(Modifier.weight(1f).padding(start = 6.dp)) {
                     HexField(value.literalText().orEmpty(), onChange)
                 }
             }
@@ -339,6 +366,160 @@ private fun Swatch(argb: Long?) {
             .background(if (argb != null) Color(argb) else Color.Transparent)
             .border(1.dp, MaterialTheme.colorScheme.outline),
     )
+}
+
+/** Preset colors offered in the picker — a small, neutral palette (greys + one row of hues). */
+private val COLOR_PRESETS = listOf(
+    "#000000", "#FFFFFF", "#9E9E9E", "#F44336", "#FF9800", "#FFEB3B",
+    "#4CAF50", "#2196F3", "#3F51B5", "#9C27B0", "#795548", "#607D8B",
+)
+
+/**
+ * A [Swatch] that opens a visual [ColorPickerPopup] on click (#293). It emits a normalized hex literal
+ * (`#RRGGBB`/`#AARRGGBB`) via [onPick] — the exact representation the hex field commits — so render and
+ * codegen are unchanged and the caller's command makes the edit undoable. Shared by the inspector color
+ * control and the theme editor's color rows.
+ */
+@Composable
+internal fun ColorSwatchButton(argb: Long?, current: String, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .size(16.dp)
+                .background(if (argb != null) Color(argb) else Color.Transparent)
+                .border(1.dp, MaterialTheme.colorScheme.outline)
+                .clickable { open = true },
+        )
+        if (open) {
+            ColorPickerPopup(
+                current = current.ifBlank { "#000000" },
+                onPick = onPick,
+                onDismiss = { open = false },
+            )
+        }
+    }
+}
+
+/**
+ * A lightweight visual color selector: a live preview, a hex field, A/R/G/B sliders, and a preset grid.
+ * Every edit emits a normalized hex via [onPick]; there is no evaluation and no new value type — the
+ * picker only ever produces a literal the hex field could also have produced.
+ */
+@Composable
+private fun ColorPickerPopup(current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    Popup(
+        onDismissRequest = onDismiss,
+        offset = IntOffset(0, 24),
+        properties = PopupProperties(focusable = true),
+    ) {
+        ColorPickerPanel(current, onPick)
+    }
+}
+
+/**
+ * The picker body, split from [ColorPickerPopup] so it renders without a window host (the popup wrapper
+ * only positions and dismisses it). Seeds its A/R/G/B from [current] once, then emits a normalized hex on
+ * every slider, preset, or hex-field change.
+ */
+@Composable
+internal fun ColorPickerPanel(current: String, onPick: (String) -> Unit) {
+    val start = hexToArgb(current) ?: 0xFF000000L
+    var a by remember { mutableStateOf(((start shr 24) and 0xFFL).toInt()) }
+    var r by remember { mutableStateOf(((start shr 16) and 0xFFL).toInt()) }
+    var g by remember { mutableStateOf(((start shr 8) and 0xFFL).toInt()) }
+    var b by remember { mutableStateOf((start and 0xFFL).toInt()) }
+    fun setFrom(packed: Long) {
+        a = ((packed shr 24) and 0xFFL).toInt()
+        r = ((packed shr 16) and 0xFFL).toInt()
+        g = ((packed shr 8) and 0xFFL).toInt()
+        b = (packed and 0xFFL).toInt()
+    }
+    fun emit() = onPick(argbToHex(a, r, g, b))
+
+    Surface(
+        shadowElevation = 6.dp,
+        tonalElevation = 2.dp,
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.width(232.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+                    .background(Color(red = r, green = g, blue = b, alpha = a), MaterialTheme.shapes.small)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small),
+            )
+            // Reuse the inspector hex field: it echoes the current a/r/g/b while unfocused and, when the
+            // user types a valid hex, drives the sliders and emits.
+            HexField(argbToHex(a, r, g, b)) { picked ->
+                hexToArgb(picked.literalText().orEmpty())?.let {
+                    setFrom(it)
+                    onPick(picked.literalText().orEmpty())
+                }
+            }
+            ColorSlider("R", r) {
+                r = it
+                emit()
+            }
+            ColorSlider("G", g) {
+                g = it
+                emit()
+            }
+            ColorSlider("B", b) {
+                b = it
+                emit()
+            }
+            ColorSlider("A", a) {
+                a = it
+                emit()
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                COLOR_PRESETS.chunked(6).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { hex ->
+                            val packed = hexToArgb(hex) ?: 0xFF000000L
+                            Box(
+                                Modifier
+                                    .size(20.dp)
+                                    .background(Color(packed), MaterialTheme.shapes.small)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
+                                    .clickable {
+                                        setFrom(packed)
+                                        emit()
+                                    },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSlider(label: String, value: Int, onValue: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(12.dp),
+        )
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValue(it.roundToInt()) },
+            valueRange = 0f..255f,
+            modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+        )
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(26.dp),
+        )
+    }
 }
 
 // --- typography --------------------------------------------------------------------------------
@@ -472,10 +653,23 @@ private fun ParamRefChip(name: String) {
     }
 }
 
+/** Read-only display of a prop bound to read-only screen state (ADR-034): `⇨ data: path`. */
+@Composable
+private fun StateBindingChip(path: String) {
+    FieldBox {
+        Text(
+            "⇨ data: $path",
+            style = fieldStyle(),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
 // --- shared bits -------------------------------------------------------------------------------
 
 @Composable
-private fun FieldBox(error: Boolean = false, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+internal fun FieldBox(error: Boolean = false, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val base = Modifier
         .fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
@@ -495,7 +689,7 @@ private fun ErrorText(message: String) {
 }
 
 @Composable
-private fun fieldStyle() = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface)
+internal fun fieldStyle() = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface)
 
 /** A preview color for the swatch: the literal hex, or the theme token resolved against the light value. */
 private fun previewArgb(value: PropValue?, theme: Theme): Long? = when (value) {

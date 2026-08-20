@@ -3,6 +3,7 @@ package viewforge.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -84,5 +85,61 @@ class ComponentGraphTest {
     fun `an instance of an unknown component id does not cycle`() {
         val p = project(component("a"))
         assertFalse(p.insertionWouldCycle("a", UserComponent.instance("ghost")))
+    }
+
+    // --- transitive closure + reference remap (#234) ----------------------------------------------
+
+    @Test
+    fun `reachableComponents is empty for a self-contained component`() {
+        val p = project(component("a"))
+        assertEquals(emptyList(), p.reachableComponents("a"))
+    }
+
+    @Test
+    fun `reachableComponents collects a transitive chain, excluding the primary itself`() {
+        // c -> b -> a. From c the closure is {b, a}; the primary c is never included.
+        val p = project(component("a"), component("b", "a"), component("c", "b"))
+        assertEquals(listOf("a", "b"), p.reachableComponents("c")?.map { it.id }?.sorted())
+    }
+
+    @Test
+    fun `reachableComponents dedupes a diamond`() {
+        // top -> {left, right}; both -> leaf. leaf appears once.
+        val p = project(
+            component("leaf"),
+            component("left", "leaf"),
+            component("right", "leaf"),
+            component("top", "left", "right"),
+        )
+        assertEquals(listOf("leaf", "left", "right"), p.reachableComponents("top")?.map { it.id }?.sorted())
+    }
+
+    @Test
+    fun `reachableComponents is null when a reference dangles`() {
+        val p = project(component("a", "ghost")) // 'ghost' is not a component in the project
+        assertNull(p.reachableComponents("a"))
+    }
+
+    @Test
+    fun `reachableComponents is null for an unknown primary`() {
+        assertNull(project(component("a")).reachableComponents("missing"))
+    }
+
+    @Test
+    fun `remapComponentReferences rewrites mapped ids and leaves the rest alone`() {
+        val tree = Node(
+            id = NodeId.random(),
+            type = "box",
+            children = listOf(UserComponent.instance("a"), box(UserComponent.instance("b"))),
+            slots = mapOf("content" to listOf(UserComponent.instance("c"))),
+        )
+        val remapped = tree.remapComponentReferences(mapOf("a" to "a2", "b" to "b2"))
+        assertEquals(setOf("a2", "b2", "c"), remapped.referencedComponentIds()) // 'c' unmapped → untouched
+    }
+
+    @Test
+    fun `remapComponentReferences is an identity when nothing matches`() {
+        val tree = box(UserComponent.instance("x"))
+        assertEquals(setOf("x"), tree.remapComponentReferences(mapOf("y" to "z")).referencedComponentIds())
     }
 }

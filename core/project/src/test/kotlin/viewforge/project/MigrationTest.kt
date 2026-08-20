@@ -1,5 +1,6 @@
 package viewforge.project
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import viewforge.model.SCHEMA_VERSION
@@ -80,6 +81,169 @@ class MigrationTest {
         val v2 = viewforge.project.migrations.M1to2.migrate(v1)
         assertEquals(2, SchemaMigrations.readVersion(v2))
         assertEquals(JsonPrimitive("x"), v2["id"])
+    }
+
+    @Test
+    fun `M2to3 stamps the version and leaves the rest of the document untouched`() {
+        val v2 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(2), "id" to JsonPrimitive("x")))
+        val v3 = viewforge.project.migrations.M2to3.migrate(v2)
+        assertEquals(3, SchemaMigrations.readVersion(v3))
+        assertEquals(JsonPrimitive("x"), v3["id"])
+    }
+
+    @Test
+    fun `M3to4 rewrites record fields and sample cells to the recursive v4 shape`() {
+        // A v3 list-of-record state field: flat `{name, scalar}` record fields and bare-primitive sample cells.
+        val v3 = VforgeJson.parseToJsonElement(
+            """
+            {
+              "schemaVersion": 3,
+              "id": "x",
+              "screens": [
+                {
+                  "id": "s",
+                  "state": [
+                    {
+                      "name": "rows",
+                      "type": { "kind": "listOfRecord", "fields": [ { "name": "label", "scalar": "STRING" } ] },
+                      "sample": { "kind": "rows", "rows": [ { "label": "Ada" } ] }
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+        ) as JsonObject
+        val v4 = viewforge.project.migrations.M3to4.migrate(v3)
+
+        assertEquals(4, SchemaMigrations.readVersion(v4))
+        // The record field is now `{name, type:{kind:"scalar", scalar}}`; the cell is `{kind:"scalar", value}`.
+        val state = ((v4["screens"] as JsonArray)[0] as JsonObject)["state"] as JsonArray
+        val stateField = state[0] as JsonObject
+        val record = ((stateField["type"] as JsonObject)["fields"] as JsonArray)[0] as JsonObject
+        assertNull(record["scalar"], "the flat `scalar` key must be gone")
+        assertEquals("scalar", ((record["type"] as JsonObject)["kind"] as JsonPrimitive).content)
+        val rows = (stateField["sample"] as JsonObject)["rows"] as JsonArray
+        val cell = (rows[0] as JsonObject)["label"] as JsonObject
+        assertEquals("scalar", (cell["kind"] as JsonPrimitive).content)
+        assertEquals(JsonPrimitive("Ada"), cell["value"])
+    }
+
+    @Test
+    fun `M3to4 stamps a stateless document without altering it`() {
+        val v3 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(3), "id" to JsonPrimitive("x")))
+        val v4 = viewforge.project.migrations.M3to4.migrate(v3)
+        assertEquals(4, SchemaMigrations.readVersion(v4))
+        assertEquals(JsonPrimitive("x"), v4["id"])
+    }
+
+    @Test
+    fun `M4to5 stamps the version and leaves the rest of the document untouched`() {
+        // Component-local state (ADR-034 Amendment) is purely additive — a v4 document has no component
+        // `state`, so the 4->5 step only stamps the version, exactly like M1to2/M2to3.
+        val v4 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(4), "id" to JsonPrimitive("x")))
+        val v5 = viewforge.project.migrations.M4to5.migrate(v4)
+        assertEquals(5, SchemaMigrations.readVersion(v5))
+        assertEquals(JsonPrimitive("x"), v5["id"])
+    }
+
+    @Test
+    fun `M5to6 stamps the version and leaves the rest of the document untouched`() {
+        // Interactive state & events (ADR-035) is purely additive — a v5 document has no node `handlers`,
+        // so the 5->6 step only stamps the version, exactly like M1to2/M2to3/M4to5.
+        val v5 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(5), "id" to JsonPrimitive("x")))
+        val v6 = viewforge.project.migrations.M5to6.migrate(v5)
+        assertEquals(6, SchemaMigrations.readVersion(v6))
+        assertEquals(JsonPrimitive("x"), v6["id"])
+    }
+
+    @Test
+    fun `a schema-5 document with no handlers migrates through the store and loads at the current version`() {
+        // A v5 file carries no node handlers, so the 5->6 step is a pure version stamp (M5to6): the document
+        // is already a valid v6 and its node must load unchanged, reporting its on-disk version for backup.
+        val tmp = Files.createTempDirectory("vforge-5to6").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 5,
+              "id": "01LEGACYINT",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+              "screens": [
+                { "id": "s", "name": "S", "root": { "id": "n_1", "type": "compose.foundation.layout.Box" } }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(5, result.migratedFromVersion)
+        // The node loads with defaulted empty handlers (interactivity is opt-in).
+        assertTrue(result.project.screens.single().root.handlers.isEmpty())
+    }
+
+    @Test
+    fun `a schema-4 document with a component migrates through the store and loads at the current version`() {
+        // A v4 file carries no component state, so the 4->5 step is a pure version stamp (M4to5): the
+        // document is already a valid v5 and its component must load unchanged, reporting its on-disk version.
+        val tmp = Files.createTempDirectory("vforge-4to5").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 4,
+              "id": "01LEGACYCMP",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+              "components": [
+                { "id": "cmp_1", "name": "Bare", "root": { "id": "n_1", "type": "compose.foundation.layout.Box" } }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(4, result.migratedFromVersion)
+        // The component loads with a defaulted empty state (component-local state is opt-in).
+        assertTrue(result.project.components.single().state.isEmpty())
+    }
+
+    @Test
+    fun `the frozen schema-3 Dashboard fixture migrates through the store and equals the in-code v4 model`() {
+        // Dashboard-v3.vforge is the pre-#256 committed serialization (flat record fields, bare cells). Loading
+        // it must run M3to4 and yield exactly the recursive in-code fixture, proving the migration is correct.
+        val v3 = javaClass.getResource("/migrations/Dashboard-v3.vforge")!!.readText()
+        val tmp = Files.createTempDirectory("vforge-3to4").resolve("Dashboard.vforge")
+        Files.writeString(tmp, v3)
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(Fixtures.stateProject(), result.project)
+        assertEquals(3, result.migratedFromVersion)
+    }
+
+    @Test
+    fun `a schema-2 document with no state migrates through the store and loads at the current version`() {
+        // A v2 file carries no screen state, so the 2->3 step is a pure version stamp (M2to3): the
+        // document is already a valid v3 and must load as-is, reporting its on-disk version for backup.
+        val tmp = Files.createTempDirectory("vforge-2to3").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 2,
+              "id": "01LEGACY",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" }
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(2, result.migratedFromVersion)
     }
 
     @Test

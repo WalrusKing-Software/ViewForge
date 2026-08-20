@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 4,
+  "id": "01J8NESTEDLST",
+  "name": "NestedList",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_org",
+      "name": "OrgChart",
+      "root": {
+        "id": "col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "dept_rep",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "departments"
+              }
+            },
+            "children": [
+              {
+                "id": "dept",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.name"
+                  }
+                }
+              },
+              {
+                "id": "teams_rep",
+                "type": "vforge.repeat",
+                "props": {
+                  "source": {
+                    "kind": "binding",
+                    "path": "item.teams"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "team",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "binding",
+                        "path": "item.label"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "previewProfile": "desktop_1280x800",
+      "state": [
+        {
+          "name": "departments",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "teams",
+                "type": {
+                  "kind": "listOfRecord",
+                  "fields": [
+                    {
+                      "name": "label",
+                      "type": {
+                        "kind": "scalar",
+                        "scalar": "STRING"
+                      }
+                    },
+                    {
+                      "name": "size",
+                      "type": {
+                        "kind": "scalar",
+                        "scalar": "INT"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Engineering"
+                },
+                "teams": {
+                  "kind": "rows",
+                  "rows": [
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Core"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 4
+                      }
+                    },
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Platform"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Design"
+                },
+                "teams": {
+                  "kind": "rows",
+                  "rows": [
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Brand"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

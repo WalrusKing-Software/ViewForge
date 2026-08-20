@@ -69,3 +69,23 @@ data class ModifierArg(
  * as the palette, ADR-015).
  */
 data class ModifierDefinition(val type: String, val label: String, val args: List<ModifierArg> = emptyList())
+
+/**
+ * One event slot a component exposes (ADR-035, #277) — a closed, named handler point like a Button's
+ * `onClick`. The catalog declares these the same data-driven way it declares [PropDefinition]s, so the
+ * inspector's action editor is generated from the list and adding a component's event slot needs **no
+ * per-component inspector UI** (the standing anti-pattern). [name] is the [Node.handlers] map key and
+ * must match what the renderer/codegen read (e.g. [EventSlots.ON_CLICK]); [label] is the display text.
+ * Like the prop/modifier schema, this is runtime capability metadata, not persisted (ADR-016).
+ */
+data class EventSlotDefinition(val name: String, val label: String)
+
+/**
+ * The well-known event-slot names (ADR-035, #277), single-sourced here so the catalog (which declares a
+ * component's slots), the renderer (which dispatches a slot's actions in C13 run mode), and codegen (which
+ * lowers them to handler lambdas) all agree on one string. Only `onClick` is live end-to-end this slice;
+ * the inert slots (`onCheckedChange`, `onValueChange`) are named for when they are wired.
+ */
+object EventSlots {
+    const val ON_CLICK: String = "onClick"
+}

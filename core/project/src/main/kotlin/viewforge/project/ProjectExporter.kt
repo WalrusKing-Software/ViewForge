@@ -1,5 +1,6 @@
 package viewforge.project
 
+import viewforge.model.Project
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -107,7 +108,13 @@ object ProjectExporter {
      * files are deleted, and a fresh manifest is written recording exactly what was emitted — so the next
      * regeneration knows what it owns. [projectName] is stored in the manifest for diagnostics only.
      */
-    fun regenerate(root: Path, files: List<ExportFile>, projectName: String): RegenerationOutcome {
+    fun regenerate(
+        root: Path,
+        files: List<ExportFile>,
+        projectName: String,
+        sidecar: Project? = null,
+        screenPaths: Map<String, String> = emptyMap(),
+    ): RegenerationOutcome {
         val realRoot = root.toRealPath()
         val plan = planRegeneration(
             bundlePaths = files.map { it.path },
@@ -118,7 +125,13 @@ object ProjectExporter {
 
         val written = write(realRoot, files)
         plan.toDelete.forEach { GuardedWriter.delete(resolveInRoot(realRoot, it), root = realRoot) }
-        ExportManifestStore.save(ExportManifest(project = projectName, paths = written), realRoot)
+        // The IR sidecar + screen map are export metadata beside the manifest (ADR-032), not bundle paths:
+        // written whenever a project is supplied so the directory can be re-opened without parsing Kotlin.
+        sidecar?.let { ExportManifestStore.saveSidecar(it, realRoot) }
+        ExportManifestStore.save(
+            ExportManifest(project = projectName, paths = written, screenPaths = screenPaths),
+            realRoot,
+        )
         return RegenerationOutcome.Applied(written = written, deleted = plan.toDelete)
     }
 

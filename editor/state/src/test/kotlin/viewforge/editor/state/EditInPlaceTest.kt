@@ -185,5 +185,20 @@ class EditInPlaceTest {
         // editingComponentId still names c1, but it no longer resolves, so the surface is the screen again.
         assertEquals(screenRoot.id, s.activeEditRoot?.id)
         assertEquals("s1", s.activeEditRootId)
+        // The UI must key on the resolved signal, not the raw id, so it reverts to Screen scope (#299): the
+        // breadcrumb becomes the switcher and the inspector's state section shows the screen's state, not a
+        // "Component State" header over screen data.
+        assertFalse(s.isEditingComponent)
+        assertEquals("c1", s.editingComponentId) // the raw id lingers but is inert — consumers use isEditingComponent
+    }
+
+    @Test
+    fun `isEditingComponent tracks whether the open id resolves (#299)`() {
+        val s = state()
+        assertFalse(s.isEditingComponent)
+        s.openComponent("c1")
+        assertTrue(s.isEditingComponent)
+        s.closeComponent()
+        assertFalse(s.isEditingComponent)
     }
 }

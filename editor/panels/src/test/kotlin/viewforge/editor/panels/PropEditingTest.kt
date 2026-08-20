@@ -53,4 +53,31 @@ class PropEditingTest {
         assertEquals(0x806750A4L, hexToArgb("#806750A4"))
         assertNull(hexToArgb("zzz")) // not hex digits
     }
+
+    @Test
+    fun `argbToHex drops alpha when opaque and keeps it otherwise`() {
+        assertEquals("#6750A4", argbToHex(a = 255, r = 0x67, g = 0x50, b = 0xA4))
+        assertEquals("#806750A4", argbToHex(a = 0x80, r = 0x67, g = 0x50, b = 0xA4))
+        // Pads single-digit components and upper-cases.
+        assertEquals("#0A0B0C", argbToHex(a = 255, r = 10, g = 11, b = 12))
+    }
+
+    @Test
+    fun `argbToHex clamps out-of-range components`() {
+        assertEquals("#FFFFFF", argbToHex(a = 300, r = 999, g = 256, b = 255))
+        assertEquals("#000000", argbToHex(a = 255, r = -5, g = -1, b = 0))
+    }
+
+    @Test
+    fun `argbToHex round-trips through hexToArgb`() {
+        for (hex in listOf("#6750A4", "#806750A4", "#000000", "#FFFFFF", "#00FF8040")) {
+            val packed = hexToArgb(hex)!!
+            val a = ((packed shr 24) and 0xFFL).toInt()
+            val r = ((packed shr 16) and 0xFFL).toInt()
+            val g = ((packed shr 8) and 0xFFL).toInt()
+            val b = (packed and 0xFFL).toInt()
+            // The picker's components re-serialize to a hex that packs back to the same ARGB.
+            assertEquals(packed, hexToArgb(argbToHex(a, r, g, b)))
+        }
+    }
 }

@@ -22,10 +22,13 @@ import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
 import viewforge.editor.state.RegenerationReport
 import viewforge.model.ComponentDef
+import viewforge.model.Dropdown
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.PropDefinition
+import viewforge.model.Repeater
 import viewforge.model.Screen
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
@@ -106,6 +109,7 @@ private fun runEditor() {
     state.applyLayout(prefs.panelLayout)
     state.applyRecentProjects(prefs.recentProjects)
     state.applyFavoriteComponents(prefs.favoriteComponents)
+    state.applyAcknowledgedInteractive(prefs.acknowledgedInteractive)
     state.applyPreferences(prefs)
     // Assets resolve from the open project's dir first (imported files, #141), then the classpath (the
     // bundled sample); the export service reads from the same source, so both key off the current path.
@@ -119,7 +123,7 @@ private fun runEditor() {
     // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
     // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
-        CanvasRenderer { root, interactive, instrument ->
+        CanvasRenderer { root, interactive, screenState, instrument ->
             ComposeRenderer.RenderScreen(
                 root = root,
                 theme = state.document.theme,
@@ -127,6 +131,7 @@ private fun runEditor() {
                 instrument = instrument,
                 imageLoader = images::load,
                 components = state.document.components,
+                state = screenState,
                 interactive = interactive,
                 // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
                 // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
@@ -159,6 +164,9 @@ private fun runEditor() {
                 exportService,
                 DesktopCodePreviewService,
                 ConfigDir.resolve(),
+                // The cross-project component library lives in a `library/` folder under the config dir
+                // (ADR-033, #209), a sibling of recovery.json/preferences.json.
+                ConfigDir.resolve().resolve("library"),
                 closeRequested = closeRequested,
                 onCloseHandled = { closeRequested = false },
                 onExit = ::exitApplication,
@@ -184,6 +192,9 @@ private object DesktopCodePreviewService : CodePreviewService {
         project.schemaVersion,
         project.assets,
         project.components,
+        // Read-only screen state (ADR-034): the preview shows the seeded stub + member-access bindings the
+        // export emits, so the code panel matches generated source for a stateful screen.
+        state = screen.state,
     ).let { PreviewSource(it.code, it.spans) }
 
     override fun previewComponent(project: Project, component: ComponentDef): PreviewSource =
@@ -219,13 +230,20 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
             RegenerationReport(written = it.toWrite, deleted = it.toDelete, blocked = it.blocked)
         }
 
-    override fun regenerate(project: Project, dir: Path): RegenerationReport =
-        when (val outcome = ProjectExporter.regenerate(dir, bundle(project, ExportMode.GRADLE_PROJECT), project.name)) {
-            is RegenerationOutcome.Blocked ->
-                RegenerationReport(written = emptyList(), deleted = emptyList(), blocked = outcome.unowned)
-            is RegenerationOutcome.Applied ->
-                RegenerationReport(written = outcome.written, deleted = outcome.deleted, blocked = emptyList())
-        }
+    override fun regenerate(project: Project, dir: Path): RegenerationReport = when (
+        val outcome = ProjectExporter.regenerate(
+            dir,
+            bundle(project, ExportMode.GRADLE_PROJECT),
+            project.name,
+            sidecar = project,
+            screenPaths = DesktopExporter.screenPaths(project),
+        )
+    ) {
+        is RegenerationOutcome.Blocked ->
+            RegenerationReport(written = emptyList(), deleted = emptyList(), blocked = outcome.unowned)
+        is RegenerationOutcome.Applied ->
+            RegenerationReport(written = outcome.written, deleted = outcome.deleted, blocked = emptyList())
+    }
 
     private fun bundle(project: Project, mode: ExportMode): List<ExportFile> = when (mode) {
         ExportMode.LOOSE_FILES -> DesktopExporter.looseFiles(project)
@@ -242,17 +260,37 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
  * The editor consults this for the palette and drop validation without ever naming the package.
  */
 private object ComposeCatalog : ComponentCatalog {
+    // The framework-agnostic `vforge.repeat` (ADR-034, #21) is a core node type, not a Compose component, so
+    // this bootstrap layer — the one place allowed to bridge core and the Compose package — offers it as its
+    // own palette entry. It accepts children (its subtree is the per-item template); its single `source`
+    // binding is edited by the inspector's dedicated Repeater picker rather than a generic prop schema.
+    private val repeatEntry = PaletteEntry(Repeater.TYPE, "Repeat", "Data")
+
+    // Likewise the framework-agnostic `vforge.dropdown` (ADR-034 slice 2, #253): a populated selection whose
+    // options bind to a list-of-record field. A leaf (no children); its options + shown-field are edited by the
+    // inspector's dedicated Dropdown picker, so it carries no generic prop schema.
+    private val dropdownEntry = PaletteEntry(Dropdown.TYPE, "Dropdown", "Data")
+
     override val palette: List<PaletteEntry> =
-        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) }
+        ComposeComponents.specs.map { PaletteEntry(it.type, it.label, it.category) } + repeatEntry + dropdownEntry
 
-    override fun newNode(type: String): Node =
-        (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
+    override fun newNode(type: String): Node = when (type) {
+        Repeater.TYPE -> Repeater.node("")
+        Dropdown.TYPE -> Dropdown.node("")
+        else -> (ComposeComponents.specFor(type) ?: error("Unknown component type: $type")).create()
+    }
 
-    override fun acceptsChildren(type: String): Boolean = ComposeComponents.specFor(type)?.acceptsChildren ?: false
+    override fun acceptsChildren(type: String): Boolean =
+        if (type == Repeater.TYPE) true else ComposeComponents.specFor(type)?.acceptsChildren ?: false
 
     override fun slotsOf(type: String): List<String> = ComposeComponents.specFor(type)?.slots ?: emptyList()
 
     override fun propsFor(type: String): List<PropDefinition> = ComposeComponents.specFor(type)?.props ?: emptyList()
+
+    // Event slots (ADR-035, #277) come straight from the package spec, like props/slots — so a component's
+    // handlers stay data-driven and the inspector's action editor needs no per-component code.
+    override fun eventSlotsOf(type: String): List<EventSlotDefinition> =
+        ComposeComponents.specFor(type)?.eventSlots ?: emptyList()
 
     override val modifierCatalog: List<ModifierDefinition> = ComposeModifiers.definitions
 

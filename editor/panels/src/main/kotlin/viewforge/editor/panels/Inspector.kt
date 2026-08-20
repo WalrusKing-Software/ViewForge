@@ -35,7 +35,11 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
+import viewforge.editor.state.BindingChoice
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.acceptsScalar
+import viewforge.editor.state.isBindableProp
+import viewforge.model.Dropdown
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.Parameter
@@ -43,6 +47,7 @@ import viewforge.model.ParameterType
 import viewforge.model.PropDefinition
 import viewforge.model.PropType
 import viewforge.model.PropValue
+import viewforge.model.Repeater
 import viewforge.model.Theme
 import viewforge.model.UserComponent
 
@@ -62,7 +67,9 @@ fun Inspector(state: EditorState, modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState())) {
         PanelHeader("Inspector")
         val node = state.selectedNode
-        if (node == null) MutedText("Select a node to inspect") else InspectorBody(state, node)
+        // With nothing selected the inspector switches to a screen-scoped view: declare and edit the active
+        // screen's read-only state (ADR-034), the data a node's props then bind to (shown when a node is picked).
+        if (node == null) ScreenStateSection(state) else InspectorBody(state, node)
     }
 }
 
@@ -70,7 +77,7 @@ fun Inspector(state: EditorState, modifier: Modifier = Modifier) {
 private fun InspectorBody(state: EditorState, node: Node) {
     val theme = state.document.theme
     PanelColumn(Modifier.padding(bottom = 12.dp)) {
-        Text(displayLabel(node), style = MaterialTheme.typography.titleSmall)
+        Text(displayLabel(node, state.componentOfInstance(node)?.name), style = MaterialTheme.typography.titleSmall)
         Text(node.type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionLabel("Identity")
@@ -79,32 +86,58 @@ private fun InspectorBody(state: EditorState, node: Node) {
         if (node.locked) KeyValueRow("locked", "true")
         if (node.hidden) KeyValueRow("hidden", "true")
 
-        // A user-component instance edits its referenced component's parameters, not a fixed prop schema.
-        if (node.type == UserComponent.TYPE) {
-            SectionLabel("Parameters")
-            InstanceParameters(state, node, theme)
-        } else {
-            SectionLabel("Props")
-            // With several same-type nodes selected, a prop edit applies to all of them (C10).
-            val shared = state.sameTypeSelection().size
-            if (shared > 1) {
-                Text(
-                    "Editing $shared ${shortTypeName(node.type)} — changes apply to all",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
+        when (node.type) {
+            // A user-component instance edits its referenced component's parameters, not a fixed prop schema.
+            UserComponent.TYPE -> {
+                SectionLabel("Parameters")
+                InstanceParameters(state, node, theme)
             }
-            val defs = state.catalog.propsFor(node.type)
-            val known = defs.map { it.name }.toSet()
-            if (defs.isEmpty() && node.props.isEmpty()) MutedText("none")
-            defs.forEach { def -> PropRow(state, node, def, theme) }
-            // Any props the schema doesn't describe are shown read-only rather than hidden.
-            node.props.filterKeys { it !in known }.forEach { (k, v) -> KeyValueRow(k, formatPropValue(v)) }
+            // A vforge.repeat (ADR-034) edits its single `source` binding, not a Compose prop schema.
+            Repeater.TYPE -> {
+                SectionLabel("Repeat")
+                RepeaterSource(state, node)
+            }
+            // A vforge.dropdown (ADR-034 slice 2) binds its options to a list field + picks the shown field.
+            Dropdown.TYPE -> {
+                SectionLabel("Dropdown")
+                DropdownSource(state, node)
+            }
+            else -> {
+                SectionLabel("Props")
+                // With several same-type nodes selected, a prop edit applies to all of them (C10).
+                val shared = state.sameTypeSelection().size
+                if (shared > 1) {
+                    Text(
+                        "Editing $shared ${shortTypeName(node.type)} — changes apply to all",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                val defs = state.catalog.propsFor(node.type)
+                val known = defs.map { it.name }.toSet()
+                if (defs.isEmpty() && node.props.isEmpty()) MutedText("none")
+                defs.forEach { def -> PropRow(state, node, def, theme) }
+                // Any props the schema doesn't describe are shown read-only rather than hidden.
+                node.props.filterKeys { it !in known }.forEach { (k, v) -> KeyValueRow(k, formatPropValue(v)) }
+            }
         }
 
-        SectionLabel("Modifiers (order matters)")
-        ModifierEditor(state, node, theme)
+        // Event handlers (ADR-035, #277): a data-driven action editor for every event slot the catalog declares
+        // for this component (e.g. a Button's onClick). No per-component UI — the section is generated from the
+        // slot metadata, exactly like the prop rows above.
+        val eventSlots = state.eventSlots(node)
+        if (eventSlots.isNotEmpty()) {
+            SectionLabel("Events")
+            EventSlotsEditor(state, node, eventSlots)
+        }
+
+        // A repeat expands in place at render/codegen, so it never draws a container of its own — modifiers on
+        // it would be meaningless. Every other node type gets the ordered modifier chain (ADR-005).
+        if (node.type != Repeater.TYPE) {
+            SectionLabel("Modifiers (order matters)")
+            ModifierEditor(state, node, theme)
+        }
     }
 }
 
@@ -115,6 +148,8 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
     val value = node.props[def.name]
     // A prop bound to a component parameter (ADR-028) shows a read-only chip, not the literal controls.
     val isParam = value is PropValue.ParamRef
+    // A prop bound to read-only screen state (ADR-034) likewise shows a chip; "unbind" resets it to default.
+    val isBound = value is PropValue.StateBinding
     Column(Modifier.padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -123,7 +158,9 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            if (!isParam) {
+            if (isBound) {
+                ActionText("unbind") { state.setProp(node.id, def.name, def.default) }
+            } else if (!isParam) {
                 // Reset to default (I7) only when the prop is set to something other than its default.
                 // Like the value edit, this fans out to every same-type selected node (C10).
                 if (value != null && value != def.default) {
@@ -133,6 +170,16 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
                 // expression is derived from this node's current value, so it isn't a shared edit.
                 if (value !is PropValue.RawExpression) {
                     ActionText("ƒx") { state.setProp(node.id, def.name, expressionValue(value.literalText() ?: "")) }
+                }
+                // Bind to read-only screen state (ADR-034): offered only for a value-like scalar prop with at
+                // least one in-scope path of a compatible type. Primary-only, like the expression hatch.
+                if (isBindableProp(def.type)) {
+                    val choices = state.bindablePaths(node).filter { acceptsScalar(def.type, it.scalar) }
+                    if (choices.isNotEmpty()) {
+                        BindMenu(choices) { path ->
+                            state.setProp(node.id, def.name, PropValue.StateBinding(path))
+                        }
+                    }
                 }
                 // Promote to a component parameter (ADR-028) while editing the component in place.
                 if (state.canPromoteToParameter(node, def)) {
@@ -354,8 +401,32 @@ private fun DropLine(active: Boolean) {
     )
 }
 
+/**
+ * The "bind to data" action (ADR-034): a `⇨ data` label opening a menu of in-scope state paths, each of a
+ * type compatible with the prop. Picking one binds the prop to a [PropValue.StateBinding]. Offered on
+ * [PropRow] only when [choices] is non-empty, so a screen with no state never shows it.
+ */
 @Composable
-private fun ActionText(label: String, onClick: () -> Unit) {
+private fun BindMenu(choices: List<BindingChoice>, onBind: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ActionText("⇨ data") { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { choice ->
+                DropdownMenuItem(
+                    text = { Text(choice.label, style = MaterialTheme.typography.bodySmall) },
+                    onClick = {
+                        onBind(choice.path)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ActionText(label: String, onClick: () -> Unit) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelSmall,

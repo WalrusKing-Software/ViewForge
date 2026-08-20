@@ -29,7 +29,7 @@ Every artifact ships a `<file>.sha256` sidecar. Verify before installing:
 - **`ViewForge-<version>.exe`** — the same installer as a self-contained executable, for contexts
   where an `.exe` is preferred over an `.msi`.
 - **Signing:** a signed release is Authenticode-signed and Windows SmartScreen shows the verified
-  publisher. **The v0.1.0-alpha-1 build is unsigned.** SmartScreen fires only on a file carrying the
+  publisher. **The alpha builds (through v0.2.0-alpha-1) are unsigned.** SmartScreen fires only on a file carrying the
   Mark-of-the-Web (i.e. one **downloaded** from the internet); a locally built and installed `.msi` has
   no MOTW and shows no warning. So a *downloaded* unsigned alpha may warn, while a local build won't.
 
@@ -42,7 +42,13 @@ Every artifact ships a `<file>.sha256` sidecar. Verify before installing:
 
 ### macOS
 
-Not packaged in Phase 1 — see [§5](#5-known-limitations--follow-ups).
+- **`.dmg`**: open it and drag **ViewForge** to **Applications**.
+- **Unsigned/un-notarized alpha.** Gatekeeper will refuse the first launch of a downloaded build. Bypass
+  it once: **right-click the app → Open → Open**, or clear the quarantine flag with
+  `xattr -dr com.apple.quarantine /Applications/ViewForge.app`. Developer ID signing + notarization is a
+  follow-up (see [§5](#5-known-limitations--follow-ups)).
+- The `.dmg` reports a mac-only artifact version with major `1` (e.g. `1.2.0` for app `0.2.0`) — jpackage
+  rejects a major-`0` mac version. This is not the application version (§2 Version).
 
 ---
 
@@ -60,6 +66,7 @@ Windows, so no separate WiX install is needed.
 ./gradlew :app:packageExe     # Windows installer (.exe)
 ./gradlew :app:packageDeb     # Debian/Ubuntu (.deb)       — Linux host only
 ./gradlew :app:packageRpm     # Fedora/RHEL (.rpm)         — Linux host only
+./gradlew :app:packageDmg     # macOS disk image (.dmg)    — macOS host only
 
 # App image (no installer, fastest smoke test — no WiX/jpackage installer step):
 ./gradlew :app:createDistributable
@@ -70,7 +77,7 @@ Output lands under `app/build/compose/binaries/main/<format>/`.
 **Platform notes**
 
 - You can only build a given OS's installer **on that OS** (jpackage is not a cross-compiler). Windows
-  installers build on Windows; `.deb`/`.rpm` build on Linux.
+  installers build on Windows; `.deb`/`.rpm` build on Linux; `.dmg` builds on macOS.
 - On Linux, jpackage shells out to distro tools: `.deb` needs `fakeroot`, `.rpm` needs `rpmbuild`
   (`sudo apt-get install fakeroot rpm`).
 - **Build installers from a clean state.** Run `clean` before any `package*` / `createDistributable`
@@ -85,7 +92,9 @@ Output lands under `app/build/compose/binaries/main/<format>/`.
 
 The installer version comes from **one place**: `viewforge.version` in `gradle.properties`. Bump it on
 the `release/x.y.z` branch. jpackage constraints: Windows MSI wants `major.minor.micro`
-(major 0–255 / minor 0–255 / micro 0–65535); macOS requires `major >= 1`.
+(major 0–255 / minor 0–255 / micro 0–65535); macOS requires `major >= 1`, so the build derives a
+mac-only `.dmg` version that forces the major to `1` (`0.x.y` → `1.x.y`) without changing the shared
+`viewforge.version` — see the `macOS { dmgPackageVersion }` block in `app/build.gradle.kts`.
 
 ### Runtime image size
 
@@ -102,7 +111,8 @@ verified `run` build. Trimming with the `suggestRuntimeModules` task is a delibe
 pushed **`v*` tag** and:
 
 1. Creates a **draft** GitHub Release for the tag.
-2. Builds installers on a per-OS matrix (Windows Msi/Exe, Linux Deb/Rpm) from the tagged commit (DI-3).
+2. Builds installers on a per-OS matrix (Windows Msi/Exe, Linux Deb/Rpm, macOS Dmg) from the tagged
+   commit (DI-3).
 3. **Signs** them if the signing secrets are present (DI-1) — see below.
 4. Generates **SHA-256** `.sha256` sidecars (DI-2) and uploads everything to the release.
 5. **Publishes** the release once every job succeeds.
@@ -147,15 +157,18 @@ Committed under `app/src/main/resources/packaging/`:
 
 These carry the ViewForge logo (the anvil + cursor + selection-marquee mark, #197). Squaring, resizing,
 and multi-resolution `.ico` packing are done from the source art; drop replacements in at the same paths
-and the build picks them up. A macOS `.icns` is still a follow-up (paired with the deferred `.dmg`, §5).
+and the build picks them up. A branded macOS `.icns` is still a follow-up — the `.dmg` currently ships
+with jpackage's default icon (§5).
 
 ---
 
 ## 5. Known limitations & follow-ups
 
-- **macOS packaging is not shipped in Phase 1.** jpackage rejects a version with major `0`, so a pre-1.0
-  `.dmg` can't carry an honest version, and it needs a Mac runner plus a real `.icns` to verify. Adding
-  it is localised: the `Dmg` target format, a `macOS { }` block, and a mac-valid version (ADR-022).
+- **macOS `.dmg` is packaged but unsigned and un-branded (#291).** It builds on the `macos-latest` GitHub
+  runner (the homelab has no Mac runner). Two follow-ups remain before a broad mac release: **(1)** Apple
+  **Developer ID signing + notarization** (today Gatekeeper warns; §1 macOS documents the bypass), and
+  **(2)** a branded **`.icns`** (today jpackage's default icon is used, §4). jpackage's major-`0` rule is
+  handled by a mac-only `dmgPackageVersion` (§2 Version), not by changing the app version (ADR-022).
 - **Installer size** until runtime modules are trimmed (`includeAllModules`, above).
 - **Branded icons** (§4).
 - **No auto-update.** By design (ADR-011). Users install new versions manually. Any future updater is a

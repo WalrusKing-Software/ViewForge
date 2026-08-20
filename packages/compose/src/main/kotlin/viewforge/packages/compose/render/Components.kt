@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -84,6 +85,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import viewforge.model.ComponentDef
+import viewforge.model.Dropdown
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.UserComponent
@@ -135,12 +137,18 @@ fun RenderNode(node: Node, ctx: RenderContext) {
         "compose.material3.HorizontalDivider" -> RenderDivider(node, modifier)
         "compose.material3.Checkbox" -> RenderCheckbox(node, modifier, childCtx)
         "compose.material3.Switch" -> RenderSwitch(node, modifier, childCtx)
+        Dropdown.TYPE -> RenderDropdown(node, modifier)
         "compose.foundation.Image" -> RenderImage(node, modifier, childCtx)
         "compose.material3.Icon" -> RenderIcon(node, modifier)
         "compose.material3.TopAppBar" -> RenderTopAppBar(node, modifier, childCtx)
         "compose.material3.BottomAppBar" -> RenderBottomAppBar(node, modifier, childCtx)
         "compose.material3.Scaffold" -> RenderScaffold(node, modifier, childCtx)
         UserComponent.TYPE -> RenderUserComponent(node, modifier, childCtx)
+        // A repeat whose source couldn't resolve to a list field (expandScreenState, ADR-034); drawn loudly.
+        PLACEHOLDER_TYPE -> ErrorPlaceholder(
+            node.props[PLACEHOLDER_MESSAGE_PROP].literalString() ?: "Unbound",
+            modifier,
+        )
         else -> ErrorPlaceholder("Unsupported component:\n${node.type}", modifier)
     }
 }
@@ -212,10 +220,16 @@ private fun RenderUserComponent(node: Node, modifier: Modifier, ctx: RenderConte
         is InstanceResolution.Missing -> ErrorPlaceholder("Unresolved component:\n${resolution.id ?: "?"}", modifier)
         is InstanceResolution.Cycle -> ErrorPlaceholder("Component cycle:\n${resolution.def.name}", modifier)
         is InstanceResolution.Resolved -> Box(modifier) {
-            // Resolve the definition's parameters against this instance's arguments (ADR-028) before
-            // rendering, so a ParamRef in the body draws the instance's value (or the parameter default).
+            // Resolve the definition's parameters against this instance's arguments (ADR-028), then expand the
+            // definition's own component-local state (ADR-034 Amendment): its StateBindings resolve to *its*
+            // sample data and its repeats expand — against the component's state, never the enclosing screen's,
+            // so an instance is self-contained. Params first, so a ParamRef inside a repeat template is bound
+            // before the template is duplicated per row. Stateless components keep the zero-copy fast path.
             // Keyed on the instance and definition so the substitution recomputes only when either changes.
-            val bound = remember(node, resolution.def) { bindParameters(resolution.def, node) }
+            val bound = remember(node, resolution.def) {
+                val params = bindParameters(resolution.def, node)
+                if (resolution.def.state.isEmpty()) params else expandScreenState(params, resolution.def.state)
+            }
             // The internals are not the active tree's nodes: suppress per-node instrumentation so a click
             // selects the instance (the Box above), and mark this id as expanding to break any cycle.
             RenderNode(
@@ -343,13 +357,24 @@ private fun textOverflowOf(name: String): TextOverflow = when (textOverflowName(
     else -> TextOverflow.Clip
 }
 
+/**
+ * A button's `onClick` (ADR-035, #277): in C13 [RenderContext.interactive] preview it dispatches the node's
+ * `onClick` [handlers] to the run-mode reducer; otherwise a no-op, so the static canvas and codegen are inert.
+ * The handler is a closed [viewforge.model.Action] list applied by [applyActions] — never evaluated (PF-4).
+ */
+private fun onClickHandler(node: Node, ctx: RenderContext): () -> Unit = if (ctx.interactive) {
+    { ctx.dispatch(node.handlers[ON_CLICK].orEmpty()) }
+} else {
+    {}
+}
+
 @Composable
 private fun RenderButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    // `onClick` is a RawExpression escape hatch — never evaluated on the canvas (PF-4); a no-op here.
-    // Absent styling props pass Compose's own defaults explicitly, so the canvas matches codegen — which
-    // simply omits those args and thus gets the same defaults (TECHNICAL_NOTES §2).
+    // In C13 interactive preview `onClick` runs the node's structured handler actions (ADR-035); on the static
+    // canvas and in codegen it is inert. Absent styling props pass Compose's own defaults explicitly, so the
+    // canvas matches codegen — which simply omits those args and thus gets the same defaults (TECHNICAL_NOTES §2).
     Button(
-        onClick = {},
+        onClick = onClickHandler(node, ctx),
         modifier = modifier,
         enabled = node.props["enabled"].literalBoolean() ?: true,
         shape = resolveShape(node.props["shape"], ctx) ?: ButtonDefaults.shape,
@@ -385,14 +410,24 @@ private fun buttonColorsFor(node: Node, ctx: RenderContext): ButtonColors {
 
 @Composable
 private fun RenderOutlinedButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    OutlinedButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
+    OutlinedButton(
+        onClick = onClickHandler(node, ctx),
+        modifier = modifier,
+        enabled =
+        node.props["enabled"].literalBoolean() ?: true,
+    ) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
 
 @Composable
 private fun RenderTextButton(node: Node, modifier: Modifier, ctx: RenderContext) {
-    TextButton(onClick = {}, modifier = modifier, enabled = node.props["enabled"].literalBoolean() ?: true) {
+    TextButton(
+        onClick = onClickHandler(node, ctx),
+        modifier = modifier,
+        enabled =
+        node.props["enabled"].literalBoolean() ?: true,
+    ) {
         RenderChildren(node.slots["content"].orEmpty(), ctx)
     }
 }
@@ -437,6 +472,21 @@ private fun RenderOutlinedTextField(node: Node, modifier: Modifier, ctx: RenderC
     } else {
         OutlinedTextField(value = initial, onValueChange = {}, modifier = modifier, enabled = enabled)
     }
+}
+
+@Composable
+private fun RenderDropdown(node: Node, modifier: Modifier) {
+    // Read-only preview (ADR-034 slice 2, #253): the closed-menu anchor showing the first sample row's label as
+    // the current selection. Options arrive pre-resolved from the state pre-pass ([DROPDOWN_SELECTED_PROP]); no
+    // menu opens and nothing mutates — selection is a codegen concern, and the canvas must stay inert (PF-4).
+    val selected = node.props[DROPDOWN_SELECTED_PROP].literalString().orEmpty()
+    OutlinedTextField(
+        value = selected,
+        onValueChange = {},
+        readOnly = true,
+        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+        modifier = modifier,
+    )
 }
 
 @Composable

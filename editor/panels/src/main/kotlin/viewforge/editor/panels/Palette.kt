@@ -49,7 +49,13 @@ import viewforge.editor.state.PaletteEntry
  * (P2a) is a deliberate follow-up (see ADR-015).
  */
 @Composable
-fun Palette(state: EditorState, onToggleFavorite: (PaletteEntry) -> Unit, modifier: Modifier = Modifier) {
+fun Palette(
+    state: EditorState,
+    onToggleFavorite: (PaletteEntry) -> Unit,
+    onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var query by remember { mutableStateOf("") }
     Column(modifier) {
         PanelHeader("Palette")
@@ -58,8 +64,15 @@ fun Palette(state: EditorState, onToggleFavorite: (PaletteEntry) -> Unit, modifi
             // Quick access to pinned + recent components (P5a) — only with no active search, since a filtered
             // list already shows everything matching and the sections would just duplicate it.
             if (query.isBlank()) {
-                QuickAccessSection("★ Favorites", state.favoriteEntries, state, onToggleFavorite)
-                QuickAccessSection("Recent", state.recentEntries, state, onToggleFavorite)
+                QuickAccessSection(
+                    "★ Favorites",
+                    state.favoriteEntries,
+                    state,
+                    onToggleFavorite,
+                    onInsert,
+                    onDropLibrary,
+                )
+                QuickAccessSection("Recent", state.recentEntries, state, onToggleFavorite, onInsert, onDropLibrary)
             }
             val entries = state.palette.filter { it.matches(query) }
             if (entries.isEmpty()) {
@@ -68,7 +81,7 @@ fun Palette(state: EditorState, onToggleFavorite: (PaletteEntry) -> Unit, modifi
                 entries.groupBy { it.category }.forEach { (category, items) ->
                     SectionLabelInset(category)
                     items.forEach { entry ->
-                        PaletteRow(state, entry, onToggleFavorite)
+                        PaletteRow(state, entry, onToggleFavorite, onInsert, onDropLibrary)
                     }
                 }
             }
@@ -83,10 +96,12 @@ private fun QuickAccessSection(
     entries: List<PaletteEntry>,
     state: EditorState,
     onToggleFavorite: (PaletteEntry) -> Unit,
+    onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
 ) {
     if (entries.isEmpty()) return
     SectionLabelInset(title)
-    entries.forEach { entry -> PaletteRow(state, entry, onToggleFavorite) }
+    entries.forEach { entry -> PaletteRow(state, entry, onToggleFavorite, onInsert, onDropLibrary) }
 }
 
 /** Case-insensitive match against the label and category (type-ahead filtering, P3a). */
@@ -104,16 +119,22 @@ private fun PaletteEntry.matches(query: String): Boolean {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaletteRow(state: EditorState, entry: PaletteEntry, onToggleFavorite: (PaletteEntry) -> Unit) {
+private fun PaletteRow(
+    state: EditorState,
+    entry: PaletteEntry,
+    onToggleFavorite: (PaletteEntry) -> Unit,
+    onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
+) {
     val cyclic = state.paletteEntryWouldCycle(entry)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val labelModifier = Modifier.weight(1f)
         if (cyclic) {
             TooltipArea(tooltip = { CycleTooltip(entry) }) {
-                PaletteRowLabel(state, entry, disabled = true, modifier = labelModifier)
+                PaletteRowLabel(state, entry, onInsert, onDropLibrary, disabled = true, modifier = labelModifier)
             }
         } else {
-            PaletteRowLabel(state, entry, disabled = false, modifier = labelModifier)
+            PaletteRowLabel(state, entry, onInsert, onDropLibrary, disabled = false, modifier = labelModifier)
         }
         FavoriteStar(favorite = state.isFavorite(entry), onClick = { onToggleFavorite(entry) })
     }
@@ -135,7 +156,14 @@ private fun FavoriteStar(favorite: Boolean, onClick: () -> Unit) {
 /** The label itself: click to insert, drag to the canvas, double-click (a component) to open. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: Boolean, modifier: Modifier = Modifier) {
+private fun PaletteRowLabel(
+    state: EditorState,
+    entry: PaletteEntry,
+    onInsert: (PaletteEntry) -> Unit,
+    onDropLibrary: (PaletteEntry) -> Unit,
+    disabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     Text(
         text = entry.label,
@@ -148,7 +176,10 @@ private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: B
             .pointerInput(entry) {
                 detectDragGestures(
                     onDragStart = { local ->
-                        // Read cycle-state fresh (it flips when a component is opened, without re-keying).
+                        // Read cycle-state fresh (it flips when a component is opened, no re-key). A library
+                        // entry drags too (#234): the drag resolves a drop position like any other, but the
+                        // commit is a copy-into-document (possibly via a name prompt), routed on drag *end*
+                        // through [onDropLibrary] rather than the generic AddNode path.
                         if (state.paletteEntryWouldCycle(entry)) return@detectDragGestures
                         val window = coords?.localToWindow(local) ?: return@detectDragGestures
                         state.beginPaletteDrag(entry)
@@ -159,14 +190,16 @@ private fun PaletteRowLabel(state: EditorState, entry: PaletteEntry, disabled: B
                         val window = coords?.localToWindow(change.position) ?: return@detectDragGestures
                         state.updatePaletteDrag(window.x, window.y)
                     },
-                    onDragEnd = { state.dropPaletteDrag() },
+                    onDragEnd = { if (entry.libraryId != null) onDropLibrary(entry) else state.dropPaletteDrag() },
                     onDragCancel = { state.cancelPaletteDrag() },
                 )
             }
             .combinedClickable(
-                // A cycle-forming insert is a no-op in state too; onClick just stays quiet so the greyed
-                // entry does nothing. Double-click still opens the component for editing (see above).
-                onClick = { state.addFromPalette(entry) },
+                // Insert routes through [onInsert]: a built-in / document component adds directly, a library
+                // entry copies into the document (prompting on a name collision). A cycle-forming or greyed
+                // entry is a no-op in state too, so onClick just stays quiet. Double-click still opens a
+                // *document* component for editing; a library entry has no id to open in place.
+                onClick = { onInsert(entry) },
                 onDoubleClick = entry.componentId?.let { id -> { state.openComponent(id) } },
             )
             .padding(start = 20.dp, top = 5.dp, bottom = 5.dp),

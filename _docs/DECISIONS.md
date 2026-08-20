@@ -68,9 +68,12 @@ Onlook's approach works partly because the browser DOM provides a live, inspecta
 source locations; Compose has no cross-target equivalent (notably, Compose for Web renders to a
 canvas, not a DOM).
 
-**Consequences.** Cannot open an existing Compose project and edit it visually — a genuine
-limitation to state plainly rather than obscure. If demanded later, the tractable version is a
-narrow marked region (`// region ViewForge`) regenerated wholesale, not general parsing.
+**Consequences.** Cannot open an existing *hand-written* Compose project and edit it visually — a genuine
+limitation to state plainly rather than obscure. This exclusion is unchanged. A **narrow exception** for
+re-opening output ViewForge itself generated — carried as an IR sidecar, recognised by ownership, never
+parsed — is sanctioned separately in **ADR-032**; it does not reverse this decision. If parsing hand-written
+Compose is demanded later, the tractable version is a marked region (`// region ViewForge`) regenerated
+wholesale, not general parsing.
 
 ---
 
@@ -1052,7 +1055,9 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
 
-**Status:** Accepted (to be implemented in Phase 2)
+**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v7 / `M6to7`** after
+ADR-034 claimed v3–v5 (read-only data binding, its nested-lists amendment #255, and its component-local-state
+amendment #266) and **ADR-035** claimed v6 for interactive state & events (2026-08-19).
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
@@ -1071,8 +1076,10 @@ the framework package's `TargetDefinition` (the Android target uses Material **w
 `compact` < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp). Render resolves the active breakpoint's
 overrides over the base props before dispatch (the same shape as `bindParameters`, ADR-028/#76); codegen
 emits the base value in Phase-2 M13, with window-size-class branching a later slice (M14). Introducing
-the field **bumps the schema 2 → 3** with an `M2to3` version stamp and a committed migration fixture
-(DATA_MODEL §10), even though the field itself is additive.
+the field **bumps the schema 6 → 7** with an `M6to7` version stamp and a committed migration fixture
+(DATA_MODEL §10), even though the field itself is additive. (Originally scoped to v3/`M2to3`; ADR-034's
+read-only data binding took v3, its nested-lists amendment (#255) took v4, its component-local-state
+amendment took v5, and ADR-035's interactive state & events took v6, so responsive slides to v7.)
 
 **Rationale.** Keeping overrides on the node keeps a node's full state in one place: selection, undo,
 copy/paste, extract-to-component, and structural-sharing rebuilds all already operate on a node and its
@@ -1080,9 +1087,9 @@ root-to-node path, so overrides ride along for free with no second structure to 
 identity. It also diffs cleanly (the overrides sit next to the props they modify) and needs no new
 cross-reference integrity rule. Opaque breakpoint strings keep `core` framework-agnostic — the same
 reason `Node.type` and theme tokens are strings — so a future non-Compose package can define its own
-breakpoint set. The 2 → 3 bump is deliberately conservative: a v2-only build silently ignoring a
+breakpoint set. The 6 → 7 bump is deliberately conservative: a v6-only build silently ignoring a
 populated `responsive` field would render/emit only base props, a fidelity loss, so this is a *semantic*
-change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M2to3` as
+change and gets a version bump per DATA_MODEL §10 (the `ParamRef` precedent, ADR-028), with `M6to7` as
 the marker that lets an older build hit the `NEWER_SCHEMA` gate cleanly.
 
 **Rejected.** **A separate screen-level override layer keyed by node id** — duplicates node identity into
@@ -1095,9 +1102,9 @@ additive field with no version bump** — technically allowed by the additive po
 data-loss on old builds makes it a semantic change; bumping is the honest, safe call.
 
 **Consequences.** Phase 2 gains responsive layouts without disturbing any existing prop reader — render
-and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 3 with a
-one-line `M2to3` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
-(the field holds ordinary `PropValue`s). Costs accepted: a third schema version to carry forward, and a
+and codegen resolve overrides *before* the value pipeline they already have. The schema goes to 7 with a
+one-line `M6to7` migration and a fixture; `NodeDisplay`'s exhaustive `PropValue` `when` is unaffected
+(the field holds ordinary `PropValue`s). Costs accepted: a seventh schema version to carry forward, and a
 node can now hold prop values that only apply at some widths — the inspector must make the active
 breakpoint obvious so an edit's scope is never ambiguous (a Phase-2 UX task, M13).
 
@@ -1132,6 +1139,545 @@ consumer. Revisiting is cheap if a concrete need appears (the chrome is already 
 **Consequences.** The build stays on a stock JDK 21 and the packaging path (ADR-022) is unchanged. The
 editor keeps a Material look rather than an IDE-native one — an accepted trade for a smaller, simpler
 toolchain. If Jewel is reconsidered later, it is a contained change at the single `MaterialTheme` seam.
+
+---
+
+## ADR-032 — Re-opening ViewForge-owned output: round-trip of *own output*, not parsing
+
+**Status:** Accepted
+
+**Context.** There is standing user demand (issue #22) to open a `.kt` file in ViewForge and view/edit
+it. ADR-003 excludes round-trip parsing of hand-written Compose — a compiler-grade problem — and that
+exclusion stands. But a narrower need is real and tractable: re-opening a project ViewForge *itself*
+generated. G5 exports a self-contained Gradle project; a user who exported one and lost or moved the
+original `.vforge` currently has no way back into the editor, even though every byte of that output came
+from a ViewForge IR the tool fully understands. The machinery to recognise our own output already exists
+(ADR-029: a `.viewforge/manifest.json` records exactly which paths a regeneration owns, with the
+`// Generated by ViewForge` header as a secondary signal).
+
+**Decision.** Support re-opening **only ViewForge-owned output**, and reconstruct the IR from an artifact
+ViewForge controls — **never** by parsing Kotlin. The chosen `.kt` is an *entry point*, not a source of
+truth:
+
+1. **Ownership gate (reuses ADR-029, read direction).** The `// Generated by ViewForge` header is a weak,
+   forgeable *hint*, never authorisation. Authority is the nearest ancestor `.viewforge/manifest.json`
+   (loaded *totally* — corrupt ⇒ nothing owned): the `.kt` is ours iff its project-relative path is in
+   the manifest's `paths`.
+2. **IR sidecar as source of truth.** Export additionally stashes the source `Project` at
+   `.viewforge/project.vforge`. Import loads *that* through the existing hardened `ProjectStore.load`
+   (strict deserialization, limits, migrations — SECURITY §3), and opens the screen the `.kt` maps to via
+   a `path → screen` entry the manifest carries. The reconstruction is therefore lossless (it *is* our IR)
+   and involves zero Kotlin reading.
+3. **Fail loud, never wrong.** No header, no ancestor manifest, a path the manifest doesn't own, a
+   missing/corrupt sidecar, or a newer-than-supported schema each *refuse* with a specific diagnostic. The
+   importer never guesses IR from the `.kt` text and never silently opens a blank document.
+
+This is **export metadata, not a schema change**: the sidecar and the `path → screen` map live beside the
+manifest under `.viewforge/`, versioned by `ExportManifest.MANIFEST_VERSION`, wholly independent of the
+`.vforge` `schemaVersion` (which stays free for #21 to claim v3).
+
+**Rationale.** Re-opening *own output* is not the excluded problem. The excluded problem is deriving IR
+from arbitrary Kotlin (control flow, custom composables, computed values with no IR representation);
+here the IR already exists and is simply carried alongside the code. Using the `.kt` purely as a
+recognised pointer, with the manifest as the ownership authority and the sidecar as the actual source,
+keeps the whole thing inside primitives the project already trusts (ADR-029 ownership, the hardened
+`.vforge` loader) and adds no parser to maintain in lockstep with codegen.
+
+**Rejected.** **Parse the emitted subset back to IR** — even our own deterministic KotlinPoet output needs
+a real tokeniser (strings, nested lambdas, modifier chains), is fragile, must track every codegen change,
+and brushes the spirit of ADR-003; the sidecar is lossless for a fraction of the code and risk.
+**The `// region ViewForge … // endregion` regenerated block** (the mitigation floated in ADR-003 /
+PROJECT_PLAN §7.1 and the original #22 note) — still requires reading Kotlin around the fence and solves a
+different problem (embedding in a hand-written file); superseded here for the re-open use case.
+**General round-trip parsing** — remains excluded (ADR-003). **Store the sidecar/ownership in the
+`.vforge`** — it is per-output-dir export metadata, not project data (same reasoning as ADR-029's
+manifest).
+
+**Consequences.** A managed export directory gains a `.viewforge/project.vforge` beside its
+`manifest.json`, and re-opening a generated `.kt` becomes possible whenever that owned `.viewforge/` tree
+travels with it. A lone `.kt` copied away from its `.viewforge/` cannot be opened — an honest, fail-loud
+boundary rather than a guess. ADR-003's "Consequences" now cross-references this narrow carve-out. No
+`.vforge` schema change. Reading the `.kt` and walking to `.viewforge/` is untrusted-input handling and is
+covered by SECURITY §3 (PF-9/PF-10).
+
+---
+
+## ADR-033 — Cross-project component library: a config-dir folder of per-component files, copied into the document on use
+
+**Status:** Accepted
+
+**Context.** #209 asks for a library of reusable components that lives in the palette **across projects**,
+not just inside one document. #184 (ADR-024) already gives a document-scoped layer: a component published
+into `Project.components` travels inside its `.vforge`. What was missing is the *global* layer — a
+component a user builds once and reuses in *any* project. That forces four decisions the document layer
+never had to make: **where** these definitions live on disk (they cannot live in a `.vforge`, which is one
+document), **what happens when one is dropped into a project** (does the document copy it or reference an
+external store), **how a name clash with the document's own components is resolved**, and **how the library
+is managed** (add / remove / rename). The pieces to build on already exist: `ConfigDir` resolves the
+per-user config dir (ADR-023); `RecoveryStore` is the precedent for storing real *user content* — not
+chrome — under that dir via `VforgeJson` + `GuardedWriter`, taking the directory as a **parameter** so
+`core/project` keeps no dependency on `core/prefs` (ADR-025); `withFreshIds()` + `AddComponent` /
+`promoteScreenToComponent` already copy a definition into a document (#184); and the palette is built
+data-driven from `catalog.palette + document.components`, so new entry kinds need no per-entry UI.
+
+**Decision.**
+
+- **Storage: a `library/` folder in `ConfigDir`, one file per component.** Each component is its own file
+  (`library/<id>.json`, `<id>` a sanitized ULID), a single serialized `ComponentDef` wrapped in a
+  `LibraryComponent(libraryVersion, component)` record — its *own* version, independent of both the
+  `.vforge` `schemaVersion` and the prefs `prefsVersion`. Content is written through `VforgeJson` (the same
+  `PropValue`-discriminated codec as `.vforge`, so props/modifiers/`RawExpression` round-trip identically)
+  via `GuardedWriter`, confined to the `library/` root. A new **`ComponentLibraryStore` lives in
+  `core/project`** beside `RecoveryStore`, taking the library directory as a parameter (`:app` passes
+  `ConfigDir.resolve().resolve("library")`), so `core/project` stays free of `core/prefs`. This is the
+  ADR-025 recovery-store shape, applied to a *set* of files rather than one.
+- **Per-file, skip-bad-file loading.** Loading enumerates the folder and reads each file independently: a
+  missing folder yields an empty library, and one unreadable or corrupt file is **skipped** (best-effort,
+  logged), never aborting the rest. This is exactly the durability the one-file-per-component layout buys —
+  a single bad entry can never take down the whole palette or lose the other components — and it is why the
+  library is *not* one aggregate file. It sits between `ProjectStore` (a document fails loud, because it is
+  *the* user work) and `PreferencesStore` (chrome silently defaults): the library is user content, but each
+  entry is independent, so the unit of "fail" is one entry, not the set.
+- **Copy into the document on use, never a live reference.** Dropping a library entry copies its
+  `ComponentDef` — root through `withFreshIds()`, plus a fresh document component id — into
+  `Project.components` via a plain undoable `AddComponent`, then inserts a `UserComponent.instance`
+  referencing the copy. This is `promoteScreenToComponent` + palette insertion, reused. The `.vforge` stays
+  **self-contained** (ADR-024): it opens, renders, and generates on any machine with no external store, and
+  survives the user later deleting the library entry. The accepted trade-off: later edits to a library entry
+  do **not** propagate to copies already inserted into documents (a live reference would propagate but break
+  self-containment — see Rejected).
+- **Name collisions prompt for a name.** A library entry is inserted through the existing document
+  identifier rules (`componentNameError`: legal Kotlin identifier, unique among `document.components`). When
+  the incoming name is already taken (or otherwise invalid), a small dialog — pre-filled with a suggested
+  free name (`uniqueComponentName` style) and validated live — collects a valid, unique name before the copy
+  is made. A non-colliding drop inserts directly with no prompt, so the common case stays frictionless. A
+  library entry can never form a reference cycle (it becomes a brand-new document component, fresh ids,
+  referencing nothing in the target), so no cycle guard applies to library entries — the same reasoning as
+  extraction and #184's publish.
+- **Palette surface + management (add / insert / remove / rename this release).** Library entries appear in
+  their own palette section, distinct from the built-ins and from the document's own "Components" (ADR-024),
+  so the two component layers stay visibly separate. A `PaletteEntry` distinguishes a library entry from a
+  document-component entry (a `libraryId` alongside the existing `componentId`) so inserting one runs the
+  copy-then-insert path rather than referencing an existing document component. Management operations —
+  **add to library** (from a document component: copy its `ComponentDef` into the store under a fresh library
+  id, resolving a within-library name clash the same way), **remove from library** (delete the file), and
+  **rename** (rewrite the entry's `name`, re-validated for uniqueness within the library) — are **direct
+  store operations, not document commands**: they mutate the out-of-document library, not the `.vforge`, so
+  they are correctly outside the undo/redo system (CLAUDE.md rule 3 governs *document* mutations), exactly
+  like recent-projects and favorites management. Organizing (folders / tags) is deferred.
+
+**Rationale.** One file per component was the user's explicit call and is the right shape here: the library
+is an unbounded, independently-editable *set*, so per-file add/remove/rename are trivial atomic operations
+and a corrupt entry is isolated — an aggregate `library.json` would rewrite the whole set on every change
+and risk the whole library on one bad write. Placing the store in `core/project` (not `core/prefs`) follows
+ADR-025: this is user *content* — real `ComponentDef`s needing the `.vforge` codec — not chrome, and the
+`ConfigDir`-as-parameter seam keeps the module boundary clean. Copy-on-use is what actually preserves
+ADR-024's self-containment guarantee across machines; it also reuses the #184 copy path wholesale, so the
+canvas, codegen, and export need **zero** new awareness of a library. Prompting on collision keeps the user
+in control when two components genuinely differ, while a clean drop stays one gesture.
+
+**Rejected.** **Fold the library into `preferences.json`** (`core/prefs`) — mixes real user content into the
+chrome file whose load *silently defaults* on corruption (ADR-023), so a single bad byte would quietly
+erase the user's whole library; and it couples the library's version to `prefsVersion`. **One aggregate
+`library.json`** — rewrites every component on each edit and stakes the whole library on one file's
+integrity; per-file isolation is the durability the user chose. **A live reference from the document to the
+global store** — breaks ADR-024 self-containment: the `.vforge` would no longer render or generate off the
+origin machine, and would break outright if the library entry were deleted; render and codegen would each
+need to consult an external, mutable store. **Auto-renaming the incoming copy silently** — cheaper, but
+hides a real "is this the same component?" question from the user; the prompt surfaces it. **Making library
+add/remove/rename undoable document commands** — they don't touch the document, so routing them through the
+command system would be a category error (and would wrongly entangle library edits with document undo).
+**A schema bump** — none is owed: the library stores `ComponentDef`s (every field exists since schema 1) in
+a separate, independently-versioned file; the `.vforge` `schemaVersion` is untouched and v3 stays reserved
+for #21.
+
+**Consequences.** ViewForge gains a `library/` folder under its config dir that outlives any single project,
+and the palette shows a third component source (built-ins, this document's components, the global library)
+with no per-component UI. Because a library drop lands as an ordinary document component, everything
+downstream — render, cycle validation, codegen, export self-containment, the compile gate — treats it
+identically to a #184-published component and needs no change. The library store is a new tenant of
+`core/project` alongside `RecoveryStore`, writing through `GuardedWriter` under a `ConfigDir`-derived root
+(no scattered `File.writeText`, CLAUDE.md rule 6; no network, ADR-011; `ComponentDef` content is data,
+never evaluated, PF-4). Honest gaps: **library edits do not propagate** to copies already placed in
+documents (the deliberate cost of self-containment); the add/insert/remove/rename **gestures are not
+headless-testable** (the same class of gap as prior drag/dialog work) and are covered by pure store and
+state tests plus running the app; **organizing** the library (folders, tags, search beyond the palette
+filter) is a clean follow-up; and a future `ComponentDef` shape change that rides a `.vforge` migration must
+also migrate library files — the per-file `libraryVersion` is the hook, and no migration is owed today.
+**Nested components are out of scope this release:** a library entry must be *self-contained* — adding a
+component whose tree references other user components is refused fail-loud (`libraryAddBlockReason`), because
+its dependencies live in the origin document, not the library, and copying it alone would dangle those
+references. Bundling the transitive closure (store the dependency `ComponentDef`s with the entry, remap ids
+on insert) is a tracked follow-up (#234); until then insert is trivially correct because every library entry
+stands alone. Drag-from-library onto the canvas is likewise deferred (click-to-insert only), since a mid-drag name
+prompt is the awkward gesture this ADR's collision decision already flagged.
+
+**Amendment (#234) — nested library components: bundle the transitive closure, and drag-from-library.**
+This lifts the two deferrals above. No `.vforge` schema change is owed (same reasoning as the original
+Rejected note — the library is a separately-versioned file), and the downstream story is unchanged: an
+inserted bundle still lands as ordinary `Project.components`, so render/cycle-validation/codegen/export/compile
+treat it identically.
+
+- **Storage: a library entry is now a *bundle*.** `LibraryComponent` gains a `dependencies: List<ComponentDef>`
+  beside its `component` (the *primary*), and `LIBRARY_VERSION` goes 1→2. The field is **additive with an
+  empty default**, so a self-contained entry writes no `dependencies` key (`VforgeJson` omits defaults) —
+  its file stays byte-identical to a v1 file — and any pre-existing v1 file loads as a bundle with empty
+  dependencies. `ComponentLibraryStore.list()` therefore returns `List<LibraryComponent>` (the whole bundle),
+  and the file name still derives from the *primary's* id. On **add to library**, the primary's transitive
+  closure is captured via `Project.reachableComponents(id)` (all user components reachable from its root,
+  transitively, via `referencedComponentIds()`); the dependency defs are stored **with their origin-document
+  ids intact** (internally consistent — nothing in the closure references the primary, since a cycle is
+  forbidden), and only the primary is relabelled to its fresh library id/name.
+- **Insert: copy the whole closure with a full id remap.** Every def in the bundle (primary + dependencies)
+  gets a fresh document-component id; a single old→new id map is built; each def's root is passed through
+  `withFreshIds()` (fresh node/modifier ids) **and** `Node.remapComponentReferences(map)` (rewrites the
+  `componentId` of every `userComponent` instance whose target is in the map). The result is self-contained
+  and collision-free, and one `CompositeCommand` (`AddComponent` per def + the referencing `AddNode`) keeps it
+  a single undo step. `libraryAddBlockReason` no longer refuses a nested component; it refuses only a
+  component whose closure **can't be resolved** — a dangling reference to a component that no longer exists in
+  the document, which cannot be made self-contained.
+- **Naming: the primary prompts, dependencies are uniquified silently.** The *primary* keeps the original
+  collision rule (a name clash with the document's components opens the name dialog, ADR-033 above), because
+  it is the thing the user is inserting and naming. **Dependency** components — transitively pulled helpers the
+  user never named — are auto-disambiguated against the target document (`Card` → `Card2`), the same
+  suffixing `uniqueComponentName` already uses, rather than surfacing a prompt per hidden dependency. This is a
+  deliberate, narrow departure from the prompt-only rule: prompting for names the user never chose would be
+  the friction this ADR set out to avoid, and codegen only needs the names to be *legal and unique* (distinct
+  composable functions), which the suffixing guarantees.
+- **Drag-from-library: drop first, prompt at the remembered position.** The awkward gesture the original
+  deferral flagged was prompting *mid-drag*. Instead the drag runs to completion using the existing
+  palette-drag machinery (the canvas/tree resolve a drop `ChildAddress` from geometry, agnostic to the entry
+  kind), and only *after* the drop does the collision prompt appear — if needed — carrying the resolved
+  address so the eventual insert lands where it was dropped, not at the selection. `insertLibraryComponent`
+  gains an optional explicit target address for exactly this (null = insert at the selection, the click path).
+  A clean drop inserts with no prompt.
+
+**Consequences of the amendment.** The honest gaps narrow but don't vanish: **library edits still don't
+propagate** to placed copies (unchanged, and now a whole closure is copied rather than one def); the **drag
+gesture itself remains non-headless** (covered by the pure `insertLibraryComponent(target=…)` seam, the
+closure/remap unit tests in `core/model`, the bundle round-trip in `ComponentLibraryStore`, and running the
+app), the same class of gap as prior drag work. The `libraryVersion` bump is the migration hook it was
+designed to be, used here for the first time; a v1 file needs no migration because empty dependencies is the
+correct reading of a self-contained entry.
+
+---
+
+## ADR-034 — Read-only data binding: screen state + sample data + a repeat node, no evaluation
+
+**Status:** Accepted (2026-08-18). Slice 1 implemented across #239–#243 on schema v3.
+
+**Context.** #21 asks for UI whose content is **data-driven at runtime** — a list with a dynamic number
+of rows, a dropdown populated from data, an indicator bound to live state. It has stood blocked because
+FEATURES §10 lists "visual state management / data binding" as an explicit non-feature for v1, and any
+real design brushes against SECURITY **PF-4** ("the canvas must not have any code-evaluation path") and the
+reserved `PropValue.StateBinding` (ADR-006, defined but never built). Three facts reshape the problem now.
+(1) `StateBinding(path)` is *already* a member of the closed `PropValue` hierarchy, so consuming it is not a
+forward-incompatible closed-hierarchy change the way `ParamRef` was (ADR-028). (2) The issue's three
+motivating examples — dynamic list, populated dropdown, live indicator — are all *display of data*; none of
+them require mutation or event handling. (3) The **static** component halves (`*ProgressIndicator`, a static
+dropdown, a table-shaped layout) are ordinary catalog components tracked elsewhere; #21 is purely the
+*dynamic* behaviour on top of them. What was missing is a model for **where the data lives**, **how a prop
+points at it without evaluating code**, **how a subtree repeats per row**, **how the canvas previews it
+without a live data source**, and **what codegen emits given that there is no backend** (also a §10
+non-feature). Decided with the user via AskUserQuestion (2026-08-18).
+
+**Decision.** Ship **read-only data binding** — bind, repeat, and populate from named data with design-time
+sample values; **no** mutable state, event handlers, or expression evaluation this release (those are a
+separate, later, consent-gated ADR). Concretely:
+
+- **State lives on the screen.** `Screen` gains an additive optional `state: List<StateField>` (default
+  empty). A `StateField` is `(name, type, sample)`: a legal-Kotlin-identifier `name` (the binding root), a
+  structured `type`, and a typed `sample` value used at design time and to seed generated code. This
+  release's `type` covers **scalars** (String / Int / Float / Bool) and a **list of records** (a record is a
+  flat set of named, scalar-typed fields) — enough for all three examples; nested lists and component-local
+  state are deferred. Sample data is stored as typed literals (the same `JsonPrimitive`/structured-literal
+  trust boundary as any `PropValue.Literal`), **never as code**.
+- **A binding is a structured path, navigated — never parsed.** `PropValue.StateBinding(path)` (already
+  reserved) is repurposed as a **dotted identifier path** resolved by *structural lookup*, not evaluation:
+  `progress`, `user.name`, or `item.title` inside a repeat scope. The grammar is `identifier ('.' identifier)*`
+  — no indexing, calls, operators, or Kotlin syntax. A path that does not resolve against the declared state
+  (or the current item record) renders a visible placeholder and marks the node unverified, exactly as
+  `RawExpression` does (PF-6 discipline: unknown → placeholder, never dynamic dispatch). This is the whole of
+  the PF-4 answer: there is no evaluator to attack, because a path is a list of names looked up in a typed
+  structure.
+- **A dynamic list is a dedicated `vforge.repeat` node.** Its `source` prop is a `StateBinding` to a
+  list-typed field; its children are the **per-item template**, rendered once per element. Inside the
+  template, bindings resolve against an `item` scope (the current record). This mirrors the user-component
+  model (ADR-024): a repeat is a *reference + template* — expanded at render/codegen, edited once as the
+  template, not inline per copy. `Repeater.TYPE`/`SOURCE_PROP` and the `item` scope keyword are pinned as
+  `core.model` constants (the DATA_MODEL §4 single-source pattern), shared by validator, renderer, and
+  generator. A container `forEach` flag was rejected (below).
+- **The canvas previews sample data, never a live source.** At design time the renderer resolves each
+  binding against its `StateField.sample`; a `vforge.repeat` renders its template once per sample row
+  (bounded — the first *N* rows). Nothing is compiled or executed; binding resolution is a structural lookup
+  over static typed values, so **no code-evaluation path is introduced** and PF-4 stays literally true. C13
+  interactive preview is unaffected — bindings are read-only, so run mode still just operates the real
+  widgets ephemerally.
+- **Codegen seeds a working stub with a `TODO`.** Because a backend is a non-feature, generated code cannot
+  fetch data — so it *is* the sample, made obviously replaceable. A screen with state emits, per field, a
+  seeded `val` from the sample (`val progress = 0.6f`; `val items = listOf(Item(…), …)`) preceded by
+  `// TODO: replace with your real data source`; record types emit a generated `data class`. A `vforge.repeat`
+  over `items` emits `items.forEach { item -> … }` (layout-neutral; a `LazyColumn` variant is a follow-up),
+  and each binding emits as a KotlinPoet **member access** (`item.title`), never string-concatenated
+  (GC-1/GC-2). The result compiles and runs out of the box; the user swaps the stub for their real source.
+  Hoisting data as a screen composable parameter was rejected (below).
+- **Schema bumps 2 → 3.** Although `Screen.state` is technically an additive optional field, a v2-only build
+  would **silently drop** it and misrender every binding and repeat — the same "semantic capability old
+  builds discard" that justified the `ParamRef` and responsive bumps. So the change claims **schema v3** with
+  an `M2to3` *stamp* migration (v2 documents carry no state and are already structurally valid v3), a real
+  fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v3 files in older builds. This is the reserved
+  v3 slot: **ADR-030 (responsive) slides to v4** (`M3to4`). (Later slid again to **v5/`M4to5`** when the
+  nested-lists amendment below claimed v4, then to **v6/`M5to6`** when the component-local-state amendment
+  claimed v5.)
+
+**Rationale.** Read-only binding is the largest slice of #21 that is *fully safe by construction*: with no
+evaluator and no mutation, PF-4 needs no new machinery and the feared per-project consent gate is simply not
+owed — sample data is typed literals and paths are validated identifier lookups, both already within the
+existing trust boundary. Screen-level state is the smallest surface that still expresses all three examples
+and gives codegen one clear owner per generated composable. A dedicated `vforge.repeat` node keeps the tree
+honest — hit-testing, selection, and codegen all see an explicit thing with an explicit template — where a
+`forEach` flag would overload every container with an "is this one child or a template?" ambiguity. Seeding a
+runnable stub keeps ViewForge's promise that generated code *compiles and runs*, while the `TODO` makes the
+one thing the tool cannot provide (a real data source) impossible to miss.
+
+**Rejected.** **Interactive mutation / events this release** — mutable state plus `onClick → setState` is
+what actually pushes toward evaluating user expressions and needs the SECURITY PF-4 threat model and consent
+gate; it does more than the issue's examples require and is deferred to its own ADR. **Component-local or
+project-global state** — component-local doubles the model/inspector/codegen surface and entangles with
+`ParamRef` resolution; project-global couples screens and blurs codegen ownership. Screen-level first, the
+others as clean additions. **A `forEach` flag on containers** — fewer node types but overloads container
+semantics and muddies selection/codegen (rejected for the same reason ADR-030 rejected a node-id-keyed
+override layer: keep the capability explicit, not smeared across existing shapes). **Hoisting data as a
+screen parameter** (`fun HomeScreen(items: List<Item>)`) — cleaner injection, but the screen no longer runs
+standalone and every preview/call site must supply data; the seeded stub keeps standalone-runnable as the
+default and a parameterized variant can come later. **Evaluating a binding path as a Kotlin expression** —
+the direct route to PF-4 violation; a path is navigated structurally, never parsed.
+
+**Consequences.** ViewForge gains a data layer that stays entirely within the offline, no-eval trust model:
+a screen owns typed sample-backed state, props bind to it by structural path, and a `vforge.repeat` expands a
+template per row — previewed against sample data and generated as a runnable stub. This spans **two point
+releases** (the issue's "slice hard"): **slice 1** (this release) is screen scalars + list-of-record state,
+`StateBinding` on props with an `item` scope, `vforge.repeat`, the inspector to declare/bind, sample-data
+preview, and codegen (record `data class`es + seeded stubs + repeater), on schema v3; **slice 2** (later) is
+the populated-dropdown convenience, component-local state, nested lists, `LazyColumn` selection, and
+eventually the separate interactive-state ADR. Implementation work this ADR authorizes, to be filed as
+sub-issues once accepted (issues are the source of truth): the `Screen.state` model + `StateField`/`StateType`
+in `core.model`; the `Repeater` constants + binding-path resolver (pure, `core`); `M2to3` + fixture +
+`NEWER_SCHEMA` update; renderer sample-data resolution + repeat expansion + placeholder for unresolved
+bindings; codegen (data classes, seeded stubs, `forEach`, member-access binding emit) with **golden fixtures**
+(CLAUDE.md rule 5); inspector UI to declare state and pick a binding for a prop (data-driven from
+`PropDefinition`, no per-component UI); and doc updates — DATA_MODEL §6/§10/§12 (resolve open question 2
+"lists and repeaters" and note the v3 claim), FEATURES §10 (carve the read-only slice out of the non-feature),
+SECURITY (new PF entry: binding paths validated, sample-data size bounds under PF-2, identifiers normalized
+per GC-3; affirm no eval path added), and **ADR-030 re-versioned to v4** (later v5, then v6; see the #255 and
+#266 amendments).
+Honest boundaries this release
+draws: **read-only only** (no mutation/events), **screen-scoped** (no component-local/global state), **flat
+records** (no nested lists), and **the sample is the generated data** (no real source, by design).
+
+**Amendment (#253) — populated dropdown: a list-valued prop binding.** Slice 2 adds the first binding whose
+source is a *list*, not a scalar. Until now a `PropValue.StateBinding` on a prop always resolved to one scalar
+(`resolveSampleScalar`); lists were consumed only by a `vforge.repeat`'s `source`. A **`vforge.dropdown`** node
+(framework-neutral like `vforge.repeat`, realized by the Compose package as a Material3 dropdown) binds its
+`options` prop to a list-of-record field and names, in an ordinary literal `optionLabel` prop, which record
+field is shown per option. **No `.vforge` schema change is owed** — both are ordinary additive props on a new
+node type; a dropdown is data-clean the same way a repeat is. This stays inside the trust model: the canvas
+previews the **first** sample row's label read-only (no selection state, PF-4), and codegen emits a `Box` with
+a read-only anchor over a `DropdownMenu` populated by `options.forEach { item -> DropdownMenuItem(…) }` reading
+the same seeded state stub — the selection/`onClick` handlers are **inert stubs** (the house style for a
+generated `Checkbox`/`Slider`), so no mutation or event path is introduced. The `LazyColumn` repeat variant
+(#251) landed under the same slice with no ADR change (an additive `layout` literal on the repeat node).
+Rejected here, as in the original Rejected note: a `ListOfScalar` state type so a dropdown could bind a bare
+list of strings — cleaner data but a schema bump and a wider model for a convenience the label-field selector
+already covers over the existing list-of-record shape.
+
+**Amendment (#255) — nested lists: a recursive record/sample model, schema v4.** The original decision drew
+"flat records (no nested lists)" as an honest boundary. Slice 2 removes it: a record field may **itself be a
+list-of-record**, so state can model a list of sections each holding a list of rows. Concretely, `RecordField`
+now carries a full `StateType` (not a bare `ScalarType`), and a sample cell is a `SampleValue` (a scalar **or**
+nested `Rows`) — the type and sample models become **recursive**, mirroring each other. A `vforge.repeat`'s
+`source` may bind `item.<listField>` (a nested list on the current row), not just a top-level field, so a repeat
+nested inside another repeat's template iterates the outer row's sub-list. **Scope stays single-keyword:** `item`
+always names the **innermost** repeat's element, so an inner `item.*` *shadows* the outer — a nested row cannot
+reach its parent's fields from inside the inner template (render the parent field in the *outer* template
+instead). This maps directly onto Kotlin's own lambda shadowing in the generated `item.teams.forEach { item -> … }`.
+Unlike the dropdown/`LazyColumn` amendments this **changes the serialized shape** of existing v3 state (record
+fields `{name, scalar}` → `{name, type}`; cells a bare primitive → `{kind:"scalar", value}`), so it **claims
+schema v4** with a real (transforming, not stamping) `M3to4` migration + a frozen v3 fixture — and **ADR-030
+responsive consequently slides to v5/`M4to5`** (later to v6/`M5to6` when component-local state, #266, claimed
+v5). Still fully inside the read-only, no-eval trust model: binding
+paths are validated identifier chains navigated structurally (PF-4 unchanged), and nested sample data is the
+same typed-literal trust boundary as any sample, merely deeper. Codegen emits recursive `data class`es (an outer
+type gains a `List<Element>` field) and a nested seeded stub; the renderer expands nested repeats against the
+sample, shadowing the `item` scope per level. **Rejected here:** *named/outer scopes* (e.g. `item.parent.…` or a
+per-repeat scope keyword) so an inner template could reach an outer row — it widens the model to a scope stack
+and multi-name resolution for a capability the outer-template placement already covers; `item`-shadowing keeps
+one keyword and one resolution rule. Deferred beyond this slice: deeper-than-two-level *source pickers* in the
+inspector (the picker offers `item.<listField>` from the nearest enclosing repeat; hand-nesting deeper still
+renders/generates correctly).
+
+**Amendment (#266) — component-local state, schema v5.** The original decision drew "screen-scoped (no
+component-local/global state)" as an honest boundary and *rejected* component-local state for that release
+("component-local doubles the model/inspector/codegen surface and entangles with `ParamRef` resolution;
+screen-level first, the others as clean additions"). Slice 2 adds it as the promised clean addition: a
+`ComponentDef` gains its own `state: List<StateField>` — the **same** `StateField`/`StateType`/`SampleValue`
+model a `Screen` carries — so a reusable component can bind, repeat, and populate from data it owns internally,
+resolved against **itself**, never the enclosing screen. An instance is therefore self-contained: at render an
+inlined component resolves its bindings against its own sample data *before* it is spliced into a screen; at
+codegen the state materialises as body locals private to the component `fun`, so scope isolation is automatic.
+The `ParamRef` "entanglement" resolves cleanly: `ParamRef` (an instance argument) and `StateBinding` (component-
+local data) are **distinct `PropValue` members**, so a prop inside a component root may reference either with no
+ambiguity — the only real cost is codegen emitting *both* typed function parameters *and* seeded state `val`s in
+one function body (params → arguments, state → locals + record `data class`es), which the existing generic
+`StateEmitter` already handles. The binding-path resolvers are unchanged: they navigate a `List<StateField>` by
+structural lookup regardless of whose state it is (PF-4 unchanged — no evaluator, samples are typed literals).
+Like slice 1 (and unlike the dropdown/`LazyColumn` amendments) populating component state is forward-incompatible
+— a v4-only build would silently drop it and misrender every component-local binding — so it **claims schema v5**
+with an `M4to5` **stamp** migration (a v4 document has no component state and is already a valid v5 document, like
+M2to3), a fixture, and the `NEWER_SCHEMA` gate. **ADR-030 responsive consequently slides to v6/`M5to6`** (and
+later to **v7/`M6to7`** once ADR-035 interactive state & events claimed v6). The
+inspector reuses the screen-state editor against the *active edit surface* — the open component's state when one
+is being edited, else the screen's — via owner-agnostic state commands (a screen id or a component id both name a
+"state owner"), so there is no per-surface UI. **Rejected here** (again): *project-global state* — it couples
+screens and blurs which composable owns a generated data stub; a component or screen owner keeps one clear owner
+per generated function. Deferred beyond this slice, as before: mutable state and event handlers, which remain the
+separate, consent-gated ADR (this amendment adds **no** evaluation, mutation, or event path).
+
+---
+
+## ADR-035 — Interactive state & events: a closed structured action model, no evaluation, consent-acknowledged
+
+**Status:** Accepted (2026-08-19). Implemented across stacked slices #279–#284 (model+schema v6, renderer/C13
+reducer, codegen, inspector action editor, per-project acknowledgment + SECURITY IA-*, docs).
+
+**Context.** #21 always had two halves. ADR-034 shipped the first — **read-only** data binding — and was
+careful to draw the second as an explicit boundary it would *not* cross: "mutable state plus `onClick →
+setState` is what actually pushes toward evaluating user expressions and needs the SECURITY PF-4 threat model
+and consent gate" (ADR-034 Rejected), and SECURITY's PF-11 design note names the same line: "that gate becomes
+owed only when *mutable* state and event handlers arrive (the direct route toward evaluating user code), which
+is a separate, later ADR with its own threat model." This is that ADR. Everything ADR-034 and its amendments
+added stayed *safe by construction*: a binding is a structured path **looked up** in typed data, never an
+expression, so there is no evaluator to attack and PF-4 stays literally true. Interactivity threatens that
+invariant because the naïve design — let a handler run whatever the user types — is exactly a code-evaluation
+path: it would mean embedding a Kotlin scripting engine and executing untrusted code out of a `.vforge` file
+(the PF-4 nightmare, and the reason SECURITY's PF-4 design note reserves "its own threat model and an explicit,
+per-project user consent gate" for it). The forces: users legitimately need a button that changes state and a
+checkbox that flips a flag (the interactive half of #21, #214 navigation, #215 UX-path simulation all want it);
+ViewForge's whole identity is *offline, no-eval, generated-code-that-compiles*; and the honest reading is that
+"mutable state + events" does **not** actually require an evaluator if the set of things a handler may do is
+**closed and structured** rather than open and textual. Decided with the user via AskUserQuestion (2026-08-18).
+
+**Decision.** Ship interactivity as a **closed, structured action model** — no expression evaluation, PF-4
+preserved — and gate it with a **light per-project acknowledgment** rather than a hard opt-in. Concretely:
+
+- **State becomes writable, but the state model is unchanged.** The existing `Screen.state` and (schema-5,
+  Amendment #266) `ComponentDef.state` fields — the same `StateField`/`StateType`/`SampleValue` model — are the
+  mutable stores. Their `sample` is now both the design-time preview value **and** the initial runtime value.
+  No new state concept, no project-global state (rejected again, below).
+- **An event handler is a `List<Action>` from a sealed set — never an expression.** A handler is not text and
+  is never parsed. `Action` is a closed `core.model` hierarchy: `SetState(target, value)`,
+  `Toggle(boolTarget)`, `Adjust(numericTarget, delta)`, `AppendRow(listTarget, record)` / `RemoveRow(listTarget,
+  indexValue)`, and `Navigate(screenId)` (the structural hook for #214). A `target` is a **`StateBinding` path**
+  (the exact structural, no-eval identifier lookup ADR-034 already validates) that must resolve to a *writable*
+  declared state field of a compatible type; a `value`/`delta` is an ordinary `PropValue` (`Literal` or a
+  read `StateBinding`). Dispatch at every layer is a `when` over the sealed `Action` type — **there is no
+  evaluator, no parser, no scripting engine; PF-4 stays literally true**, for the same reason a binding path
+  does: the handler is a list of *named, typed, closed operations*, looked up and applied, never interpreted.
+  An action whose `target` does not resolve to a writable field renders/marks the node unverified (PF-6
+  discipline: unknown → placeholder, never dynamic dispatch), exactly as an unresolved binding does.
+- **Events are closed named slots on catalog components, data-driven.** A component declares which event slots
+  it exposes (`onClick`, `onCheckedChange`, `onValueChange`, …) the same way it declares `PropDefinition`s —
+  from catalog metadata, **no per-component inspector UI** (the standing anti-pattern). Each slot holds a
+  `List<Action>`; the inspector edits them with a data-driven action editor (pick action kind → pick a writable
+  target from declared state → pick a literal/binding value), never free text.
+- **Interaction runs in C13 run-mode only; the design canvas stays static.** The editing canvas keeps
+  previewing `sample` data read-only, preserving the "canvas shows static sample data" invariant. The existing
+  C13 interactive-preview run mode (#120), which already operates the *real* Compose widgets ephemerally, now
+  actually applies actions to an ephemeral copy of the state — a `when(action)` reducer over `remember`ed state,
+  nothing persisted to IR. Because the action set is closed and total, running it live is safe by construction;
+  live *design-canvas* mutation was considered and rejected (below) to keep the default surface eval-free.
+- **Codegen emits real interactive Compose — not the inert stubs** of the generated `Checkbox`/`Slider`/
+  dropdown. A mutable field emits `var field by remember { mutableStateOf(<sample>) }`; a handler slot emits a
+  lambda whose body is the action list lowered structurally — `SetState`→ assignment, `Toggle`→ `f = !f`,
+  `Adjust`→ `f += delta`, `Navigate`→ the navigation call (#214) — each built with the **KotlinPoet structural
+  API** (GC-1/GC-2), never string-concatenated. The result compiles and runs; the sample seeds the initial
+  value and the interactions are live. Golden fixtures per new node/handler shape (CLAUDE.md rule 5), compiled
+  for real (the CI compile gate).
+- **Consent is a light, per-project one-time acknowledgment**, not a hard opt-in. Because the model introduces
+  **no evaluator**, the heavy eval-consent gate the PF-4 design note reserves is **not owed** — but generating
+  code that *mutates state and reacts to input* is a genuine capability step beyond "renders static data," so
+  the promise the docs made ("a consent gate") is discharged **proportionally**: the first time a project adds
+  an interactive node (or on first open of a project that contains one), ViewForge shows an explicit,
+  dismissible acknowledgment that generated code will now include mutable state and event handlers bounded to
+  the closed action set, recorded per-project so it is asked once. This is documented in a new SECURITY section
+  (proposed **IA-1…IA-n**, "interactive actions"): the action set is closed and total, targets are validated
+  writable identifiers, values ride the existing `PropValue.Literal` trust boundary, and **no code-evaluation
+  path is added** (PF-4 unchanged) — so the acknowledgment informs rather than guards against an evaluator that
+  does not exist.
+- **Schema bumps 5 → 6.** Event-handler slots and the writable-state capability are new document semantics a
+  v5-only build would **silently drop** (it would load an interactive `.vforge`, discard every handler, and
+  render a dead UI) — the same "old builds discard a semantic capability" rule that justified every prior bump.
+  So the change claims **schema v6** — the slot ADR-030 responsive currently reserves — with an `M5to6`
+  migration (a v5 document carries no handlers and is a structurally-valid v6, so a **stamp** like M2to3/M4to5),
+  a real fixture in `samples/`, and the `NEWER_SCHEMA` gate refusing v6 in older builds. **ADR-030 (responsive)
+  consequently slides to v7/`M6to7`.**
+
+**Rationale.** The key realization is that "mutable state + events" and "evaluate user code" are **separable**.
+The industry reflex — a handler is a code string you `eval` — is what forces a scripting engine and a hard
+consent gate; but the interactions #21 actually needs (set a field, toggle a flag, nudge a number, add/remove a
+row, go to a screen) form a *small closed set of structured operations*. Modelling them as a sealed `Action`
+type reuses the exact machinery ADR-034 built — structural path resolution, typed `PropValue`s, `when`-based
+dispatch — so interactivity lands **entirely inside the existing no-eval trust model**: PF-4 stays literally
+true, and the feared scripting-engine threat model simply never materializes. That in turn makes the *light*
+consent posture the honest one — a hard opt-in gate implies a danger (arbitrary code execution) that the closed
+model does not contain, while "no gate at all" understates the real step up in generated-code capability; a
+one-time per-project acknowledgment is proportionate to what actually changed. Keeping live interaction in C13
+run-mode preserves the "canvas previews static sample data" invariant that hit-testing, selection, and the
+inspector all rely on, while still giving a real try-it-out surface. Reusing `Screen.state`/`ComponentDef.state`
+as the mutable stores means no second state concept and no second codegen owner.
+
+**Rejected.** **Free-form expression / `RawExpression` handlers** (`onClick = "count = item.qty * 2"`) — the
+maximally flexible option and the one every "visual builder" reaches for, but it embeds a Kotlin evaluator,
+**breaks PF-4's "no code-evaluation path,"** and mandates the full threat model + hard consent gate; it
+contradicts the entire ADR-034 lineage and is exactly what this ADR is designed to avoid. Complex per-handler
+logic is instead served by editing the generated code (ViewForge emits, the user extends). **A hard,
+off-by-default consent gate** (no interactive node may be added or generated until the project opts in) — the
+literal reading of the docs' "consent gate," but disproportionate once the model provably contains no
+evaluator; it adds friction against a threat that isn't present. **No consent surface at all** — defensible on
+pure PF-4 grounds (a closed action set adds no eval surface, like the read-only amendments), but it understates
+that generated code now *mutates and reacts*, and it silently drops the explicit promise the PF-4/PF-11 design
+notes made; the light acknowledgment keeps that promise proportionally. **Live mutation in the design canvas** —
+more immediate WYSIWYG, but it blurs the "canvas previews static sample data" invariant and puts a running
+reducer under the selection/hit-testing surface; C13 run-mode already exists for exactly this and keeps the
+editing surface static. **Project-global mutable state** — rejected again for the same reason ADR-034 rejected
+it: it couples screens and blurs which composable owns a generated store; screen/component owners keep one
+clear owner per generated function. **An open/extensible action registry** ("plugins add action kinds") —
+premature generalization (the ADR-007 anti-pattern); one closed set until a real second consumer exists.
+
+**Consequences.** ViewForge gains genuine interactivity while staying **offline, no-eval, and
+generated-code-that-compiles**: state declared for read-only binding becomes writable, catalog components expose
+closed event slots, handlers are structured action lists resolved and dispatched (never parsed), C13 run-mode
+operates them live and ephemerally, and codegen emits real `remember { mutableStateOf(…) }` + structural
+handler lambdas. PF-4 is unchanged — there is still no evaluator anywhere in the pipeline — so the security cost
+is a **light per-project acknowledgment**, not a scripting sandbox. What becomes harder: the action editor is a
+real piece of data-driven inspector UI (kind/target/value pickers with type-compatibility checks), and codegen
+now has a second, non-inert lowering path (handlers) that must stay structural. What we accept: **closed action
+set only** — logic outside `SetState`/`Toggle`/`Adjust`/`Append`/`RemoveRow`/`Navigate` means editing the
+generated code; **C13-run-mode interactivity** — no live design-canvas mutation; and a **light acknowledgment**,
+not a hard gate. This spans several slices. Implementation work this ADR authorizes, to be filed as stacked
+sub-issues under epic #277 once accepted (issues are the source of truth), following the
+stack-sequential-branches practice: the sealed `Action` model + writable-target resolver + event-slot metadata
+in `core.model` (pure, no Compose); event-slot + `Action` serialization and the `M5to6` + fixture +
+`NEWER_SCHEMA` update (schema v6); the C13 run-mode reducer (renderer); codegen (`mutableStateOf` + structural
+handler lambdas) with **golden fixtures** (CLAUDE.md rule 5, real compile gate); the data-driven action editor
+in the inspector (no per-component UI); the **per-project acknowledgment + SECURITY `IA-*` section** (affirm no
+eval path added; action set closed/total; targets validated writable identifiers per GC-3; values under the
+`PropValue.Literal`/PF-2 bounds); and doc updates — DATA_MODEL (state now writable, event-slot + `Action`
+model), FEATURES §10 (carve interactive-with-closed-actions out of the non-feature list; free-form expression
+evaluation *stays* excluded), SECURITY (the `IA-*` section + a note that PF-4 is unchanged), and **ADR-030
+re-versioned to v7/`M6to7`**. Honest boundaries this ADR draws: **closed structured actions** (no user-authored
+expressions — those remain a PF-4 non-goal), **run-mode-only interactivity** (static design canvas), and a
+**light acknowledgment** (no hard opt-in, because there is no evaluator to gate).
 
 ---
 

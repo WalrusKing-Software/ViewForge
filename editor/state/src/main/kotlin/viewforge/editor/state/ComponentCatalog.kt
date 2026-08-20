@@ -1,5 +1,6 @@
 package viewforge.editor.state
 
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
 import viewforge.model.PropDefinition
@@ -13,15 +14,28 @@ import viewforge.model.PropDefinition
  * user-defined component (P6a): the entry's [type] is then `vforge.userComponent` and inserting it
  * builds an instance node referencing this id. It lets both kinds of entry live in one palette list and
  * one drag path.
+ *
+ * [libraryId] is set for a *global* component from the cross-project library (ADR-033, #209): inserting
+ * it does not reference an existing document component but **copies** the library definition into this
+ * document first (`insertLibraryComponent`), so the entry is neither a built-in nor a document component —
+ * it is the third palette source. A library entry has [componentId] null; the two fields are mutually
+ * exclusive.
  */
-data class PaletteEntry(val type: String, val label: String, val category: String, val componentId: String? = null)
+data class PaletteEntry(
+    val type: String,
+    val label: String,
+    val category: String,
+    val componentId: String? = null,
+    val libraryId: String? = null,
+)
 
 /**
  * A stable identity for a palette entry, used to pin favorites and track recents (P5a, #121): a built-in is
- * keyed by its [type] (stable across projects), a user component by its [componentId] (a per-document ULID,
- * globally unique so it never collides with another project's). The one place this key is derived.
+ * keyed by its [type] (stable across projects), a library component by its [libraryId] (a global ULID,
+ * stable across projects), and a document user component by its [componentId] (a per-document ULID, globally
+ * unique so it never collides with another project's). The one place this key is derived.
  */
-val PaletteEntry.key: String get() = componentId ?: type
+val PaletteEntry.key: String get() = libraryId ?: componentId ?: type
 
 /**
  * The editor's Compose-free seam onto a framework package's component set — the schema half of the
@@ -51,6 +65,13 @@ interface ComponentCatalog {
 
     /** The editable prop schema for [type] — drives the data-driven inspector (M5, I1). Empty if unknown. */
     fun propsFor(type: String): List<PropDefinition>
+
+    /**
+     * The closed event slots [type] exposes (ADR-035, #277) — e.g. a Button → `onClick`. Drives the inspector's
+     * data-driven action editor, so a component's handlers need no per-component UI (I1 anti-pattern). Empty for
+     * a component with no events; defaults to empty so non-interactive test doubles need no override.
+     */
+    fun eventSlotsOf(type: String): List<EventSlotDefinition> = emptyList()
 
     /** Every modifier the inspector may add, with its arg schema (the renderer-supported set). */
     val modifierCatalog: List<ModifierDefinition>

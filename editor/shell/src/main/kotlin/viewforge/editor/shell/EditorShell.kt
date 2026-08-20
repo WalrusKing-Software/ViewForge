@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -84,6 +85,9 @@ fun FrameWindowScope.EditorShell(
     exportService: ProjectExportService,
     previewService: CodePreviewService,
     recoveryDir: Path,
+    // The per-user config-dir folder the cross-project component library persists to (ADR-033, #209),
+    // supplied by :app like [recoveryDir]. The library controller loads it into the palette at startup.
+    libraryDir: Path,
     // Save-on-close (#56): the window's onCloseRequest raises [closeRequested] when the document is dirty;
     // the shell shows a Save/Discard/Cancel prompt and calls [onExit] to actually quit or [onCloseHandled]
     // to abort. Defaulted so the shell stays usable (and the signature stable) without the close wiring.
@@ -132,6 +136,11 @@ fun FrameWindowScope.EditorShell(
             recovery.tick()
         }
     }
+    // The cross-project component library (ADR-033, #209): loads the config-dir folder into the palette at
+    // startup and owns add/remove/rename + the copy-into-document insert. A one-frame delay before library
+    // entries appear is fine (unlike panel layout, this is not chrome that would flash).
+    val library = rememberLibraryController(state, libraryDir)
+    LaunchedEffect(library) { library.reload() }
 
     AppMenuBar(
         state,
@@ -140,8 +149,10 @@ fun FrameWindowScope.EditorShell(
         onRegenerate = export::regenerate,
         onOpenThemeEditor = { showThemeEditor = true },
         onOpenPreferences = { showPreferences = true },
+        onOpenLibraryManager = library::openManager,
         onNew = document::newDocument,
         onOpen = document::open,
+        onOpenGenerated = document::openGenerated,
         onOpenRecent = document::openRecent,
         onClearRecent = prefs::clearRecent,
         onSave = document::save,
@@ -171,6 +182,8 @@ fun FrameWindowScope.EditorShell(
         DocumentDialogs(document)
         AssetImportDialogs(assetImport)
         RecoveryDialog(recovery)
+        ManageLibraryDialog(library, state)
+        LibraryInsertDialog(library, state)
         ExitConfirmation(
             closeRequested,
             state,
@@ -189,6 +202,8 @@ fun FrameWindowScope.EditorShell(
                     export,
                     onOpenThemeEditor = { showThemeEditor = true },
                     onOpenPreferences = { showPreferences = true },
+                    onInsert = library::insert,
+                    onOpenLibraryManager = library::openManager,
                 ),
             ) { showPalette = false }
         }
@@ -210,6 +225,7 @@ fun FrameWindowScope.EditorShell(
                     // hijacked. Editing shortcuts first, then the File-menu document shortcuts.
                     .onKeyEvent {
                         handlePaletteShortcut(it) { showPalette = true } ||
+                            handlePanelShortcut(it, prefs) ||
                             handleShortcut(it, state) ||
                             handleDocumentShortcut(it, document)
                     },
@@ -217,9 +233,17 @@ fun FrameWindowScope.EditorShell(
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
                 // The screen switcher (D6) — or, while a component is open for in-place editing (#61), a
-                // breadcrumb back to the screen in its place (you don't switch screens inside a component).
-                if (state.editingComponentId != null) ComponentEditBar(state) else ScreenSwitcher(state)
+                // breadcrumb back to the screen in its place (you don't switch screens inside a component). Keyed on
+                // the resolved signal so a stale open id (component deleted/undone) reverts to the switcher (#299).
+                if (state.isEditingComponent) ComponentEditBar(state) else ScreenSwitcher(state)
                 HorizontalDivider()
+                // A light, one-time-per-project notice that generated code will now include mutable state and
+                // event handlers (ADR-035, #277). Informational, not a gate — nothing is blocked (the closed
+                // action model adds no evaluator, PF-4). Dismissing records it per project id (persisted).
+                if (state.needsInteractiveAcknowledgment) {
+                    InteractiveAcknowledgmentBanner(onDismiss = prefs::acknowledgeInteractive)
+                    HorizontalDivider()
+                }
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     // Each side panel and its adjacent divider hide together (S1, #39); the canvas keeps
                     // weight(1f) and is always shown, so hiding everything still leaves an edit surface.
@@ -227,7 +251,13 @@ fun FrameWindowScope.EditorShell(
                     // state (persisted across sessions), and the drag grows it toward the canvas — so the
                     // left panels add the delta and the right-hand inspector subtracts it.
                     if (state.paletteVisible) {
-                        Palette(state, prefs::toggleFavorite, Modifier.width(state.paletteWidth.dp).fillMaxHeight())
+                        Palette(
+                            state,
+                            prefs::toggleFavorite,
+                            onInsert = library::insert,
+                            onDropLibrary = library::dropDrag,
+                            Modifier.width(state.paletteWidth.dp).fillMaxHeight(),
+                        )
                         ResizableDivider(onResize = state::resizePalette, onCommit = prefs::persist)
                     }
                     if (state.treeVisible) {
@@ -252,6 +282,30 @@ fun FrameWindowScope.EditorShell(
         // The right-click context menu (#160), positioned at the window-space point the tree/canvas
         // recorded. A sibling of the content above so its anchor shares the same origin as those coords.
         ContextMenuOverlay(state)
+    }
+}
+
+/**
+ * The light interactive-code acknowledgment banner (ADR-035, #277): a one-line, dismissible notice shown once
+ * per project that contains an event handler, telling the user generated code will now include mutable state
+ * and event handlers. **Informational, not a gate** — the closed action model adds no evaluator (PF-4), so
+ * nothing is blocked; "Got it" records the acknowledgment per project id ([PreferencesController.acknowledgeInteractive]).
+ */
+@Composable
+private fun InteractiveAcknowledgmentBanner(onDismiss: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "This project uses interactivity — generated code will include mutable state and event handlers.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("Got it") }
+        }
     }
 }
 
@@ -538,6 +592,50 @@ private fun handlePaletteShortcut(event: KeyEvent, onOpen: () -> Unit): Boolean 
         return true
     }
     return false
+}
+
+/** The four editor panels that toggle from the keyboard (S1, #208). */
+internal enum class EditorPanel { PALETTE, TREE, INSPECTOR, CODE_PREVIEW }
+
+/**
+ * The pure Ctrl/Cmd+1..4 → panel mapping (#208): 1 Palette, 2 Tree, 3 Inspector, 4 Code preview. The
+ * digits are collision-free with the existing shortcuts (Ctrl+0/9 reset/fit, Ctrl+± zoom, the Ctrl+letter
+ * edit/document actions). Requires the platform command modifier and rejects Shift/Alt chords so those
+ * combinations stay free for the future. Extracted from [KeyEvent] so the mapping is unit-testable
+ * without synthesising a key event (mirroring the pure menu models).
+ */
+internal fun panelForShortcut(key: Key, cmd: Boolean, shift: Boolean, alt: Boolean): EditorPanel? {
+    if (!cmd || shift || alt) return null
+    return when (key) {
+        Key.One -> EditorPanel.PALETTE
+        Key.Two -> EditorPanel.TREE
+        Key.Three -> EditorPanel.INSPECTOR
+        Key.Four -> EditorPanel.CODE_PREVIEW
+        else -> null
+    }
+}
+
+/**
+ * The panel show/hide shortcuts (S1, #208): Ctrl/Cmd+1..4 toggle the four editor panels through the same
+ * [PreferencesController] toggles the View menu uses, so a keyboard toggle persists across sessions like a
+ * menu one. Checked after the palette shortcut and before the editing/document shortcuts; the digits don't
+ * overlap those, so ordering is only for readability. The real binder — the menu labels only display.
+ */
+private fun handlePanelShortcut(event: KeyEvent, prefs: PreferencesController): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    val panel = panelForShortcut(
+        event.key,
+        cmd = event.isCtrlPressed || event.isMetaPressed,
+        shift = event.isShiftPressed,
+        alt = event.isAltPressed,
+    ) ?: return false
+    when (panel) {
+        EditorPanel.PALETTE -> prefs.togglePalette()
+        EditorPanel.TREE -> prefs.toggleTree()
+        EditorPanel.INSPECTOR -> prefs.toggleInspector()
+        EditorPanel.CODE_PREVIEW -> prefs.toggleCodePreview()
+    }
+    return true
 }
 
 /**

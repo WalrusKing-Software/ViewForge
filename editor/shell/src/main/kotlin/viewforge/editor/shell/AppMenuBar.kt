@@ -34,8 +34,10 @@ internal fun FrameWindowScope.AppMenuBar(
     onRegenerate: () -> Unit,
     onOpenThemeEditor: () -> Unit,
     onOpenPreferences: () -> Unit,
+    onOpenLibraryManager: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
+    onOpenGenerated: () -> Unit,
     onOpenRecent: (String) -> Unit,
     onClearRecent: () -> Unit,
     onSave: () -> Unit,
@@ -49,6 +51,9 @@ internal fun FrameWindowScope.AppMenuBar(
             // .vforge persistence (#37). Accelerators display-only — handleShortcut binds the real keys.
             Item(withAccel("New", "Ctrl+N"), onClick = onNew)
             Item(withAccel("Open…", "Ctrl+O"), onClick = onOpen)
+            // Re-open a ViewForge-generated .kt via its IR sidecar (#22/#227). No accelerator — a rarely
+            // used entry point, kept discoverable in the menu without claiming a global chord.
+            Item("Open Generated .kt…", onClick = onOpenGenerated)
             // Recently opened/saved projects (D8, #88). Empty -> a single disabled placeholder so the
             // submenu is discoverable; each entry shows its file name and reopens it (guarding unsaved
             // edits in the controller). Clear Recent empties the list.
@@ -93,6 +98,20 @@ internal fun FrameWindowScope.AppMenuBar(
                 enabled = edit.canExtract,
                 onClick = { state.extractSelectionToComponent(state.uniqueComponentName()) },
             )
+            // Publish the whole active screen as a reusable component (#184) — distinct from Extract
+            // (which lifts a selection). A copy: the screen stays; the definition appears in the palette.
+            Item(
+                "Save Screen as Component",
+                enabled = state.activeScreenId != null,
+                onClick = {
+                    state.activeScreenId?.let {
+                        state.saveScreenAsComponent(it, state.defaultComponentNameForScreen(it))
+                    }
+                },
+            )
+            // Manage the cross-project component library (ADR-033, #209): add project components to it,
+            // rename/remove entries. Inserting is done from the palette; this is the management surface.
+            Item("Manage Library…", onClick = onOpenLibraryManager)
             Separator()
             Item(withAccel("Delete", "Del"), enabled = edit.hasSelection, onClick = state::deleteSelected)
         }
@@ -143,15 +162,30 @@ internal fun FrameWindowScope.AppMenuBar(
             Item(withAccel("Fit to Frame", "Ctrl+9"), enabled = view.canFit, onClick = state::fitToFrame)
             Separator()
             // Panel visibility (S1, #39) — checked when shown, mirroring the Dark canvas toggle above.
-            // Routed through the preferences controller so a toggle persists across sessions (#43).
-            CheckboxItem("Palette", checked = state.paletteVisible, onCheckedChange = { prefs.togglePalette() })
-            CheckboxItem("Tree", checked = state.treeVisible, onCheckedChange = { prefs.toggleTree() })
-            CheckboxItem("Inspector", checked = state.inspectorVisible, onCheckedChange = { prefs.toggleInspector() })
+            // Routed through the preferences controller so a toggle persists across sessions (#43). The
+            // Ctrl+1..4 accelerators are display-only (#208) — handlePanelShortcut binds the real keys.
+            CheckboxItem(
+                withAccel("Palette", "Ctrl+1"),
+                checked = state.paletteVisible,
+                onCheckedChange = { prefs.togglePalette() },
+            )
+            CheckboxItem(
+                withAccel("Tree", "Ctrl+2"),
+                checked = state.treeVisible,
+                onCheckedChange = { prefs.toggleTree() },
+            )
+            CheckboxItem(
+                withAccel("Inspector", "Ctrl+3"),
+                checked = state.inspectorVisible,
+                onCheckedChange = { prefs.toggleInspector() },
+            )
             // The live code preview (G3, #50). Persisted across sessions (#52), so it routes through the
             // preferences controller like the panel toggles above.
-            CheckboxItem("Code preview", checked = state.codePreviewVisible, onCheckedChange = {
-                prefs.toggleCodePreview()
-            })
+            CheckboxItem(
+                withAccel("Code preview", "Ctrl+4"),
+                checked = state.codePreviewVisible,
+                onCheckedChange = { prefs.toggleCodePreview() },
+            )
             // Soft-wrap long lines in the code preview instead of scrolling horizontally (#115). Persisted
             // like the panel toggles above, so it routes through the preferences controller.
             CheckboxItem("Wrap code preview", checked = state.codePreviewWrap, onCheckedChange = {

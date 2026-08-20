@@ -3,30 +3,39 @@ package viewforge.editor.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.serialization.json.JsonPrimitive
+import viewforge.command.AddComponent
 import viewforge.command.AddNode
 import viewforge.command.AddScreen
+import viewforge.command.AddStateField
 import viewforge.command.Command
 import viewforge.command.CompositeCommand
 import viewforge.command.History
 import viewforge.command.MoveNode
 import viewforge.command.RemoveNode
 import viewforge.command.RemoveScreen
+import viewforge.command.RemoveStateField
 import viewforge.command.RenameNode
 import viewforge.command.RenameScreen
 import viewforge.command.RenameThemeToken
+import viewforge.command.SetHandler
 import viewforge.command.SetModifierArg
 import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
 import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
+import viewforge.command.SetStateField
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
 import viewforge.command.importAsset
+import viewforge.command.promoteScreenToComponent
 import viewforge.command.promoteToParameter
+import viewforge.model.Action
 import viewforge.model.Asset
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
 import viewforge.model.ComponentDef
+import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
 import viewforge.model.NodeId
@@ -35,21 +44,32 @@ import viewforge.model.ParameterType
 import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.PropValue
+import viewforge.model.RecordField
+import viewforge.model.SampleValue
+import viewforge.model.ScalarType
 import viewforge.model.Screen
+import viewforge.model.StateField
+import viewforge.model.StateType
 import viewforge.model.Theme
 import viewforge.model.ThemeCategory
 import viewforge.model.TypographyToken
 import viewforge.model.Ulid
 import viewforge.model.UserComponent
 import viewforge.model.findById
+import viewforge.model.hasInteractiveNodes
 import viewforge.model.insertionWouldCycle
 import viewforge.model.locate
+import viewforge.model.reachableComponents
+import viewforge.model.remapComponentReferences
+import viewforge.model.scalarRows
 import viewforge.model.subtreeContains
 import viewforge.model.withFreshIds
+import viewforge.prefs.AcknowledgedInteractive
 import viewforge.prefs.EditorPreferences
 import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
+import viewforge.project.LibraryComponent
 import java.nio.file.Path
 
 /**
@@ -112,6 +132,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     /** The name of the component open for in-place editing (for the breadcrumb), or null when editing a screen. */
     val editingComponentName: String?
         get() = editingComponent?.name
+
+    /**
+     * Whether a component is genuinely open for in-place editing — i.e. [editingComponentId] resolves to a real
+     * component. The UI (breadcrumb, inspector state scope) must key on **this**, not the raw [editingComponentId],
+     * so a stale id — a component deleted or undone away while open — falls back to the screen surface instead of
+     * stranding the inspector in "Component State" over screen data (#299). Mirrors the [activeEditRoot] fallback.
+     */
+    val isEditingComponent: Boolean
+        get() = editingComponent != null
 
     /**
      * What the code preview should show (G3, #69): the open component when one is being edited in place,
@@ -368,6 +397,15 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      */
     private var paletteDragComponentId: String? = null
 
+    /**
+     * The library id being dragged, when the drag source is a cross-project library entry (#234); null for a
+     * built-in or a document component. Rides beside [paletteDragComponentId] the same way: the canvas overlay
+     * treats the drag opaquely (geometry only), and its presence tells [dropPaletteDrag] to defer — a library
+     * drop copies a whole closure into the document (and may prompt for a name), which the shell commits via
+     * `LibraryController.dropDrag` at the [resolvedPaletteDropAddress], not this generic AddNode path.
+     */
+    private var paletteDragLibraryId: String? = null
+
     /** The canvas-resolved drop for the live palette drag; a plain field — only [dropPaletteDrag] reads it. */
     private var paletteDropAddress: ChildAddress? = null
 
@@ -439,12 +477,32 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         private set
 
     /**
+     * Project ids whose one-time interactive-code acknowledgment (ADR-035, #277) the user has dismissed.
+     * Applied from prefs at launch ([applyAcknowledgedInteractive]); the shell persists it. Per-user chrome
+     * keyed by the project's stable ULID, never document data — like [favoriteComponents].
+     */
+    var acknowledgedInteractive: List<String> by mutableStateOf(emptyList())
+        private set
+
+    /**
      * Palette entries used most recently, most-recent first (P5a, #121). **Session-only** transient state:
      * recorded on every insert ([noteRecentComponent]) and reset when the app restarts, deliberately *not*
      * persisted — recording on each insert would write the prefs file constantly. Capped at
      * [MAX_RECENT_COMPONENTS].
      */
     var recentComponents: List<String> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * The cross-project component library (ADR-033, #209) — global user components surfaced in the palette
+     * beside the built-ins and this document's own components. A transient snapshot loaded from the on-disk
+     * `ComponentLibraryStore` at launch and after any library edit ([applyLibraryComponents]); the shell
+     * owns the store and persistence. Each entry is a [LibraryComponent] *bundle* — a primary plus, for a
+     * nested component, its dependency closure (#234). Not document data — these live outside any `.vforge`,
+     * and dropping one into a document *copies* the whole bundle into [document] (`insertLibraryComponent`),
+     * keeping the file self-contained.
+     */
+    var libraryComponents: List<LibraryComponent> by mutableStateOf(emptyList())
         private set
 
     /**
@@ -716,6 +774,69 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         execute(SetPreviewProfile(screen.id, profileId), selectAfter = selectedId)
     }
 
+    // --- read-only screen state (ADR-034, #21) ----------------------------------------------------
+
+    /**
+     * The declared state (ADR-034) of the active edit surface, as it should feed the renderer and code
+     * preview: the **opened component's** own state when one is open for in-place editing (component-local
+     * state, ADR-034 Amendment), else the active **screen's** state. Follows [activeEditRoot] exactly — the
+     * state always matches the tree being edited, so a binding resolves against the surface it lives in and a
+     * component edit never previews screen data (nor vice versa). Empty when the surface declares no state.
+     */
+    val activeScreenStateForRender: List<StateField>
+        get() = editingComponent?.state ?: activeScreen?.state.orEmpty()
+
+    /** The active edit surface's list-of-record fields (ADR-034) — the `source`s a `vforge.repeat` can bind to. */
+    val listStateFields: List<StateField>
+        get() = activeScreenStateForRender.filter { it.type is StateType.ListOfRecord }
+
+    /** Every read-only state path [node] can bind a prop to on the active edit surface (ADR-034). */
+    fun bindablePaths(node: Node): List<BindingChoice> = bindablePaths(activeEditRoot, node, activeScreenStateForRender)
+
+    /** The list sources a `vforge.repeat` [node] can bind: top-level lists + nested `item.<listField>` (#255). */
+    fun listSourceChoices(node: Node): List<String> =
+        listSourceChoices(activeEditRoot, node, activeScreenStateForRender)
+
+    /**
+     * Declare a fresh scalar state field on the **active edit surface** (ADR-034) — the open component's own
+     * state when one is being edited (component-local state, Amendment), else the active screen's — seeded with
+     * an empty String sample. The command is owner-agnostic ([AddStateField]), so this one path serves both.
+     */
+    fun addScalarStateField() {
+        val ownerId = activeEditRootId ?: return
+        val name = uniqueStateName("field", activeScreenStateForRender)
+        val field = StateField(name, StateType.Scalar(ScalarType.STRING), SampleValue.Scalar(JsonPrimitive("")))
+        execute(AddStateField(ownerId, field))
+    }
+
+    /** Declare a fresh list-of-record state field on the active edit surface (ADR-034), seeded with one `name` field. */
+    fun addListStateField() {
+        val ownerId = activeEditRootId ?: return
+        val name = uniqueStateName("items", activeScreenStateForRender)
+        val field = StateField(
+            name,
+            StateType.ListOfRecord(listOf(RecordField("name", ScalarType.STRING))),
+            scalarRows(listOf(mapOf("name" to JsonPrimitive("")))),
+        )
+        execute(AddStateField(ownerId, field))
+    }
+
+    /** Replace the state field at [index] on the active edit surface with [field] — rename, retype, or sample edit. */
+    fun updateStateField(index: Int, field: StateField) {
+        val ownerId = activeEditRootId ?: return
+        execute(SetStateField(ownerId, index, field))
+    }
+
+    /** Remove the state field named [name] from the active edit surface (ADR-034). Undoable. */
+    fun removeStateField(name: String) {
+        val ownerId = activeEditRootId ?: return
+        execute(RemoveStateField(ownerId, name))
+    }
+
+    /** The first `<base><n>` name not already a state field name — always a legal binding identifier (GC-3). */
+    private fun uniqueStateName(base: String, taken: List<StateField>): String =
+        uniqueNameAmong(base, taken.mapTo(HashSet()) { it.name })
+
     /**
      * Add a fresh, empty screen after the last one and make it active. It is auto-named to the first
      * unused `Screen<n>` — a valid identifier, so it exports without a rename — and rooted in the
@@ -763,6 +884,8 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     val palette: List<PaletteEntry>
         get() = catalog.palette + document.components.map {
             PaletteEntry(UserComponent.TYPE, it.name, USER_COMPONENTS_CATEGORY, componentId = it.id)
+        } + libraryComponents.map {
+            PaletteEntry(UserComponent.TYPE, it.component.name, LIBRARY_CATEGORY, libraryId = it.component.id)
         }
 
     /** A fresh node for a palette entry: an instance node for a user component, else a built-in. */
@@ -776,7 +899,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * caught at render (loud placeholder) and load (validation), but the editor refuses to *create* one:
      * the palette greys such entries out and paste is disabled. Screen editing never cycles.
      */
-    fun wouldInsertingCycle(node: Node): Boolean = document.insertionWouldCycle(editingComponentId, node)
+    fun wouldInsertingCycle(node: Node): Boolean = document.insertionWouldCycle(editingComponent?.id, node)
 
     /**
      * Whether adding palette [entry] here would form a cycle (#70) — always false for a framework
@@ -788,6 +911,10 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /** Add a fresh node for [entry] at the current insertion point on the active edit surface, and select it (P1a/P6a). */
     fun addFromPalette(entry: PaletteEntry) {
+        // A library entry is inserted by *copying* its definition into the document first, and may need a
+        // name from the user on collision — that flow is driven by the shell (insertLibraryComponent), not
+        // this generic path. Refuse it here so a stray call can never insert a mis-typed built-in node.
+        if (entry.libraryId != null) return
         val rootId = activeEditRootId ?: return
         val address = insertionAddress() ?: return
         val node = paletteNode(entry.type, entry.componentId)
@@ -807,6 +934,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun beginPaletteDrag(entry: PaletteEntry) {
         paletteDragType = entry.type
         paletteDragComponentId = entry.componentId
+        paletteDragLibraryId = entry.libraryId
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
@@ -833,10 +961,28 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     }
 
     /**
+     * The drop address resolved for the live palette drag — the tree's when the pointer is over the Layers
+     * panel (#164), else the canvas's — or null when the pointer isn't over a legal target. The shell reads
+     * this to commit a **library** drop ([insertLibraryComponent]) at the dropped position (#234), the way
+     * [dropPaletteDrag] commits a built-in/document-component drop internally.
+     */
+    val resolvedPaletteDropAddress: ChildAddress?
+        get() = treePaletteDropAddress ?: paletteDropAddress
+
+    /**
      * Commit the in-flight palette drag: insert a fresh node of the dragged type at the canvas-resolved
      * address and select it. A no-op when the pointer isn't over a legal target. Always clears the drag.
+     *
+     * A **library** drag is *not* committed here (its `type` is `userComponent` but it has no
+     * [paletteDragComponentId], so a generic AddNode would insert a broken null-reference instance): the shell
+     * routes a library drop through `LibraryController.dropDrag` instead, which copies the closure in (and may
+     * prompt for a name) at [resolvedPaletteDropAddress]. This guard makes a stray call a safe no-op.
      */
     fun dropPaletteDrag() {
+        if (paletteDragLibraryId != null) {
+            cancelPaletteDrag()
+            return
+        }
         val type = paletteDragType
         // Prefer the tree's resolution when the pointer is over the Layers panel (#164); the canvas
         // resolves null there, and vice versa, so the two never both hold a target for one pointer.
@@ -857,6 +1003,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun cancelPaletteDrag() {
         paletteDragType = null
         paletteDragComponentId = null
+        paletteDragLibraryId = null
         paletteDragX = null
         paletteDragY = null
         paletteDropAddress = null
@@ -976,6 +1123,30 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         execute(extractComponent(rootId, node.id, component, instance), selectAfter = instance.id)
     }
 
+    /**
+     * Save the screen [screenId] as a new reusable component named [name] (#184), publishing it to the
+     * palette. Unlike [extractSelectionToComponent] this leaves the screen intact: the component's root
+     * is a **fresh-id copy** of the screen's root (ADR-024), so the copy's node ids are disjoint from the
+     * screen's and the two never collide. A no-op if the screen is unknown or the name is invalid/duplicate.
+     */
+    fun saveScreenAsComponent(screenId: String, name: String) {
+        val screen = document.screens.firstOrNull { it.id == screenId } ?: return
+        if (componentNameError(name) != null) return
+        val id = "cmp_${Ulid.next()}"
+        val component = ComponentDef(id = id, name = name.trim(), root = screen.root.withFreshIds())
+        execute(promoteScreenToComponent(component))
+    }
+
+    /**
+     * A legal, unique default component name seeded from the screen [screenId]'s own name (#184): the
+     * screen name when it is a valid, free identifier, otherwise the next `Component<n>` (as
+     * [uniqueComponentName]). Drives the "Save screen as component…" dialog's initial value.
+     */
+    fun defaultComponentNameForScreen(screenId: String): String {
+        val base = document.screens.firstOrNull { it.id == screenId }?.name?.trim()
+        return if (base != null && componentNameError(base) == null) base else uniqueComponentName()
+    }
+
     /** The first `Component<n>` name not already taken — a legal identifier default for a fresh extraction. */
     fun uniqueComponentName(): String {
         val taken = document.components.mapTo(HashSet()) { it.name }
@@ -989,7 +1160,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * component is open for in-place editing (its definition is the edit surface), only for a value-like
      * [PropType] (`ParameterType.isPromotable`), and only when the prop is not already bound to a parameter.
      */
-    fun canPromoteToParameter(node: Node, def: PropDefinition): Boolean = editingComponentId != null &&
+    fun canPromoteToParameter(node: Node, def: PropDefinition): Boolean = isEditingComponent &&
         ParameterType.isPromotable(def.type) &&
         node.props[def.name] !is PropValue.ParamRef
 
@@ -1000,7 +1171,7 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
      * in one undoable step. A no-op unless a component is open and the prop is promotable.
      */
     fun promotePropToParameter(nodeId: NodeId, propName: String) {
-        val componentId = editingComponentId ?: return
+        val componentId = editingComponent?.id ?: return
         val node = activeEditRoot?.findById(nodeId) ?: return
         val def = catalog.propsFor(node.type).firstOrNull { it.name == propName } ?: return
         if (!canPromoteToParameter(node, def)) return
@@ -1124,6 +1295,22 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     fun resetProp(nodeId: NodeId, def: PropDefinition) {
         setProp(nodeId, def.name, def.default)
     }
+
+    /** The event slots [node]'s component type exposes (ADR-035) — the handler points the action editor offers. */
+    fun eventSlots(node: Node): List<EventSlotDefinition> = catalog.eventSlotsOf(node.type)
+
+    /**
+     * Set node [nodeId]'s event-handler [slot] to the ordered [actions] (ADR-035) — the one undoable command
+     * behind add/remove/reorder/edit of a slot's actions; an empty list clears the slot. Targets the active edit
+     * surface (screen or component), like [setProp].
+     */
+    fun setHandler(nodeId: NodeId, slot: String, actions: List<Action>) {
+        val rootId = activeEditRootId ?: return
+        execute(SetHandler(rootId, nodeId, slot, actions), selectAfter = selectedId)
+    }
+
+    /** The screens a `Navigate` action may target (all screens — navigating to the current one is allowed). */
+    fun navigableScreens(): List<Screen> = document.screens
 
     /**
      * Request importing an image from disk into node [nodeId]'s resource prop [propName] (ADR-021). The
@@ -1396,6 +1583,26 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
         favoriteComponents = FavoriteComponents.toggled(favoriteComponents, entry.key)
     }
 
+    // --- interactive-code acknowledgment (ADR-035, #277) ------------------------------------------
+
+    /** Restore the persisted acknowledged-project ids at startup; re-sanitized defensively. */
+    fun applyAcknowledgedInteractive(ids: List<String>) {
+        acknowledgedInteractive = AcknowledgedInteractive.sanitized(ids)
+    }
+
+    /**
+     * Whether the light interactive-code acknowledgment (ADR-035) should be shown: the open document contains
+     * at least one event handler AND this project has not been acknowledged before. It is an informational
+     * notice, not a gate — nothing is blocked while it is true (the closed action model adds no evaluator, PF-4).
+     */
+    val needsInteractiveAcknowledgment: Boolean
+        get() = document.hasInteractiveNodes() && document.id !in acknowledgedInteractive
+
+    /** Record that the current project's interactive-code notice has been dismissed; the shell persists it. */
+    fun acknowledgeInteractive() {
+        acknowledgedInteractive = AcknowledgedInteractive.acknowledged(acknowledgedInteractive, document.id)
+    }
+
     /** Record a just-inserted entry [key] as most-recently-used (P5a): to the front, de-duplicated, capped. */
     private fun noteRecentComponent(key: String) {
         recentComponents = (listOf(key) + recentComponents.filterNot { it == key }).take(MAX_RECENT_COMPONENTS)
@@ -1413,6 +1620,118 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     private fun resolvePaletteKeys(keys: List<String>): List<PaletteEntry> {
         val byKey = palette.associateBy { it.key }
         return keys.mapNotNull { byKey[it] }
+    }
+
+    // --- cross-project component library (ADR-033, #209) -------------------------------------------
+
+    /** Restore the library snapshot from the store (name-sorted by primary for a stable palette order). */
+    fun applyLibraryComponents(list: List<LibraryComponent>) {
+        libraryComponents = list.sortedBy { it.component.name.lowercase() }
+    }
+
+    /**
+     * Why the document component [id] cannot be added to the cross-project library, or null if it can. It
+     * must resolve, and its dependency **closure must be resolvable**: a component whose tree references
+     * another user component that no longer exists in this document is dangling and can't be bundled
+     * self-contained, so it is refused fail-loud (#234, ADR-033). A nested-but-resolvable component is
+     * *allowed* — its closure travels with it ([reachableComponents]); only a dangling reference is refused.
+     */
+    fun libraryAddBlockReason(id: String): String? {
+        if (document.components.none { it.id == id }) return "That component no longer exists"
+        return if (document.reachableComponents(id) == null) {
+            "This component references another that no longer exists in the project"
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Whether inserting library [entry] would collide with an existing document component name (or is
+     * otherwise not a legal identifier), so the shell must prompt for a name before copying it in (ADR-033).
+     * False — a clean drop — inserts directly with the entry's own name.
+     */
+    fun libraryInsertNeedsName(entry: PaletteEntry): Boolean =
+        entry.libraryId != null && componentNameError(entry.label) != null
+
+    /**
+     * Why [name] cannot name a library component, or null if it is acceptable — the library-side counterpart
+     * to [componentNameError] (which validates against the *document*). It must be a legal identifier and
+     * unique **within the library** (a name a palette row would show), ignoring [excludingId] so renaming an
+     * entry to its own current name is allowed.
+     */
+    fun libraryNameError(name: String, excludingId: String? = null): String? {
+        val trimmed = name.trim()
+        return when {
+            trimmed.isBlank() -> "Name cannot be empty"
+            !catalog.isValidScreenName(trimmed) -> "Not a valid name (must be a legal Kotlin identifier)"
+            libraryComponents.any { it.component.id != excludingId && it.component.name == trimmed } ->
+                "A library component named “$trimmed” already exists"
+            else -> null
+        }
+    }
+
+    /** [base] if free within the library, else `base2`, `base3`, … — a legal default when adding to the library. */
+    fun uniqueLibraryName(base: String): String {
+        val taken = libraryComponents.mapTo(HashSet()) { it.component.name }
+        if (base !in taken) return base
+        var n = 2
+        while ("$base$n" in taken) n++
+        return "$base$n"
+    }
+
+    /** A suggested free, legal name for inserting library [entry]: its own name if available, else the next unique. */
+    fun suggestedLibraryName(entry: PaletteEntry): String =
+        if (componentNameError(entry.label) == null) entry.label else uniqueComponentName()
+
+    /**
+     * Insert library [entry] by copying its whole bundle — the primary plus any dependency closure (#234) —
+     * into [document] and dropping an instance of the primary, in one undoable step (ADR-033). Every def in
+     * the closure takes a fresh document-component id and fresh node ids ([Node.withFreshIds]), and the
+     * `componentId` references that wire them together are rewritten through the same id map
+     * ([Node.remapComponentReferences]), so the result never collides with anything already in the document
+     * and the `.vforge` stays self-contained (ADR-024) — later edits to the library entry do not propagate to
+     * this copy. The primary takes the (validated, unique) [name]; each dependency, a helper the user never
+     * named, is silently disambiguated. Inserts at [target] when given (a drag drop), else the current
+     * insertion point (a click). A no-op if the entry is unknown or [name] is invalid/duplicate.
+     */
+    fun insertLibraryComponent(entry: PaletteEntry, name: String, target: ChildAddress? = null) {
+        val libraryId = entry.libraryId ?: return
+        val bundle = libraryComponents.firstOrNull { it.component.id == libraryId } ?: return
+        if (componentNameError(name) != null) return
+        val rootId = activeEditRootId ?: return
+        val address = target ?: insertionAddress() ?: return
+
+        val primary = bundle.component
+        val defs = listOf(primary) + bundle.dependencies
+        val idMap = defs.associate { it.id to "cmp_${Ulid.next()}" }
+        // The primary gets the chosen name; each dependency is uniquified against the document and the names
+        // assigned earlier in this same insert, so two components never share a (composable) name (GC-3).
+        val taken = document.components.mapTo(HashSet()) { it.name }.apply { add(name.trim()) }
+        val copies = defs.map { def ->
+            val newName = if (def.id == primary.id) name.trim() else uniqueNameAmong(def.name, taken).also(taken::add)
+            def.copy(
+                id = idMap.getValue(def.id),
+                name = newName,
+                root = def.root.withFreshIds().remapComponentReferences(idMap),
+            )
+        }
+        val instance = UserComponent.instance(idMap.getValue(primary.id))
+        execute(
+            CompositeCommand(
+                commands = copies.map { AddComponent(it, index = Int.MAX_VALUE) } + AddNode(rootId, address, instance),
+                label = "Insert library component",
+            ),
+            selectAfter = instance.id,
+        )
+        noteRecentComponent(entry.key) // resurface it under "Recent" (P5a) — same key re-inserts via this path
+    }
+
+    /** [base] if free among [taken], else `base2`, `base3`, … — used to disambiguate closure dependency names. */
+    private fun uniqueNameAmong(base: String, taken: Set<String>): String {
+        if (base !in taken) return base
+        var n = 2
+        while ("$base$n" in taken) n++
+        return "$base$n"
     }
 
     // --- canvas viewport (C5) ---------------------------------------------------------------------
@@ -1594,6 +1913,9 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
     companion object {
         /** The palette category the document's user components cluster under (P6a). */
         const val USER_COMPONENTS_CATEGORY = "Components"
+
+        /** The palette category the cross-project library components cluster under (ADR-033, #209). */
+        const val LIBRARY_CATEGORY = "Library"
 
         /** How many recently-used palette entries to keep for the palette's "Recent" quick-access row (P5a, #121). */
         const val MAX_RECENT_COMPONENTS = 8

@@ -118,6 +118,18 @@ fun extractComponent(rootId: String, targetNodeId: NodeId, component: ComponentD
     )
 
 /**
+ * Publish [component] as a new reusable component (#184) — the "save a screen as a palette component"
+ * authoring action. Unlike [extractComponent], which *moves* a selected subtree and leaves an instance
+ * in its place, this *copies*: the caller builds [component] from a fresh-id copy of a screen's root
+ * ([viewforge.model.withFreshIds]), so the source screen is untouched and the two roots never share node
+ * ids. That makes it a plain [AddComponent] (undo removes the definition; the screen was never modified),
+ * so no composite is needed. The definition surfaces in the palette immediately (the editor lists
+ * [Project.components]).
+ */
+fun promoteScreenToComponent(component: ComponentDef): Command =
+    AddComponent(component, index = Int.MAX_VALUE, label = "Save screen as component")
+
+/**
  * Add [parameter] at [index] to component [componentId]'s parameter list (ADR-028). [index] is clamped,
  * so a large index appends (how [promoteToParameter] adds a freshly derived parameter). Parameter names
  * are unique within a component (two would generate a duplicate function parameter), so a name already

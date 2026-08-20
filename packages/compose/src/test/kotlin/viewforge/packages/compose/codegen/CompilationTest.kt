@@ -30,7 +30,8 @@ class CompilationTest {
             "Demo", "RowBox", "Modifiers", "ModifierOrder", "Weight", "Lazy", "Image",
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
             "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling",
-            "ButtonShape", "Gallery",
+            "ButtonShape", "Gallery", "StateBinding", "RepeatLazyColumn", "PopulatedDropdown", "NestedList",
+            "Interactive", "IntText",
         )
 
     @Test
@@ -66,6 +67,32 @@ class CompilationTest {
         val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
         val sources = files.map { SourceFile.kotlin(it.path, it.content) }
         assertCompiles(sources, "generated parameterized component did not compile with its screen")
+    }
+
+    @Test
+    fun `generated component with its own state compiles with the screen that instances it`() {
+        // Component-local state (ADR-034 Amendment, #269): the component emits a parameter AND seeded state
+        // locals (a `data class` + `forEach` over it), and the screen calls it with an argument. Compiled
+        // together they must resolve — the state locals are private to the component fn, the param is its arg.
+        val text = requireNotNull(
+            javaClass.getResourceAsStream("/golden/ComponentState.vforge"),
+        ).bufferedReader().readText()
+        val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
+        val sources = files.map { SourceFile.kotlin(it.path, it.content) }
+        assertCompiles(sources, "generated component with local state did not compile with its screen")
+    }
+
+    @Test
+    fun `an exported project bundles transitively-referenced components and compiles standalone`() {
+        // Export completeness (#213): a screen instances InfoCard, which itself instances PrimaryButton.
+        // The whole document's generated files — screen + both components — must compile together with no
+        // outside sources, so a component reachable only through another component still ships and resolves.
+        val text = requireNotNull(
+            javaClass.getResourceAsStream("/golden/NestedComponent.vforge"),
+        ).bufferedReader().readText()
+        val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
+        val sources = files.map { SourceFile.kotlin(it.path, it.content) }
+        assertCompiles(sources, "generated project with nested components did not compile standalone")
     }
 
     @Test

@@ -110,6 +110,12 @@ internal class PreferencesController(private val state: EditorState) {
         persist()
     }
 
+    /** Dismiss the current project's one-time interactive-code acknowledgment and persist it (ADR-035, #277). */
+    fun acknowledgeInteractive() {
+        state.acknowledgeInteractive()
+        persist()
+    }
+
     /**
      * Persist the current preferences. Triggered at the discrete points chrome changes — a visibility
      * toggle, the end of a resize drag, or a recent-projects change.
@@ -133,6 +139,7 @@ internal class PreferencesController(private val state: EditorState) {
                     historyDepth = state.historyDepth,
                     defaultExportPath = state.defaultExportPath,
                     favoriteComponents = state.favoriteComponents,
+                    acknowledgedInteractive = state.acknowledgedInteractive,
                     // Remember the current file so the next launch restores it (#156); blank for a
                     // never-saved or New document, which then opens a blank canvas next time.
                     lastProjectPath = state.currentPath?.toString().orEmpty(),

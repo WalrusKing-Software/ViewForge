@@ -103,6 +103,24 @@ fun Node.withModifiers(modifiers: List<ModifierEntry>): Node =
     if (modifiers == this.modifiers) this else copy(modifiers = modifiers)
 
 /**
+ * A copy of this node with the event-handler [slot]'s ordered [Action] list set to [actions], or the whole
+ * slot **removed** when [actions] is empty (a handler-free node omits `handlers`, keeping the serialized form
+ * byte-identical to before — ADR-035, #277). Returns the same instance if nothing changed. Only this node's
+ * [Node.handlers] map is rebuilt; children, props, and modifiers keep identity. The single structural edit
+ * behind add/remove/reorder of a slot's actions, exactly as [withModifiers] is for the modifier chain.
+ */
+fun Node.withHandlers(slot: String, actions: List<Action>): Node {
+    val next = if (actions.isEmpty()) {
+        if (slot !in handlers) return this
+        handlers - slot
+    } else {
+        if (handlers[slot] == actions) return this
+        handlers + (slot to actions)
+    }
+    return copy(handlers = next)
+}
+
+/**
  * A copy of this [Project] with the screen [screenId]'s root transformed. Other screens keep their
  * identity, and if [transform] returns the same root instance the whole project is returned unchanged.
  */

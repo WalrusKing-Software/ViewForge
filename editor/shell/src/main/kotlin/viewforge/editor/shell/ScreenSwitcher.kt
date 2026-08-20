@@ -2,6 +2,8 @@
 
 package viewforge.editor.shell
 
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -93,14 +95,29 @@ fun ScreenSwitcher(state: EditorState, modifier: Modifier = Modifier) {
                         onCancel = ::cancelRename,
                     )
                 } else {
-                    ScreenTab(
-                        name = screen.name,
-                        active = screen.id == state.activeScreenId,
-                        canClose = screens.size > 1,
-                        onSelect = { state.activeScreenId = screen.id },
-                        onRename = { startRename(screen.id, screen.name) },
-                        onClose = { state.removeScreen(screen.id) },
-                    )
+                    // Right-click a tab to publish that screen as a reusable palette component (#184) —
+                    // acts on the tab's own screen id, so it works without switching to it first.
+                    ContextMenuArea(
+                        items = {
+                            listOf(
+                                ContextMenuItem("Save Screen as Component") {
+                                    state.saveScreenAsComponent(
+                                        screen.id,
+                                        state.defaultComponentNameForScreen(screen.id),
+                                    )
+                                },
+                            )
+                        },
+                    ) {
+                        ScreenTab(
+                            name = screen.name,
+                            active = screen.id == state.activeScreenId,
+                            canClose = screens.size > 1,
+                            onSelect = { state.activeScreenId = screen.id },
+                            onRename = { startRename(screen.id, screen.name) },
+                            onClose = { state.removeScreen(screen.id) },
+                        )
+                    }
                 }
                 Spacer(Modifier.width(4.dp))
             }

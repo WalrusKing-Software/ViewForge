@@ -31,6 +31,11 @@ data class ModifierEntry(
  *   [children] so slot identity is never encoded in child ordering.
  * @property hidden excluded from BOTH render and codegen — a "visible in editor only" state would
  *   be a fidelity lie (DATA_MODEL §5).
+ * @property handlers event handlers keyed by a catalog-declared event-slot name (e.g. "onClick",
+ *   "onCheckedChange"); each value is an **ordered** list of structured [Action]s (ADR-035, #277).
+ *   The action list is closed and never a code expression, so no evaluator is introduced (PF-4). Empty
+ *   by default and omitted from the serialized form, so a non-interactive node is byte-identical to
+ *   before schema v6; populating it is what claims the bump (an older build would silently drop it).
  */
 @Serializable
 data class Node(
@@ -43,4 +48,5 @@ data class Node(
     val slots: Map<String, List<Node>> = emptyMap(),
     val locked: Boolean = false,
     val hidden: Boolean = false,
+    val handlers: Map<String, List<Action>> = emptyMap(),
 )

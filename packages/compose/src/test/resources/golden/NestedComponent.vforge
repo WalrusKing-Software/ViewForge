@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 2,
+  "id": "01J8NESTED",
+  "name": "NestedComponent",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "targets": ["desktop"],
+  "screens": [
+    {
+      "id": "scr_nc",
+      "name": "HomeScreen",
+      "root": {
+        "id": "col_screen",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          { "id": "m_screen", "type": "compose.fillMaxSize", "args": {} }
+        ],
+        "children": [
+          { "id": "t_title", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Dashboard" } } },
+          {
+            "id": "inst_card",
+            "type": "vforge.userComponent",
+            "props": { "componentId": { "kind": "literal", "value": "cmp_card" } },
+            "modifiers": [
+              { "id": "m_card", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 16 } } }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_card",
+      "name": "InfoCard",
+      "root": {
+        "id": "col_card",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          { "id": "m_cardroot", "type": "compose.fillMaxWidth", "args": {} }
+        ],
+        "children": [
+          { "id": "t_card", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Card title" } } },
+          {
+            "id": "inst_button",
+            "type": "vforge.userComponent",
+            "props": { "componentId": { "kind": "literal", "value": "cmp_primary" } },
+            "modifiers": [
+              { "id": "m_btn", "type": "compose.padding", "args": { "all": { "kind": "literal", "value": 8 } } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmp_primary",
+      "name": "PrimaryButton",
+      "root": {
+        "id": "btn_primary",
+        "type": "compose.material3.Button",
+        "props": { "onClick": { "kind": "expression", "code": "{ /* TODO */ }" } },
+        "modifiers": [
+          { "id": "m_btnroot", "type": "compose.fillMaxWidth", "args": {} }
+        ],
+        "slots": {
+          "content": [
+            { "id": "t_btn", "type": "compose.material3.Text", "props": { "text": { "kind": "literal", "value": "Click me" } } }
+          ]
+        }
+      }
+    }
+  ],
+  "assets": []
+}

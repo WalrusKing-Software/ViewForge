@@ -4,12 +4,17 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.StateField
 import viewforge.model.Theme
 
 /**
@@ -34,23 +39,47 @@ object ComposeRenderer {
         instrument: (NodeId) -> Modifier = { Modifier },
         imageLoader: (assetId: String) -> ImageBitmap? = { null },
         components: List<ComponentDef> = emptyList(),
+        state: List<StateField> = emptyList(),
         interactive: Boolean = false,
         editorAffordances: Boolean = false,
     ) {
         ProjectTheme(theme, dark) {
-            RenderNode(
-                root,
-                RenderContext(
-                    theme = theme,
-                    dark = dark,
-                    instrument = instrument,
-                    imageLoader = imageLoader,
-                    components = components.associateBy { it.id },
-                    interactive = interactive,
-                    editorAffordances = editorAffordances,
-                ),
+            val ctx = RenderContext(
+                theme = theme,
+                dark = dark,
+                instrument = instrument,
+                imageLoader = imageLoader,
+                components = components.associateBy { it.id },
+                interactive = interactive,
+                editorAffordances = editorAffordances,
             )
+            if (interactive) {
+                // C13 run mode (ADR-035): back the writable state with an ephemeral store seeded from the
+                // samples, re-resolve bindings against the LIVE values each change, and hand each widget a
+                // reducer that applies its handler actions to that store. Nothing is persisted to the IR.
+                InteractiveScreen(root, state, ctx)
+            } else {
+                // Static design canvas (ADR-034): bindings become sample literals and repeats expand to their
+                // rows, so RenderNode only ever sees an ordinary tree. Remembered on (root, state) so it
+                // recomputes only when the screen or its data changes, like bindParameters.
+                RenderNode(remember(root, state) { expandScreenState(root, state) }, ctx)
+            }
         }
+    }
+
+    /**
+     * The C13 interactive-preview holder (ADR-035, #277): remembers the ephemeral [InteractiveState] store
+     * seeded from [state]'s samples, re-expands [root] against the current live values so bound props redraw,
+     * and provides [RenderContext.dispatch] so a widget's event handler mutates the store. Purely ephemeral —
+     * keyed on [root] so a structural edit resets it — and no evaluation (the reducer is a `when`, PF-4).
+     */
+    @Composable
+    private fun InteractiveScreen(root: Node, state: List<StateField>, ctx: RenderContext) {
+        var live by remember(root) { mutableStateOf(initialInteractiveState(state)) }
+        val expanded = remember(root, live) {
+            expandScreenState(root, state.map { it.copy(sample = live[it.name] ?: it.sample) })
+        }
+        RenderNode(expanded, ctx.copy(dispatch = { actions -> live = applyActions(live, actions) }))
     }
 
     /**

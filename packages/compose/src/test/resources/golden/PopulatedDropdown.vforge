@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 4,
+  "id": "01J8PICKER0",
+  "name": "Picker",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_venue",
+      "name": "VenuePicker",
+      "root": {
+        "id": "n_venue_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_venue_dropdown",
+            "type": "vforge.dropdown",
+            "props": {
+              "options": {
+                "kind": "binding",
+                "path": "venues"
+              },
+              "optionLabel": {
+                "kind": "literal",
+                "value": "name"
+              }
+            }
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "venues",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "city",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grand Hall"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Paris"
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Sky Dome"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Tokyo"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

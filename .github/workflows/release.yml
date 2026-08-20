@@ -6,10 +6,11 @@
 # mirror. There is intentionally no .forgejo copy.
 #
 # Signing is best-effort on the CI secrets being present (see the "Sign" steps): Windows Authenticode
-# on the .msi/.exe, detached GPG signatures on the Linux .deb/.rpm. When the secret is absent the job
-# still produces UNSIGNED artifacts and says so loudly — a real public release MUST run with the
-# secrets configured (DI-1). Secrets are never exposed to fork PR builds because this workflow only
-# triggers on tag pushes to this repo, never on pull_request (DS-7).
+# on the .msi/.exe, detached GPG signatures on the Linux .deb/.rpm. The macOS .dmg is UNSIGNED and
+# un-notarized for now (Apple Developer ID signing + notarization is a follow-up); the job says so
+# loudly. When a secret is absent the job still produces UNSIGNED artifacts and says so — a real public
+# release MUST run with the secrets configured (DI-1). Secrets are never exposed to fork PR builds
+# because this workflow only triggers on tag pushes to this repo, never on pull_request (DS-7).
 name: release
 
 on:
@@ -55,6 +56,8 @@ jobs:
             tasks: ":app:packageMsi :app:packageExe"
           - os: ubuntu-latest
             tasks: ":app:packageDeb :app:packageRpm"
+          - os: macos-latest
+            tasks: ":app:packageDmg"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -121,6 +124,10 @@ jobs:
               --armor --detach-sign --output "$f.asc" "$f"
           done
 
+      - name: macOS signing status (unsigned alpha)
+        if: runner.os == 'macOS'
+        run: echo "::warning::The .dmg is UNSIGNED and un-notarized (alpha). Gatekeeper will warn users (INSTALL.md documents the one-time bypass). Apple Developer ID signing + notarization is a follow-up before a broad release (SECURITY DI-1)."
+
       # --- Checksums (DI-2) ----------------------------------------------------------------------
       - name: Checksums and upload (Windows)
         if: runner.os == 'Windows'
@@ -150,6 +157,19 @@ jobs:
             if [ "${f##*.}" != "asc" ]; then
               ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" ) > "$out/$(basename "$f").sha256"
             fi
+          done
+          gh release upload "$GITHUB_REF_NAME" "$out"/* --clobber
+
+      - name: Checksums and upload (macOS)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          out="$RUNNER_TEMP/artifacts"; mkdir -p "$out"
+          for f in app/build/compose/binaries/main/dmg/*.dmg; do
+            [ -e "$f" ] || continue
+            cp "$f" "$out/"
+            ( cd "$(dirname "$f")" && shasum -a 256 "$(basename "$f")" ) > "$out/$(basename "$f").sha256"
           done
           gh release upload "$GITHUB_REF_NAME" "$out"/* --clobber
 

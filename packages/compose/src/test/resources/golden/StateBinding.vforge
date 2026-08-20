@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 4,
+  "id": "01J8STATEBIND",
+  "name": "StateBinding",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_dash",
+      "name": "Dashboard",
+      "root": {
+        "id": "n_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_title",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "title"
+              }
+            }
+          },
+          {
+            "id": "n_slider",
+            "type": "compose.material3.Slider",
+            "props": {
+              "value": {
+                "kind": "binding",
+                "path": "progress"
+              }
+            }
+          },
+          {
+            "id": "n_repeat",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "members"
+              }
+            },
+            "children": [
+              {
+                "id": "n_name",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.name"
+                  }
+                }
+              },
+              {
+                "id": "n_role",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.role"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "title",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Team Dashboard"
+          }
+        },
+        {
+          "name": "progress",
+          "type": {
+            "kind": "scalar",
+            "scalar": "FLOAT"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": 0.6
+          }
+        },
+        {
+          "name": "members",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "role",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Ada"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Lead"
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grace"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Engineer"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 6,
+  "id": "01J8CTRLS",
+  "name": "Interactive",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_counter",
+      "name": "Counter",
+      "root": {
+        "id": "n_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_heading",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "heading"
+              }
+            }
+          },
+          {
+            "id": "n_inc",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "n_inc_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Increment"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "adjust",
+                  "target": "count",
+                  "by": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                },
+                {
+                  "kind": "toggle",
+                  "target": "expanded"
+                }
+              ]
+            }
+          },
+          {
+            "id": "n_reset",
+            "type": "compose.material3.TextButton",
+            "slots": {
+              "content": [
+                {
+                  "id": "n_reset_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Reset"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "setState",
+                  "target": "count",
+                  "value": {
+                    "kind": "literal",
+                    "value": 0
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "heading",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Score"
+          }
+        },
+        {
+          "name": "count",
+          "type": {
+            "kind": "scalar",
+            "scalar": "INT"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": 0
+          }
+        },
+        {
+          "name": "expanded",
+          "type": {
+            "kind": "scalar",
+            "scalar": "BOOL"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": false
+          }
+        }
+      ]
+    }
+  ]
+}

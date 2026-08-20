@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import viewforge.editor.state.EditorState
+import viewforge.editor.state.PaletteEntry
+import viewforge.editor.state.key
 
 /**
  * The command palette (FEATURES S4, issue #123): a Ctrl+Shift+P fuzzy launcher for the editor's actions.
@@ -119,6 +121,8 @@ internal fun buildPaletteCommands(
     export: ExportController,
     onOpenThemeEditor: () -> Unit,
     onOpenPreferences: () -> Unit,
+    onInsert: (PaletteEntry) -> Unit,
+    onOpenLibraryManager: () -> Unit,
 ): List<PaletteCommand> {
     val file = state.fileMenuModel()
     val edit = state.editMenuModel()
@@ -128,6 +132,7 @@ internal fun buildPaletteCommands(
     // File
     commands += PaletteCommand("file.new", "New Project", "File", run = document::newDocument)
     commands += PaletteCommand("file.open", "Open Project…", "File", run = document::open)
+    commands += PaletteCommand("file.openGenerated", "Open Generated .kt…", "File", run = document::openGenerated)
     commands += PaletteCommand("file.save", "Save", "File", enabled = file.canSave, run = document::save)
     commands += PaletteCommand("file.saveAs", "Save As…", "File", run = document::saveAs)
     commands += PaletteCommand("file.exportKt", "Export → .kt files", "File") {
@@ -155,6 +160,15 @@ internal fun buildPaletteCommands(
     commands += PaletteCommand("edit.extract", "Extract to Component", "Edit", enabled = edit.canExtract) {
         state.extractSelectionToComponent(state.uniqueComponentName())
     }
+    commands += PaletteCommand(
+        "edit.saveScreenAsComponent",
+        "Save Screen as Component",
+        "Edit",
+        enabled = state.activeScreenId != null,
+    ) {
+        state.activeScreenId?.let { state.saveScreenAsComponent(it, state.defaultComponentNameForScreen(it)) }
+    }
+    commands += PaletteCommand("edit.manageLibrary", "Manage Library…", "Edit", run = onOpenLibraryManager)
     commands +=
         PaletteCommand("edit.delete", "Delete", "Edit", enabled = edit.hasSelection, run = state::deleteSelected)
 
@@ -195,13 +209,16 @@ internal fun buildPaletteCommands(
     }
 
     // Add component (dynamic): every live palette entry, gated on the same cycle check the palette uses.
+    // Routed through [onInsert] so a library entry copies into the document (prompting on collision) exactly
+    // like a palette click; the id keys on [PaletteEntry.key] so library entries (componentId == null) stay
+    // distinct rather than colliding on the shared userComponent type.
     state.palette.forEach { entry ->
         commands += PaletteCommand(
-            id = "add.${entry.componentId ?: entry.type}",
+            id = "add.${entry.key}",
             title = "Add ${entry.label}",
             category = "Add component",
             enabled = !state.paletteEntryWouldCycle(entry),
-            run = { state.addFromPalette(entry) },
+            run = { onInsert(entry) },
         )
     }
 

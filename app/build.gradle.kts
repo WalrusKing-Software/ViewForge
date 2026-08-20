@@ -46,11 +46,13 @@ tasks.withType<Test>().configureEach {
 // metadata, so the two `application { }` blocks merge. Deliberately kept here, in :app, against a
 // real build (the convention plugin's M10 note).
 //
-// Phase-1 target formats are Windows (Msi/Exe) and Linux (Deb/Rpm) — the M10 "at least Win + Linux"
-// bar. macOS (Dmg) is deliberately NOT declared: jpackage rejects a version whose major is 0, so a
-// pre-1.0 mac package can't be built without misreporting the version, and it can't be verified
-// without a Mac runner + a branded .icns anyway. It is a documented follow-up (INSTALL.md), not a
-// Phase-1 gate; adding it is a localised change (the Dmg format + macOS block + a mac version).
+// Target formats cover all three desktop OSes: Windows (Msi/Exe), Linux (Deb/Rpm), macOS (Dmg). The
+// .dmg is built only on the macos-latest GitHub runner (release.yml / matrix.yml) — a homelab Forgejo
+// has no Mac runner, so mac packaging lives entirely in .github (#291). For the alpha the .dmg is
+// unsigned and un-notarized (Gatekeeper warns; INSTALL.md documents the one-time bypass), matching the
+// unsigned-Windows posture (DI-3). A branded macOS .icns is a follow-up (INSTALL.md §5); until then
+// jpackage falls back to its default app icon. The numeric packageVersion (gradle.properties) stays the
+// single source of truth across every OS.
 //
 // Signing is NOT done by Gradle here: the Compose plugin only wires macOS signing/notarization.
 // Windows Authenticode and Linux repo/GPG signing are per-OS post-build steps in the release
@@ -64,6 +66,7 @@ compose.desktop {
                 TargetFormat.Exe,
                 TargetFormat.Deb,
                 TargetFormat.Rpm,
+                TargetFormat.Dmg,
             )
 
             packageName = "ViewForge"
@@ -98,6 +101,23 @@ compose.desktop {
                 // Debian/RPM package name base (lowercase, no spaces).
                 packageName = "viewforge"
                 menuGroup = "Development"
+            }
+
+            macOS {
+                // Reverse-DNS bundle identifier. Stable across versions (like the Windows upgradeUuid), so
+                // never regenerate it once released (ADR-022). No custom iconFile yet — a branded .icns is a
+                // follow-up (INSTALL.md §5), so jpackage uses its default icon. Unsigned/un-notarized for the
+                // alpha; Apple signing + notarization are gated CI steps for a real release (SECURITY DI-1/DI-3).
+                bundleID = "software.walrusking.viewforge"
+
+                // jpackage rejects a macOS version whose major is 0, so the .dmg carries a mac-ONLY artifact
+                // version with the major forced to 1 (app 0.x.y -> dmg 1.x.y, e.g. 0.2.0 -> 1.2.0). This is NOT
+                // the application version — that stays 0.x in gradle.properties and in the Windows/Linux
+                // packages; this exists solely to satisfy jpackage's mac rule (#291, INSTALL.md §5). Revisit at
+                // the 1.0 release, where the real version is already valid and this mapping becomes the identity.
+                dmgPackageVersion = providers.gradleProperty("viewforge.version").get().let { v ->
+                    v.split(".").let { p -> if (p.size == 3 && p[0] == "0") "1.${p[1]}.${p[2]}" else v }
+                }
             }
         }
     }

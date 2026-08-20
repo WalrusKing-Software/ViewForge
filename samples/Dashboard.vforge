@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 6,
+  "id": "01J8DASHBRD",
+  "name": "Dashboard",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_dash",
+      "name": "Dashboard",
+      "root": {
+        "id": "n_dash_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_dash_title",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "title"
+              }
+            }
+          },
+          {
+            "id": "n_dash_repeat",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "members"
+              }
+            },
+            "children": [
+              {
+                "id": "n_dash_member",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.name"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "previewProfile": "desktop_1280x800",
+      "state": [
+        {
+          "name": "title",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Team Dashboard"
+          }
+        },
+        {
+          "name": "online",
+          "type": {
+            "kind": "scalar",
+            "scalar": "BOOL"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": true
+          }
+        },
+        {
+          "name": "members",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "role",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Ada"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Lead"
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grace"
+                },
+                "role": {
+                  "kind": "scalar",
+                  "value": "Engineer"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
