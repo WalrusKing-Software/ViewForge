@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -538,6 +539,10 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     // ctrl/cmd- or shift-click (toggle into a multi-selection, C10).
     val windowInfo = LocalWindowInfo.current
     val density = LocalDensity.current
+    // Clearing focus on a canvas interaction blurs a focused inspector text field (e.g. a Screen State box), so
+    // its blinking cursor doesn't linger after you click out onto the canvas — pointerInput, unlike a `clickable`
+    // (the tree rows), doesn't move focus on its own (#300).
+    val focusManager = LocalFocusManager.current
     // Measures the short type-name tags drawn on the debug container-border overlay (#117); cached
     // internally by the measurer, so re-drawing every frame while the mode is on stays cheap.
     val textMeasurer = rememberTextMeasurer()
@@ -582,6 +587,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                 detectTapGestures { local ->
                     // While panning (space held) a press is a pan, not a selection — ignore it here.
                     if (state.isSpaceHeld) return@detectTapGestures
+                    focusManager.clearFocus() // clicking the canvas ends editing of any focused inspector field (#300)
                     val hit = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
                     val mods = windowInfo.keyboardModifiers
                     // Ctrl/Cmd- or Shift-click toggles the hit in/out of a multi-selection (C10). The canvas
@@ -632,6 +638,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                 val scope = this
                 detectDragGestures(
                     onDragStart = { local ->
+                        focusManager.clearFocus() // a canvas drag also blurs a focused inspector field (#300)
                         val point = scope.pointerToContent(local, state)
                         val hit = hitTest(bounds.snapshot(), root, point)
                         if (hit == null || hit == root.id) {
