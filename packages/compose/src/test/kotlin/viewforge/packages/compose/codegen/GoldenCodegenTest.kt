@@ -102,6 +102,10 @@ class GoldenCodegenTest {
     // `data class`, and a `vforge.repeat` lowered to `members.forEach { item -> … }` with item-scoped bindings.
     @Test fun stateBinding() = assertGolden("StateBinding")
 
+    // #298: a numeric (Int/Float) state field bound to a String prop (Text) is coerced with `.toString()`,
+    // so a live number can be shown as text — a read-only Float `val` and a written Int `var` both display.
+    @Test fun intText() = assertGolden("IntText")
+
     // A `vforge.repeat` in LazyColumn layout (ADR-034 slice 2, #251): lowers to
     // `LazyColumn { items(members) { item -> … } }` instead of the default inline `forEach`, with the
     // same seeded stub + record `data class` and item-scoped member-access bindings.

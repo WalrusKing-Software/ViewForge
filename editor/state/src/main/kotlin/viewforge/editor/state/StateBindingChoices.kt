@@ -91,11 +91,12 @@ private val BINDABLE_PROP_TYPES = setOf(PropType.String, PropType.Int, PropType.
 
 /**
  * Whether a [scalar] state value is an acceptable binding for a prop of [propType]. Forgiving on numbers — a
- * numeric prop (Int/Float/Dp) accepts either INT or FLOAT — since a read-only preview widens freely; String
- * takes STRING and Bool takes BOOL. A non-bindable prop accepts nothing.
+ * numeric prop (Int/Float/Dp) accepts either INT or FLOAT — since a read-only preview widens freely. String is
+ * likewise forgiving: it takes STRING **or** a number (INT/FLOAT), which codegen coerces with `.toString()` so a
+ * live numeric value can be shown as text (#298). Bool takes BOOL only. A non-bindable prop accepts nothing.
  */
 fun acceptsScalar(propType: PropType, scalar: ScalarType): Boolean = when (propType) {
-    PropType.String -> scalar == ScalarType.STRING
+    PropType.String -> scalar == ScalarType.STRING || scalar == ScalarType.INT || scalar == ScalarType.FLOAT
     PropType.Bool -> scalar == ScalarType.BOOL
     PropType.Int, PropType.Float, PropType.Dp -> scalar == ScalarType.INT || scalar == ScalarType.FLOAT
     else -> false

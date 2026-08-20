@@ -48,4 +48,25 @@ class ParameterTypesTest {
         assertEquals("enabled", CodegenValues.bool(PropValue.ParamRef("enabled")).toString())
         assertEquals("count", CodegenValues.int(PropValue.ParamRef("count")).toString())
     }
+
+    @Test
+    fun `a string binding emits member access, coerced with toString only when numeric (#298)`() {
+        // A String field bound to a String prop stays bare member access…
+        assertEquals("title", CodegenValues.text(PropValue.StateBinding("title")).toString())
+        assertEquals("item.name", CodegenValues.text(PropValue.StateBinding("item.name")).toString())
+        // …a numeric field bound to a String prop is coerced so it satisfies the String parameter.
+        assertEquals(
+            "count.toString()",
+            CodegenValues.text(PropValue.StateBinding("count"), numericBinding = true).toString(),
+        )
+        assertEquals(
+            "item.size.toString()",
+            CodegenValues.text(PropValue.StateBinding("item.size"), numericBinding = true).toString(),
+        )
+        // The same coercion applies to a nullable string prop (e.g. contentDescription).
+        assertEquals(
+            "count.toString()",
+            CodegenValues.nullableString(PropValue.StateBinding("count"), numericBinding = true).toString(),
+        )
+    }
 }
