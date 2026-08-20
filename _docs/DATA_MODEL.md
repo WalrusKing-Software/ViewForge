@@ -1,7 +1,7 @@
 # ViewForge — Data Model
 
 **Status:** Living — shipping in **v0.1.0-alpha-1** (Phase 1).
-**Schema version:** 6 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; v5 = component-local state, ADR-034 Amendment #266; v6 = interactive state & events, ADR-035; see §10 version history)
+**Schema version:** 7 (v3 = read-only data binding, ADR-034; v4 = nested lists, ADR-034 Amendment #255; v5 = component-local state, ADR-034 Amendment #266; v6 = interactive state & events, ADR-035; v7 = responsive per-breakpoint overrides, ADR-030; see §10 version history)
 
 This document defines the intermediate representation (IR) and the `.vforge` project file format.
 Everything else in the system is downstream of this, so changes here are expensive — treat this
@@ -164,7 +164,8 @@ data class Node(
     val slots: Map<String, List<Node>> = emptyMap(),
     val locked: Boolean = false,                 // editor-only: protects this node (per-node, not its subtree)
     val hidden: Boolean = false,                 // editor-only: excluded from render AND codegen
-    val handlers: Map<String, List<Action>> = emptyMap()  // event slot -> ordered actions (ADR-035); omitted when empty
+    val handlers: Map<String, List<Action>> = emptyMap(),  // event slot -> ordered actions (ADR-035); omitted when empty
+    val responsive: Map<String, Map<String, PropValue>> = emptyMap()  // breakpoint -> prop overrides (ADR-030); omitted when empty
 )
 ```
 
@@ -193,6 +194,16 @@ run-mode reducer, codegen, the inspector) with **no evaluator anywhere** (PF-4 s
 SECURITY IA-*). The map is omitted when empty, so a handler-free node serializes exactly as before. Which slots
 a component exposes is catalog metadata (`EventSlotDefinition`), not persisted — the same data-driven source
 that describes its props.
+
+**`responsive`** — per-breakpoint **prop overrides** (ADR-030, schema v7): `breakpoint-id → (prop-name →
+override `PropValue`)`. The base `props` are the default (the smallest/`compact` breakpoint); a breakpoint
+entry supplies *replacements* for named props, and `effectiveProps(node, breakpointId)` overlays them once —
+render and codegen resolve against that, so no existing prop reader changes (the same approach as parameter
+binding). Breakpoint ids are **opaque strings to `core`**; the set and its dp thresholds are owned by the
+framework package's target (the Android target uses Material window size classes — `compact` < 600dp,
+`medium` 600–840dp, `expanded` ≥ 840dp). The map is omitted when empty, so a non-responsive node serializes
+exactly as before v7. Codegen emits only the base value for now (ADR-037 M13); `BoxWithConstraints` threshold
+branching is #222/M14.
 
 **`locked`** — editor-only protection (T4), scoped **per-node, not to the subtree**: a locked node is
 non-selectable (canvas click, marquee, tree click), non-draggable, cannot receive dropped children (a
@@ -421,7 +432,7 @@ changes.
 | **4** | Nested lists (ADR-034 Amendment #255) — `RecordField` carries a full `StateType` and a sample cell is a `SampleValue`, so a record field may be a nested list. Changes the serialized shape of v3 record fields/cells, so a *transforming* migration (not a stamp). | `M3to4` (transforms `{name,scalar}`→`{name,type}` and cell primitive→`{kind:"scalar",value}`; frozen v3 fixture). |
 | **5** | Component-local state (ADR-034 Amendment #266) — `ComponentDef` gains its own `state: List<StateField>` (§3, §4), the same model `Screen.state` carries; additive, but a v4 build would silently drop it and misrender every component-local binding, so it is treated as semantic. | `M4to5` (stamp; v4 docs carry no component state and are already valid v5). |
 | **6** | Interactive state & events (ADR-035) — state becomes **writable** and `Node.handlers` maps an event slot to an ordered, closed `List<Action>` (§3, §5); additive, but a v5 build would silently drop every handler and render a dead UI, so it is treated as semantic. No evaluator is introduced (PF-4 / SECURITY IA-*). | `M5to6` (stamp; v5 docs carry no handlers and are already valid v6). |
-| **7** *(reserved)* | Node `responsive` per-breakpoint overrides (ADR-030, Phase 2). | `M6to7`. |
+| **7** | Node `responsive` per-breakpoint overrides (§5, ADR-030, #221) — a breakpoint-id → (prop-name → override) map layered over base `props` at render/codegen; additive, but a v6 build would silently drop it and render/emit only base props, so it is treated as semantic. | `M6to7` (stamp; v6 docs carry no `responsive` and are already valid v7). |
 
 For which **app version** reads and writes which schema version, and the user-facing forward/backward
 compatibility policy, see [`COMPATIBILITY.md`](../COMPATIBILITY.md).
@@ -554,17 +565,19 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    a record field may itself be a list, and a repeat may bind `source = item.<listField>`, with `item`
    shadowing the innermost element. **Component-local state** (#266, schema 5) then gave `ComponentDef` its own
    `state` (§4), so all of the above work inside a reusable component against data it owns, not just on a screen.
-3. **Responsive variants.** *Resolved (ADR-030), to be implemented in Phase 2.* Per-breakpoint prop
-   overrides live **on the node** as an additive optional field
-   `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the
-   base `props` map is the default (the smallest/compact breakpoint). Breakpoint identities are opaque
-   strings to `core` and defined by the framework package's target (Material window size classes —
-   `compact`/`medium`/`expanded` — for the Android target), so `core` stays framework-agnostic.
-   Introducing the field will bump the schema **6 → 7** (an `M6to7` stamp) because it is a semantic
-   capability old builds would silently drop, following the `ParamRef` precedent (ADR-028). (Originally
-   scoped to v3; ADR-034 read-only data binding claimed v3, its nested-lists amendment (#255) claimed v4,
-   its component-local-state amendment (#266) claimed v5, and ADR-035 interactive state & events claimed v6,
-   so responsive slides to v7.) A separate node-id-keyed override layer was rejected — see ADR-030.
+3. **Responsive variants.** *Resolved (ADR-030); the schema slice landed in **#221** (schema v7).* Per-breakpoint
+   prop overrides live **on the node** as the additive optional field
+   `responsive: Map<String, Map<String, PropValue>>` (breakpoint-id → prop-name → override value); the base
+   `props` map is the default (the smallest/compact breakpoint), and `effectiveProps(node, breakpointId)`
+   overlays a breakpoint's overrides onto it (§5). Breakpoint identities are opaque strings to `core` and
+   defined by the framework package's target (Material window size classes — `compact`/`medium`/`expanded` —
+   for the Android target), so `core` stays framework-agnostic. Populating the field bumped the schema **6 →
+   7** (an `M6to7` stamp) because it is a semantic capability old builds would silently drop, following the
+   `ParamRef` precedent (ADR-028). (Originally scoped to v3; ADR-034 read-only data binding claimed v3, its
+   nested-lists amendment (#255) claimed v4, its component-local-state amendment (#266) claimed v5, and
+   ADR-035 interactive state & events claimed v6, so responsive slid to v7.) A separate node-id-keyed override
+   layer was rejected — see ADR-030. **Codegen** emits only the base value for now (ADR-037 M13); the
+   `BoxWithConstraints` threshold branching and the canvas active-breakpoint UX are follow-up slices (#222/M14).
 4. **Interaction/navigation.** *Resolved (ADR-035, schema v6):* state is now **writable** and a node's
    `handlers` map event slots to ordered, closed `Action` lists (§5) — `SetState`/`Toggle`/`Adjust`/
    `AppendRow`/`RemoveRow`/`Navigate` — dispatched by a `when`, never evaluated (PF-4 / SECURITY IA-*).

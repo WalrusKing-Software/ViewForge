@@ -1083,11 +1083,11 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 ## ADR-030 — Responsive overrides live on the node as an additive per-breakpoint map
 
-**Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v7 / `M6to7`** after
-ADR-034 claimed v3–v5 (read-only data binding, its nested-lists amendment #255, and its component-local-state
-amendment #266) and **ADR-035** claimed v6 for interactive state & events (2026-08-19). The **codegen
-strategy** this ADR deferred ("emit the base value, branching a later slice") is settled by **ADR-037**
-(base value in M13; `BoxWithConstraints` threshold branching in M14).
+**Status:** Accepted. The **schema slice landed in #221 (M13)** — `Node.responsive` + the `M6to7` bump to
+**schema v7** (after ADR-034 claimed v3–v5 and **ADR-035** claimed v6 for interactive state & events). The
+**codegen strategy** this ADR deferred ("emit the base value, branching a later slice") is settled by
+**ADR-037** (base value in M13; `BoxWithConstraints` threshold branching in M14/#222); the render-time
+resolution, canvas active-breakpoint, and inspector affordance are the remaining M13/M14 slices.
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
