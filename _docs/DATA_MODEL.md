@@ -255,7 +255,11 @@ lists, ADR-034 Amendment #255). Resolution:
 - **Canvas** substitutes the field's typed `sample` value; a `vforge.repeat` renders its template once per
   sample row (bounded to the first *N*). No live source, no compilation — so **PF-4 stays literally true**.
 - **Codegen** emits the binding as a KotlinPoet **member access** (`item.title`, never string-built,
-  GC-1/GC-2), reading a seeded stub (`// TODO: replace with your real data source`).
+  GC-1/GC-2), reading a seeded stub (`// TODO: replace with your real data source`). A **numeric** (INT/FLOAT)
+  field bound to a **String** prop (e.g. `Text.text`, `contentDescription`) is coerced with `.toString()`
+  (`count.toString()`) so a live number can be shown as text (#298); the canvas already stringifies the sample
+  literal, so preview and output agree. The type-compatibility rule (`acceptsScalar`) is likewise forgiving:
+  String accepts STRING or a number, numeric props accept INT/FLOAT, Bool accepts BOOL only.
 - A path that does not resolve against the declared state renders a visible placeholder and marks the node
   unverified — the same loud-failure discipline as `RawExpression` (PF-6), never a silent wrong result.
 

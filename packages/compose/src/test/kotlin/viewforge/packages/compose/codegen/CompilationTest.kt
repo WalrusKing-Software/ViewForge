@@ -31,7 +31,7 @@ class CompilationTest {
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
             "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling",
             "ButtonShape", "Gallery", "StateBinding", "RepeatLazyColumn", "PopulatedDropdown", "NestedList",
-            "Interactive",
+            "Interactive", "IntText",
         )
 
     @Test

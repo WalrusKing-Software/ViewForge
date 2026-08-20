@@ -96,11 +96,15 @@ class BindablePathsTest {
     }
 
     @Test
-    fun `acceptsScalar is forgiving on numbers and strict on string and bool`() {
+    fun `acceptsScalar is forgiving on numbers and strict on bool`() {
         assertTrue(acceptsScalar(PropType.Dp, ScalarType.INT))
         assertTrue(acceptsScalar(PropType.Float, ScalarType.INT))
-        assertFalse(acceptsScalar(PropType.String, ScalarType.INT))
+        // String takes a number too (#298): codegen coerces a numeric binding with .toString().
+        assertTrue(acceptsScalar(PropType.String, ScalarType.STRING))
+        assertTrue(acceptsScalar(PropType.String, ScalarType.INT))
+        assertTrue(acceptsScalar(PropType.String, ScalarType.FLOAT))
         assertTrue(acceptsScalar(PropType.Bool, ScalarType.BOOL))
         assertFalse(acceptsScalar(PropType.Bool, ScalarType.STRING))
+        assertFalse(acceptsScalar(PropType.Bool, ScalarType.INT))
     }
 }

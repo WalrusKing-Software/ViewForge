@@ -3,15 +3,19 @@ package viewforge.packages.compose.codegen
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.MemberName
 import viewforge.model.Asset
+import viewforge.model.BindingTypeScope
 import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
 import viewforge.model.EventSlots
 import viewforge.model.Node
 import viewforge.model.PropValue
 import viewforge.model.Repeater
+import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.model.UserComponent
+import viewforge.model.resolveBindingType
+import viewforge.model.resolveListShape
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
@@ -37,6 +41,19 @@ internal class ComponentEmitter(
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
 
+    /** The binding scope at the surface root: the owner's declared [state], with no repeat item in scope yet. */
+    private val screenScope: BindingTypeScope get() = BindingTypeScope(fields = state)
+
+    /**
+     * Whether [value] is a [PropValue.StateBinding] to a numeric (INT/FLOAT) field under [scope] — the case a
+     * String-typed prop must coerce with `.toString()` (#298). Resolved via [resolveBindingType], the shared
+     * authority the renderer and inspector also use, so `item.<field>` inside a repeat resolves against the row.
+     */
+    private fun numericBinding(value: PropValue?, scope: BindingTypeScope): Boolean {
+        val path = (value as? PropValue.StateBinding)?.path ?: return false
+        return resolveBindingType(path, scope) in setOf(ScalarType.INT, ScalarType.FLOAT)
+    }
+
     /**
      * Set true while emitting a tree that used an experimental Material3 API (e.g. `TopAppBar`), so the
      * caller can annotate the generated function `@OptIn(ExperimentalMaterial3Api::class)`. Read after
@@ -52,8 +69,13 @@ internal class ComponentEmitter(
      * `emit` is only ever embedded as a statement (a body line, a lazy `item { }`, a slot lambda), the
      * markers always land on their own lines, covering nodes inside slots and lazy lists too.
      */
-    fun emit(node: Node, isRoot: Boolean, parentAllowsWeight: Boolean = false): CodeBlock {
-        val core = emitCore(node, isRoot, parentAllowsWeight)
+    fun emit(
+        node: Node,
+        isRoot: Boolean,
+        parentAllowsWeight: Boolean = false,
+        scope: BindingTypeScope = screenScope,
+    ): CodeBlock {
+        val core = emitCore(node, isRoot, parentAllowsWeight, scope)
         return if (!recordSpans) {
             core
         } else {
@@ -65,7 +87,7 @@ internal class ComponentEmitter(
         }
     }
 
-    private fun emitCore(node: Node, isRoot: Boolean, parentAllowsWeight: Boolean): CodeBlock {
+    private fun emitCore(node: Node, isRoot: Boolean, parentAllowsWeight: Boolean, scope: BindingTypeScope): CodeBlock {
         val mod = if (isRoot) {
             ModifierEmitter.rootChain(node.modifiers, theme)
         } else {
@@ -74,27 +96,37 @@ internal class ComponentEmitter(
         return when (node.type) {
             // Row/Column establish the RowScope/ColumnScope their direct children may `weight` into (#158).
             "compose.foundation.layout.Column" ->
-                layout(ComposeNames.Column, node, mod, columnArgs(node), childrenGetWeight = true)
+                layout(ComposeNames.Column, node, mod, columnArgs(node), scope, childrenGetWeight = true)
             "compose.foundation.layout.Row" ->
-                layout(ComposeNames.Row, node, mod, rowArgs(node), childrenGetWeight = true)
-            "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, boxArgs(node))
+                layout(ComposeNames.Row, node, mod, rowArgs(node), scope, childrenGetWeight = true)
+            "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, boxArgs(node), scope)
             "compose.foundation.layout.Spacer" -> call(ComposeNames.Spacer, modifierArg(mod), content = null)
-            "compose.foundation.lazy.LazyColumn" -> lazyList(ComposeNames.LazyColumn, node, mod, columnArgs(node))
-            "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node))
-            "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod), content = null)
-            "compose.material3.Button" -> button(ComposeNames.Button, node, mod)
-            "compose.material3.OutlinedButton" -> button(ComposeNames.OutlinedButton, node, mod)
-            "compose.material3.TextButton" -> button(ComposeNames.TextButton, node, mod)
+            "compose.foundation.lazy.LazyColumn" -> lazyList(
+                ComposeNames.LazyColumn,
+                node,
+                mod,
+                columnArgs(node),
+                scope,
+            )
+            "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node), scope)
+            "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod, scope), content = null)
+            "compose.material3.Button" -> button(ComposeNames.Button, node, mod, scope)
+            "compose.material3.OutlinedButton" -> button(ComposeNames.OutlinedButton, node, mod, scope)
+            "compose.material3.TextButton" -> button(ComposeNames.TextButton, node, mod, scope)
             "compose.material3.Slider" -> call(ComposeNames.Slider, sliderArgs(node, mod), content = null)
-            "compose.material3.TextField" -> call(ComposeNames.TextField, textFieldArgs(node, mod), content = null)
+            "compose.material3.TextField" -> call(
+                ComposeNames.TextField,
+                textFieldArgs(node, mod, scope),
+                content = null,
+            )
             "compose.material3.OutlinedTextField" ->
-                call(ComposeNames.OutlinedTextField, textFieldArgs(node, mod), content = null)
+                call(ComposeNames.OutlinedTextField, textFieldArgs(node, mod, scope), content = null)
             "compose.material3.CircularProgressIndicator" ->
                 call(ComposeNames.CircularProgressIndicator, modifierArg(mod), content = null)
             "compose.material3.LinearProgressIndicator" ->
                 call(ComposeNames.LinearProgressIndicator, modifierArg(mod), content = null)
-            "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, emptyList())
-            "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, emptyList())
+            "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, emptyList(), scope)
+            "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, emptyList(), scope)
             "compose.material3.HorizontalDivider" -> call(
                 ComposeNames.HorizontalDivider,
                 dividerArgs(node, mod),
@@ -102,13 +134,13 @@ internal class ComponentEmitter(
             )
             "compose.material3.Checkbox" -> call(ComposeNames.Checkbox, toggleArgs(node, mod), content = null)
             "compose.material3.Switch" -> call(ComposeNames.Switch, toggleArgs(node, mod), content = null)
-            "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod), content = null)
-            "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod), content = null)
-            "compose.material3.TopAppBar" -> topAppBar(node, mod)
-            "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList())
-            "compose.material3.Scaffold" -> scaffold(node, mod)
+            "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod, scope), content = null)
+            "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod, scope), content = null)
+            "compose.material3.TopAppBar" -> topAppBar(node, mod, scope)
+            "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList(), scope)
+            "compose.material3.Scaffold" -> scaffold(node, mod, scope)
             UserComponent.TYPE -> userComponentCall(node, mod)
-            Repeater.TYPE -> repeater(node, parentAllowsWeight)
+            Repeater.TYPE -> repeater(node, parentAllowsWeight, scope)
             Dropdown.TYPE -> dropdown(node, mod)
             else -> throw CodegenException("Unsupported component '${node.type}'")
         }
@@ -155,17 +187,21 @@ internal class ComponentEmitter(
      * - **lazyColumn** — `LazyColumn { items(source) { item -> … } }`, a scrolling list. Items sit in a
      *   `LazyItemScope`, not the parent Row/Column, so `weight` does not apply and is not forwarded.
      */
-    private fun repeater(node: Node, parentAllowsWeight: Boolean): CodeBlock {
+    private fun repeater(node: Node, parentAllowsWeight: Boolean, scope: BindingTypeScope): CodeBlock {
         val source = Repeater.sourceOf(node)
             ?: throw CodegenException("vforge.repeat node '${node.id.value}' has no source binding")
         val sourceRef = CodegenValues.bindingPath(source)
+        // The template body binds against the row: `item.<field>` resolves to the source list's record fields, so
+        // a numeric record field bound to a String prop is coerced correctly (#298). Nested lists (#255) resolve
+        // the source in the *current* scope, so an inner repeat shadows the outer item.
+        val itemScope = scope.copy(itemFields = resolveListShape(source, scope))
         return if (Repeater.isLazyColumn(node)) {
             CodeBlock.builder()
                 .add("%M {\n", ComposeNames.LazyColumn)
                 .indent()
                 .add("%M(%L) { %N ->\n", ComposeNames.lazyItems, sourceRef, Repeater.ITEM_SCOPE)
                 .indent()
-                .add(body(node.children, allowWeight = false))
+                .add(body(node.children, itemScope, allowWeight = false))
                 .unindent()
                 .add("}\n")
                 .unindent()
@@ -175,7 +211,7 @@ internal class ComponentEmitter(
             CodeBlock.builder()
                 .add("%L.forEach { %N ->\n", sourceRef, Repeater.ITEM_SCOPE)
                 .indent()
-                .add(body(node.children, allowWeight = parentAllowsWeight))
+                .add(body(node.children, itemScope, allowWeight = parentAllowsWeight))
                 .unindent()
                 .add("}")
                 .build()
@@ -266,8 +302,8 @@ internal class ComponentEmitter(
     // fontSize, fontStyle, fontWeight, letterSpacing, textDecoration, textAlign, lineHeight, overflow,
     // maxLines, style. Each optional arg is emitted only when the prop is present, so a plain Text
     // stays `Text(text = …)`.
-    private fun textArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
-        add(named("text", CodegenValues.text(node.props["text"])))
+    private fun textArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
+        add(named("text", CodegenValues.text(node.props["text"], numericBinding(node.props["text"], scope))))
         if (mod != null) add(named("modifier", mod))
         node.props["color"]?.let { add(named("color", CodegenValues.color(it, theme))) }
         node.props["fontSize"]?.let { add(named("fontSize", CodegenValues.sp(it))) }
@@ -284,9 +320,17 @@ internal class ComponentEmitter(
 
     // Arg order mirrors the `Image` composable signature (and RenderImage): painter, contentDescription,
     // modifier, alignment, contentScale, alpha. Each optional arg is emitted only when its prop is set.
-    private fun imageArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+    private fun imageArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
         add(named("painter", CodegenValues.painter(node.props["source"], assetsById)))
-        add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
+        add(
+            named(
+                "contentDescription",
+                CodegenValues.nullableString(
+                    node.props["contentDescription"],
+                    numericBinding(node.props["contentDescription"], scope),
+                ),
+            ),
+        )
         if (mod != null) add(named("modifier", mod))
         node.props["alignment"]?.let { add(named("alignment", CodegenValues.enum("alignment", it))) }
         node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
@@ -294,9 +338,17 @@ internal class ComponentEmitter(
     }
 
     /** `Icon`: imageVector (a curated `Icons.Filled.*`), contentDescription, modifier (order mirrors the renderer). */
-    private fun iconArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+    private fun iconArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
         add(named("imageVector", CodegenValues.enum("icon", node.props["icon"])))
-        add(named("contentDescription", CodegenValues.nullableString(node.props["contentDescription"])))
+        add(
+            named(
+                "contentDescription",
+                CodegenValues.nullableString(
+                    node.props["contentDescription"],
+                    numericBinding(node.props["contentDescription"], scope),
+                ),
+            ),
+        )
         if (mod != null) add(named("modifier", mod))
     }
 
@@ -324,22 +376,28 @@ internal class ComponentEmitter(
         node: Node,
         mod: CodeBlock?,
         extra: List<CodeBlock>,
+        scope: BindingTypeScope,
         childrenGetWeight: Boolean = false,
-    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = body(node.children, childrenGetWeight))
+    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = body(node.children, scope, childrenGetWeight))
 
     /**
      * A lazy list (`LazyColumn`/`LazyRow`): same args as its eager twin, but each static child is
      * wrapped in its own `item { … }` — the `LazyListScope` DSL, mirroring the renderer (DATA_MODEL
      * §12.2: static children only in Phase 1).
      */
-    private fun lazyList(callee: MemberName, node: Node, mod: CodeBlock?, extra: List<CodeBlock>): CodeBlock =
-        call(callee, modifierArg(mod) + extra, content = lazyBody(node.children))
+    private fun lazyList(
+        callee: MemberName,
+        node: Node,
+        mod: CodeBlock?,
+        extra: List<CodeBlock>,
+        scope: BindingTypeScope,
+    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = lazyBody(node.children, scope))
 
     /** Children as `item { … }` entries; hidden nodes excluded from codegen (DATA_MODEL §5). */
-    private fun lazyBody(children: List<Node>): CodeBlock {
+    private fun lazyBody(children: List<Node>, scope: BindingTypeScope): CodeBlock {
         val b = CodeBlock.builder()
         children.filterNot { it.hidden }.forEach { child ->
-            b.add("item {\n").indent().add("%L\n", emit(child, isRoot = false)).unindent().add("}\n")
+            b.add("item {\n").indent().add("%L\n", emit(child, isRoot = false, scope = scope)).unindent().add("}\n")
         }
         return b.build()
     }
@@ -348,20 +406,20 @@ internal class ComponentEmitter(
      * `TopAppBar`: a `title` slot (required) then modifier. Experimental Material3, so it flags the
      * screen for an `@OptIn(ExperimentalMaterial3Api::class)` annotation.
      */
-    private fun topAppBar(node: Node, mod: CodeBlock?): CodeBlock {
+    private fun topAppBar(node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
         requiresMaterial3OptIn = true
         val args = buildList {
-            add(slotArg("title", node.slots["title"].orEmpty()))
+            add(slotArg("title", node.slots["title"].orEmpty(), scope))
             if (mod != null) add(named("modifier", mod))
         }
         return call(ComposeNames.TopAppBar, args, content = null)
     }
 
     /** A named slot emitted as a `name = { … }` lambda argument (hidden children dropped). */
-    private fun slotArg(name: String, children: List<Node>): CodeBlock = CodeBlock.builder()
+    private fun slotArg(name: String, children: List<Node>, scope: BindingTypeScope): CodeBlock = CodeBlock.builder()
         .add("%L = {\n", name)
         .indent()
-        .add(body(children))
+        .add(body(children, scope))
         .unindent()
         .add("}")
         .build()
@@ -372,7 +430,7 @@ internal class ComponentEmitter(
      * `Button` advertises (issue #17), so the `ButtonDefaults.button*` factories are correct here; the
      * outlined/text variants would need their own factories if ever extended.
      */
-    private fun button(callee: MemberName, node: Node, mod: CodeBlock?): CodeBlock {
+    private fun button(callee: MemberName, node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
         val args = buildList {
             add(named("onClick", onClickArg(node)))
             if (mod != null) add(named("modifier", mod))
@@ -383,7 +441,7 @@ internal class ComponentEmitter(
             node.props["elevation"]?.let { add(named("elevation", CodegenValues.buttonElevation(it))) }
             node.props["contentPadding"]?.let { add(named("contentPadding", CodegenValues.contentPadding(it))) }
         }
-        return call(callee, args, content = body(node.slots["content"].orEmpty()))
+        return call(callee, args, content = body(node.slots["content"].orEmpty(), scope))
     }
 
     /**
@@ -411,8 +469,8 @@ internal class ComponentEmitter(
     }
 
     /** `TextField`/`OutlinedTextField` share: value (String), onValueChange, modifier, enabled. */
-    private fun textFieldArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
-        add(named("value", CodegenValues.text(node.props["value"])))
+    private fun textFieldArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
+        add(named("value", CodegenValues.text(node.props["value"], numericBinding(node.props["value"], scope))))
         add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
         if (mod != null) add(named("modifier", mod))
         node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
@@ -428,10 +486,10 @@ internal class ComponentEmitter(
      * Children as a trailing-lambda body; hidden nodes excluded from codegen (DATA_MODEL §5). [allowWeight]
      * (true only for a Row/Column parent) lets each direct child emit a `weight` modifier (#158).
      */
-    private fun body(children: List<Node>, allowWeight: Boolean = false): CodeBlock {
+    private fun body(children: List<Node>, scope: BindingTypeScope, allowWeight: Boolean = false): CodeBlock {
         val b = CodeBlock.builder()
         children.filterNot { it.hidden }
-            .forEach { b.add("%L\n", emit(it, isRoot = false, parentAllowsWeight = allowWeight)) }
+            .forEach { b.add("%L\n", emit(it, isRoot = false, parentAllowsWeight = allowWeight, scope = scope)) }
         return b.build()
     }
 
@@ -470,11 +528,11 @@ internal class ComponentEmitter(
      * Compose's `UnusedMaterialScaffoldPaddingParameter` lint) — the same wrapping the renderer draws,
      * so canvas and output still agree (TECHNICAL_NOTES §2). `Scaffold` itself is stable (no opt-in).
      */
-    private fun scaffold(node: Node, mod: CodeBlock?): CodeBlock {
+    private fun scaffold(node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
         val args = buildList {
             if (mod != null) add(named("modifier", mod))
-            node.slots["topBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("topBar", it)) }
-            node.slots["bottomBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("bottomBar", it)) }
+            node.slots["topBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("topBar", it, scope)) }
+            node.slots["bottomBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("bottomBar", it, scope)) }
         }
         val content = CodeBlock.builder()
             .add(
@@ -484,7 +542,7 @@ internal class ComponentEmitter(
                 ComposeNames.padding,
             )
             .indent()
-            .add(body(node.children))
+            .add(body(node.children, scope))
             .unindent()
             .add("}\n")
             .build()
