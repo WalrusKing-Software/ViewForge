@@ -128,11 +128,14 @@ internal class ExportController(private val state: EditorState, private val serv
 internal fun rememberExportController(state: EditorState, service: ProjectExportService): ExportController =
     remember(state, service) { ExportController(state, service) }
 
-/** The toolbar's two export buttons — a thin trigger over [controller]. */
+/** The toolbar's export buttons — thin triggers over [controller]. */
 @Composable
 internal fun ExportBar(controller: ExportController) {
     ToolbarButton("Export .kt", enabled = true) { controller.start(ExportMode.LOOSE_FILES) }
     ToolbarButton("Export Project", enabled = true) { controller.start(ExportMode.GRADLE_PROJECT) }
+    ToolbarButton("Export Multiplatform Project", enabled = true) {
+        controller.start(ExportMode.MULTIPLATFORM_PROJECT)
+    }
 }
 
 /** The overwrite-confirmation and result dialogs, rendered once at the shell root. */

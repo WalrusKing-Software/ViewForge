@@ -242,6 +242,13 @@ interface TargetDefinition {
 }
 ```
 
+**Status (M11, #218):** `TargetDefinition` is now real in `core/spi` with `id` + `sourceSetFor` — the
+Compose package supplies `DesktopTarget`/`AndroidTarget` (`packages/compose/targets`), and the
+`MultiplatformExporter` routes each generated file through `sourceSetFor` to place shared screens in
+`commonMain` and each platform's entry point (`Main.kt` → `jvmMain`, `MainActivity.kt` + manifest →
+`androidMain`), so **G9 source-set-aware export** has landed. `previewProfiles` is deferred to the
+Android device frames (#220/M12) — added when there is a consumer, not ahead of one (ADR-007).
+
 **Important:** `ComponentDefinition` (schema — pure data) is separate from `ComponentRenderer`
 (rendering — Compose-typed). The schema half can live in a `core`-compatible module; only the
 renderer half needs the framework. This split is what makes the inspector, palette, validation, and
