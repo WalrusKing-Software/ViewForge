@@ -903,6 +903,34 @@ resolves to the real size rather than snapping to the default — a small forwar
 custom-size entry dialog is shell-owned (material3), and remembering custom sizes as reusable presets is a
 noted follow-up (a `core/prefs` concern).
 
+**Amendment (#220) — profiles become target-owned; Android density + insets.** Phase 2 adds real Android
+device frames, which forces two changes to the original decision:
+
+- **The profile definitions move from `editor/state` onto the targets** — `TargetDefinition.previewProfiles:
+  List<PreviewProfile>` (a framework-neutral `core/spi` type: viewport dp `width`/`height`, `density`,
+  `insets`, `group`). `DesktopTarget` supplies the window sizes (moved verbatim from the old
+  `DeviceProfiles.ALL`); `AndroidTarget` supplies device frames. The app aggregates every target's list and
+  injects it into `EditorState.previewProfiles`, so the editor still names no framework. `editor/state`
+  keeps only the *resolver* (`DeviceProfiles.forId(id, available)`, `customProfileId`, the clamp bounds, and
+  a single `FALLBACK` frame for headless/test use). **This reverses this ADR's original rejection of "a
+  profile registry supplied by the framework package."** The Phase-1 reasoning ("device sizes are
+  framework-agnostic; one package until Phase 5") no longer decides it: Phase 2 introduces multiple *targets*
+  within the one package, and ADR-036/ADR-037 established that a target owns its device-specific knowledge
+  (source-set routing; window-size-class thresholds). Preview frames + insets are the same kind of
+  target-owned data, and #220 is a real consumer — so it is added now, not ahead of one (ADR-007).
+- **Android profiles carry `density` and `insets`.** `width`/`height` are the device's **logical** dp size
+  (physical px ÷ density); `PreviewInsets` gives status-bar (top) / nav-bar (bottom) / cutout (sides) safe
+  areas in dp. The canvas draws translucent **inset chrome** over the framed content so layout under the
+  system bars previews honestly. `density` derives the dp frame size and labels the profile, but does **not**
+  re-scale rendering: the desktop canvas cannot match a device's text metrics, so this is an explicit
+  *within-tolerance* preview (TECHNICAL_NOTES §11–12; visual parity is graded by screenshot diff against an
+  emulator, PROJECT_PLAN §2 exit #3). Keeping density out of the render transform also leaves the C5 zoom/pan
+  and selection-overlay coordinate math untouched — zero regression for desktop frames.
+
+**Still no `.vforge` schema change**: `Screen.previewProfile` remains just the id string, so every existing
+document and the custom / forward-compatible `<prefix>_<w>x<h>` id parsing carry over unchanged; the new
+`android_*` ids are self-describing on the same convention.
+
 ---
 
 ## ADR-027 — Root-agnostic node editing: one command family edits screens and components alike

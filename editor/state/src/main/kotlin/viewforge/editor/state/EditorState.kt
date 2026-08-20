@@ -70,6 +70,7 @@ import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
 import viewforge.project.LibraryComponent
+import viewforge.spi.PreviewProfile
 import java.nio.file.Path
 
 /**
@@ -83,8 +84,17 @@ import java.nio.file.Path
  *
  * Framework knowledge (which components exist, which are containers) comes from the injected
  * [catalog], the editor's Compose-free seam onto the package (ADR-013). Nothing here names Compose.
+ *
+ * Device preview frames (C6, ADR-026) are likewise injected: [previewProfiles] is the aggregate of every
+ * target's [previewProfiles][viewforge.spi.TargetDefinition.previewProfiles] (desktop windows + Android
+ * devices, #220), supplied by the app so the editor names no framework. Empty in headless/test use, where
+ * resolution falls back to a plain desktop frame.
  */
-class EditorState(initial: Project, val catalog: ComponentCatalog) {
+class EditorState(
+    initial: Project,
+    val catalog: ComponentCatalog,
+    val previewProfiles: List<PreviewProfile> = emptyList(),
+) {
     /** The live document — the single source of truth the UI renders (ARCHITECTURE §1). */
     var document: Project by mutableStateOf(initial)
         private set
@@ -761,11 +771,11 @@ class EditorState(initial: Project, val catalog: ComponentCatalog) {
 
     /**
      * The device profile the active screen is framed to on the canvas (C6), resolving the screen's stored
-     * [previewProfile][Screen.previewProfile] against the [DeviceProfiles] registry — falling back to the
+     * [previewProfile][Screen.previewProfile] against the injected [previewProfiles] — falling back to the
      * default for a screen with no or an unrecognized profile, so the canvas always has a frame size.
      */
-    val activeDeviceProfile: DeviceProfile
-        get() = DeviceProfiles.forId(activeScreen?.previewProfile)
+    val activeDeviceProfile: PreviewProfile
+        get() = DeviceProfiles.forId(activeScreen?.previewProfile, previewProfiles)
 
     /** Set the active screen's device preview profile (C6); undoable, preview-only (no codegen effect). */
     fun setPreviewProfile(profileId: String) {

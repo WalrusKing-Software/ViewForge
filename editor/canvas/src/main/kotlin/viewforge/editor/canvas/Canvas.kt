@@ -3,9 +3,13 @@ package viewforge.editor.canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +32,7 @@ import viewforge.editor.state.EditorState
 import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.StateField
+import viewforge.spi.PreviewInsets
 
 /**
  * The seam between the editor and whatever framework package renders the IR. Compose-typed (so it
@@ -127,6 +132,9 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                             }
                         }
                     }
+                    // The device's system-bar / safe-area chrome (#220), drawn over the content inside the
+                    // frame so it scales with zoom/pan; desktop profiles carry no insets and skip it.
+                    if (!profile.insets.isEmpty) SystemBarChrome(profile.insets, Modifier.matchParentSize())
                 }
                 // In interactive preview (C13, #120) the selection overlay is removed so pointer events reach
                 // the live tree — clicks, typing, and scrolling hit the real components rather than being
@@ -142,5 +150,30 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
 private fun EmptyCanvasHint() {
     BasicText(text = "No screen to display.", style = TextStyle(color = Color(0xFF9E9E9E)))
 }
+
+/**
+ * The device's system-bar / safe-area chrome (#220): translucent scrims over the framed content marking the
+ * regions a status bar ([PreviewInsets.top]), navigation bar ([PreviewInsets.bottom]), or landscape
+ * cutout/nav ([PreviewInsets.left]/[PreviewInsets.right]) occupy on the real device, so layout drawn under
+ * them previews honestly (a within-tolerance guide, not pixel-exact). Insets are dp; desktop frames declare
+ * none and never reach here.
+ */
+@Composable
+private fun SystemBarChrome(insets: PreviewInsets, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        if (insets.top > 0f) Scrim(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(insets.top.dp))
+        if (insets.bottom > 0f) Scrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(insets.bottom.dp))
+        if (insets.left > 0f) Scrim(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(insets.left.dp))
+        if (insets.right > 0f) Scrim(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(insets.right.dp))
+    }
+}
+
+/** One system-bar scrim rectangle — a soft dark fill visible over light and dark content without hiding it. */
+@Composable
+private fun Scrim(modifier: Modifier) {
+    Box(modifier.background(SYSTEM_BAR_SCRIM))
+}
+
+private val SYSTEM_BAR_SCRIM = Color(0x33000000)
 
 private val CANVAS_BACKDROP = Color(0xFF2B2B2B)

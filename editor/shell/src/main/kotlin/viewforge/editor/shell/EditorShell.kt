@@ -60,10 +60,10 @@ import viewforge.editor.panels.Palette
 import viewforge.editor.panels.ThemeEditor
 import viewforge.editor.panels.TreePanel
 import viewforge.editor.state.CodePreviewService
-import viewforge.editor.state.DeviceProfile
 import viewforge.editor.state.DeviceProfiles
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
+import viewforge.spi.PreviewProfile
 import java.nio.file.Path
 
 /**
@@ -358,9 +358,10 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
 }
 
 /**
- * The device-preview-frame selector (C6): a dropdown showing the active screen's profile and offering
- * the Phase-1 desktop sizes. Selecting one runs the undoable `SetPreviewProfile` command through
- * [EditorState], and the canvas reframes to it. A view over state like the rest of the toolbar.
+ * The device-preview-frame selector (C6): a dropdown showing the active screen's profile and offering the
+ * profiles every target contributes (desktop windows + Android devices, #220), grouped by section. Selecting
+ * one runs the undoable `SetPreviewProfile` command through [EditorState], and the canvas reframes to it. A
+ * view over state like the rest of the toolbar.
  */
 @Composable
 private fun DeviceProfileSelector(state: EditorState) {
@@ -369,14 +370,22 @@ private fun DeviceProfileSelector(state: EditorState) {
     Box {
         ToolbarButton("◱ ${state.activeDeviceProfile.label}", enabled = true, onClick = { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DeviceProfiles.ALL.forEach { profile ->
-                DropdownMenuItem(
-                    text = { Text(profile.label) },
-                    onClick = {
-                        expanded = false
-                        state.setPreviewProfile(profile.id)
-                    },
+            state.previewProfiles.groupBy { it.group }.forEach { (group, profiles) ->
+                Text(
+                    group,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
+                profiles.forEach { profile ->
+                    DropdownMenuItem(
+                        text = { Text(profile.label) },
+                        onClick = {
+                            expanded = false
+                            state.setPreviewProfile(profile.id)
+                        },
+                    )
+                }
             }
             HorizontalDivider()
             DropdownMenuItem(
@@ -408,7 +417,7 @@ private fun DeviceProfileSelector(state: EditorState) {
  */
 @Composable
 private fun CustomSizeDialog(
-    initial: DeviceProfile,
+    initial: PreviewProfile,
     onDismiss: () -> Unit,
     onConfirm: (width: Int, height: Int) -> Unit,
 ) {
