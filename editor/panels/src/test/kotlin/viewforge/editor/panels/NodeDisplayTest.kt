@@ -24,6 +24,18 @@ class NodeDisplayTest {
     }
 
     @Test
+    fun `display label resolves a component instance to its component name`() {
+        val instance = Node(id = NodeId("3"), type = "vforge.userComponent")
+        // A resolved component name is used when there is no user-given name (#305).
+        assertEquals("ProfileCard", displayLabel(instance, componentName = "ProfileCard"))
+        // An unresolvable / dangling id falls back to the short type.
+        assertEquals("userComponent", displayLabel(instance, componentName = null))
+        // A user-given name still wins over the resolved component name.
+        val renamed = Node(id = NodeId("4"), type = "vforge.userComponent", name = "My Card")
+        assertEquals("My Card", displayLabel(renamed, componentName = "ProfileCard"))
+    }
+
+    @Test
     fun `literal prop values show their content`() {
         assertEquals("Welcome", formatPropValue(PropValue.Literal(JsonPrimitive("Welcome"))))
         assertEquals("24", formatPropValue(PropValue.Literal(JsonPrimitive(24))))

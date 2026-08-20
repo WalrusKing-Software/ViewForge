@@ -14,8 +14,14 @@ import viewforge.model.PropValue
 /** The last segment of a fully-qualified type, e.g. `compose.material3.Button` → `Button`. */
 internal fun shortTypeName(type: String): String = type.substringAfterLast('.')
 
-/** What a node is called in the tree/inspector: its user-given [Node.name], else its short type. */
-internal fun displayLabel(node: Node): String = node.name ?: shortTypeName(node.type)
+/**
+ * What a node is called in the tree/inspector: its user-given [Node.name], else — for a
+ * `vforge.userComponent` instance — the referenced component's [componentName], else its short type.
+ * The caller resolves the name (e.g. `state.componentOfInstance(node)?.name`) so this stays Compose-free
+ * and Project-free; a null [componentName] (unresolvable/dangling id, or a non-instance node) falls back.
+ */
+internal fun displayLabel(node: Node, componentName: String? = null): String =
+    node.name ?: componentName ?: shortTypeName(node.type)
 
 /** A one-line, read-only rendering of a typed prop value (DATA_MODEL §6). Never evaluated. */
 internal fun formatPropValue(value: PropValue): String = when (value) {

@@ -114,7 +114,10 @@ fun TreePanel(state: EditorState, modifier: Modifier = Modifier) {
             TreeSearchField(query = query, onQueryChange = { query = it })
             // Filter to matching nodes and their ancestors (null = no query = full tree). When filtering,
             // `flatten` force-expands along the kept paths so a match under a collapsed ancestor still shows.
-            val keep = remember(root, query) { searchKeepSet(root, query) }
+            // Key on the components too: a search can match a component instance by its resolved name.
+            val keep = remember(root, query, state.document.components) {
+                searchKeepSet(root, query) { state.componentOfInstance(it)?.name }
+            }
             val rows = remember(root, expanded.toMap(), keep) {
                 if (keep != null && keep.isEmpty()) emptyList() else flatten(root, 0, null, expanded, keep)
             }
@@ -558,7 +561,7 @@ private fun NodeRow(
                         )
                     }
                     Text(
-                        text = displayLabel(node),
+                        text = displayLabel(node, state.componentOfInstance(node)?.name),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
