@@ -36,6 +36,7 @@ import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.DesktopExporter
+import viewforge.packages.compose.targets.MultiplatformExporter
 import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
 import viewforge.project.CrashReporter
@@ -251,6 +252,9 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
         // from the same source the canvas loads from — the project dir first, then the classpath.
         ExportMode.GRADLE_PROJECT ->
             DesktopExporter.gradleProject(project) { asset -> assetBytes(projectDir(), asset.path) }
+        // The KMP multi-target project (desktop + Android, ADR-036). Image assets are not wired yet — they
+        // await the multiplatform-resources migration (#223) — so no asset resolver is threaded here.
+        ExportMode.MULTIPLATFORM_PROJECT -> MultiplatformExporter.multiplatformProject(project)
     }
 }
 

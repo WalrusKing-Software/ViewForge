@@ -10,6 +10,12 @@ enum class ExportMode {
 
     /** A complete runnable Gradle Compose Desktop project scaffold (G5). */
     GRADLE_PROJECT,
+
+    /**
+     * A complete runnable **Compose Multiplatform** project targeting desktop (`jvm`) and Android from
+     * shared `commonMain` UI (G9, M11, ADR-036). Added alongside [GRADLE_PROJECT], not replacing it.
+     */
+    MULTIPLATFORM_PROJECT,
 }
 
 /**
