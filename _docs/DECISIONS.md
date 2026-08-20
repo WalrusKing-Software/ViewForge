@@ -1057,7 +1057,9 @@ deleted orphans are not pruned (a minor future refinement). No `.vforge` schema 
 
 **Status:** Accepted (to be implemented in Phase 2). Re-versioned to **schema v7 / `M6to7`** after
 ADR-034 claimed v3–v5 (read-only data binding, its nested-lists amendment #255, and its component-local-state
-amendment #266) and **ADR-035** claimed v6 for interactive state & events (2026-08-19).
+amendment #266) and **ADR-035** claimed v6 for interactive state & events (2026-08-19). The **codegen
+strategy** this ADR deferred ("emit the base value, branching a later slice") is settled by **ADR-037**
+(base value in M13; `BoxWithConstraints` threshold branching in M14).
 
 **Context.** Phase 2 (Android) needs per-breakpoint property values — a `fontSize`, `padding`, or
 `horizontalArrangement` that differs between a phone and a tablet/desktop width. DATA_MODEL §12 left the
@@ -1678,6 +1680,204 @@ evaluation *stays* excluded), SECURITY (the `IA-*` section + a note that PF-4 is
 re-versioned to v7/`M6to7`**. Honest boundaries this ADR draws: **closed structured actions** (no user-authored
 expressions — those remain a PF-4 non-goal), **run-mode-only interactivity** (static design canvas), and a
 **light acknowledgment** (no hard opt-in, because there is no evaluator to gate).
+
+---
+
+## ADR-036 — Android target: one KMP multi-target export, source-set routing, pinned toolchain
+
+**Status:** Accepted (Phase-2 kickoff, #217 — implemented across #218 onward)
+
+**Context.** Phase 2's goal (PROJECT_PLAN §2) is that the *same* `.vforge` project that exports a
+Compose Desktop app also exports a runnable Android app. ADR-008 already models Compose Multiplatform
+as **one package with N targets**, and ARCHITECTURE §6.2 reserves `TargetDefinition.sourceSetFor(file)`
+for exactly this — but it has never been exercised: the current `DesktopExporter` emits a flat
+JVM-only Gradle scaffold (`src/main/kotlin`, `compose.desktop.currentOs`), and `GeneratedFile` carries
+no source-set metadata (it was left flat on purpose, ADR-007, to avoid generalizing for a framework
+that didn't exist yet). Adding Android forces a concrete answer to two things this kickoff must settle
+before any exporter code: **what shape the exported project takes**, and **exactly which toolchain
+versions we pin** (CLAUDE.md rule 9; PROJECT_PLAN §2 "record before coding").
+
+**Decision.**
+
+- **One KMP multi-target project.** The Phase-2 exporter emits a *single* Kotlin Multiplatform Gradle
+  project with a shared `commonMain` and per-target entry points, not two standalone projects:
+
+  ```
+  commonMain/kotlin/   generated @Composable screens (shared, framework-neutral Compose)
+  jvmMain/kotlin/      Main.kt          (desktop window entry point — today's Main.kt, relocated)
+  androidMain/kotlin/  MainActivity.kt  (ComponentActivity + setContent)
+  androidMain/         AndroidManifest.xml
+  ```
+
+  Most UI is `commonMain`; only the platform entry points and the manifest are per-target. This is the
+  literal reading of "the same project runs on both" and it makes `commonMain` sharing real rather than
+  copying screens into two trees.
+
+- **`sourceSetFor` becomes real.** The Compose `TargetDefinition`s gain a working
+  `sourceSetFor(GeneratedFile): String` that returns the owning source set (`commonMain` for screens,
+  `jvmMain`/`androidMain` for entry points). The export router uses it to place each `GeneratedFile`.
+  `GeneratedFile` stays the flat `{path, content}` data class (ADR-007) — routing is a function *of* the
+  file, decided by the target, not a field baked into every generated file.
+
+- **Pinned Android toolchain (candidate values — verify at the #218 merge; the ecosystem moves fast and
+  cannot be checked offline):** Android Gradle Plugin **8.7.x**, `compileSdk`/`targetSdk` **35**, `minSdk`
+  **24**, `androidx.activity:activity-compose` **1.9.x**. Compose-Android reuses the already-pinned
+  `org.jetbrains.compose` **1.7.3** via the compose Gradle plugin's Android target (no separate androidx
+  Compose BOM). Kotlin stays **2.1.20**. All land in `gradle/libs.versions.toml` (rule 9); #217 adds them
+  as inert declarations (nothing applies them yet), #218 wires them into the exporter scaffold.
+
+- **Application id = `dev.viewforge.<slug>`**, derived from the existing `GradleScaffold.slug`
+  (lowercased, non-alphanumerics folded to hyphens → dots for the package segment). A user-chosen
+  application id is a later, non-blocking follow-up, not kickoff scope.
+
+- **Deferred to #218 (recorded, not decided here):** whether the KMP scaffold *replaces* today's
+  desktop-only `gradleProject` or is added beside it. Carried recommendation: **add** the KMP path and
+  leave `looseFiles` (already `commonMain`-compatible) unchanged, so nothing regresses for a
+  desktop-only user while the multi-target path stabilizes.
+
+**Rationale.** A single KMP project is how Kotlin/Compose itself models multi-platform, so it is the
+shape a Compose developer expects and the one AGP + the compose plugin support directly; it also keeps
+the generated screens in exactly one place, which is what makes "edit once, ships to both" true.
+Routing by `sourceSetFor(file)` rather than a per-file field keeps `GeneratedFile` flat and framework-
+neutral (the target owns the placement policy, `core` owns none of it), honoring ADR-007/§6.2 as
+written. Pinning in the catalog is non-negotiable (rule 9, risk 7.5); recording candidate values now
+with an explicit "verify before merge" flag is the honest state — they are real pins, not floats, but
+the exact patch versions get a final check when a build actually resolves them.
+
+**Rejected.** **Separate per-target standalone projects** (a desktop scaffold + a parallel Android
+scaffold with screens copied into each) — no real `commonMain`, duplicated source that drifts, and it
+doesn't honor "the same project runs on both" literally; only chosen if KMP tooling had blocked us,
+which it does not. **Baking a `sourceSet` field into `GeneratedFile`** — pushes framework/target policy
+into a `core` data class every emitter would have to set, the exact premature-generalization ADR-007
+warns against; the target computing it on demand is strictly better. **A separate Android *package*
+(not target)** — contradicts ADR-008 (package ≠ platform); Android is another Compose target, sharing
+the whole component model. **Dynamic-version Android artifacts** — violates rule 9 outright.
+
+**Consequences.** #218 can build the exporter against a settled scaffold shape and a pinned toolchain;
+`sourceSetFor` graduates from a documented seam to a tested function. The export surface grows a KMP
+path beside the desktop one, and the version catalog carries an Android block that must be kept in
+lockstep on every Compose/Kotlin bump (same discipline as `GradleScaffold`'s duplicated constants).
+Accepted costs: the exact AGP/SDK patch versions are provisional until a real Android resolve confirms
+them (flagged, not asserted), and the generated Android entry point (`MainActivity`) is new codegen
+surface that needs its own goldens (rule 5) under the ADR-038 gate.
+
+---
+
+## ADR-037 — Responsive codegen: base value in M13, `BoxWithConstraints` threshold branching in M14
+
+**Status:** Accepted (Phase-2 kickoff, #217). Settles the codegen strategy ADR-030 deferred.
+
+**Context.** ADR-030 decided *where* responsive per-breakpoint overrides live (an additive
+`Node.responsive: Map<breakpointId, Map<prop, PropValue>>`, schema 6 → 7 / `M6to7`) but explicitly left
+the *codegen* strategy open — "emit the base value in M13, with window-size-class branching a later
+slice (M14)." Kickoff must fix how the branching is emitted so #221 (the schema slice) and #222 (the
+branching + goldens) build against a settled shape. The generated code is `commonMain` (ADR-036), so
+whatever branches on width must work on **both** desktop and Android from shared code.
+
+**Decision.**
+
+- **M13 emits the base (compact) value only.** The `responsive` field round-trips through schema 7 and
+  resolves on the canvas (ADR-030), but codegen ignores overrides for now and emits exactly today's
+  base-prop output. This decouples the schema bump/migration from the branching design.
+
+- **M14 emits `BoxWithConstraints` threshold branching.** For a node carrying overrides, codegen wraps
+  it in `BoxWithConstraints { … }` and selects each overridden prop by comparing `maxWidth` against the
+  target's breakpoint thresholds, largest-first:
+
+  ```kotlin
+  BoxWithConstraints {
+      val fontSize = if (maxWidth >= 840.dp) 20.sp
+                     else if (maxWidth >= 600.dp) 16.sp
+                     else 14.sp        // base
+      Text(fontSize = fontSize, …)
+  }
+  ```
+
+- **Thresholds are owned by the Android `TargetDefinition`,** not `core`. `core` sees opaque breakpoint
+  ids (ADR-030); the Compose Android target maps them to Material **window size classes** — `compact`
+  < 600dp, `medium` 600–840dp, `expanded` ≥ 840dp — and supplies the dp thresholds codegen compares
+  against. A future non-Compose package can define its own breakpoint set.
+
+**Rationale.** Staging base-first lands the risky, irreversible part (a schema version + migration +
+fixture + `NEWER_SCHEMA` gate) on its own, fully testable, before any branching-shape churn — the same
+"one hard thing per slice" discipline the rest of the project follows. `BoxWithConstraints` is chosen
+over `androidx.compose.material3.windowsizeclass.calculateWindowSizeClass` because the latter needs an
+`Activity`/`WindowMetrics` and is Android-only, which would break `commonMain`; `BoxWithConstraints`
+reads its own layout constraints, is `commonMain`, and renders identically on desktop and Android — so
+one emitter serves both targets and the canvas can preview the active breakpoint with the same rule.
+Largest-first `if/else` keeps the emission a plain, KotlinPoet-structural `CodeBlock` (rule 4) with
+obvious goldens.
+
+**Rejected.** **Window-size-class branching immediately in M13** — couples the branching design to the
+schema slice, inflates that slice's golden churn, and re-does exactly the deferral ADR-030 already
+made. **`calculateWindowSizeClass`** — Android-only, Activity-bound, cannot live in `commonMain`.
+**A `when` over a computed size-class enum** — needs a shared size-class type emitted into the output
+(more generated surface) for no clarity gain over threshold `if/else`. **`core` owning the dp
+thresholds** — would put framework/device numbers in the framework-neutral layer, against ADR-030's
+opaque-id decision.
+
+**Consequences.** #221 is a contained schema-7 slice (field + `M6to7` + fixture + resolution) with
+zero codegen change; #222 adds one branching emitter path with goldens against both targets. The base
+value is always emitted, so an old-schema or override-free node is byte-for-byte unchanged. Accepted:
+until M14, a populated `responsive` field renders responsively on the canvas but generates only the base
+value — a *known, staged* gap (the canvas is honest; the code is a superset-later), not silent data loss,
+because the field still round-trips losslessly in the schema-7 file.
+
+---
+
+## ADR-038 — Android compile gate runs in-process, without the Android SDK
+
+**Status:** Accepted (Phase-2 kickoff, #217 — implemented in #219)
+
+**Context.** Phase-1's highest-value test is the codegen compile gate (ADR-018, G2/GC-6): generated
+`.kt` is compiled **in-process** with kotlin-compile-testing (kctfork) against the Compose classpath —
+no Gradle, no plugins, fast, runs on every PR. Phase 2 needs the same guarantee for generated
+`androidMain` output (PROJECT_PLAN §2, exit #2: "the Android output compiles in CI"). But the homelab
+Forgejo runners — where the required checks live — have **no Android SDK** (`ct109-runner`, the
+runner-topology note in the hosting docs), and provisioning one is constrained: `ct109` is 4c/6GB and
+already OOM-prone under ViewForge's heavy Gradle build. So the gate's *topology* must be decided at
+kickoff before #219 relies on it.
+
+**Decision.** **Extend the existing in-process pattern; no Android SDK.** The Android compile gate
+compiles a generated `androidMain` fixture with kctfork against a classpath of the compose-android
+artifacts + `androidx.activity:activity-compose` + a **resolvable `android.jar` stub** (candidate: the
+Robolectric `android-all` jar, which publishes the Android platform stubs to Maven). No SDK, no Gradle,
+no emulator — so it runs on the existing SDK-less `ct109-runner` and the Forgejo required-check set is
+unchanged (it slots beside `codegen-verify`).
+
+- **Spike gate (#219):** confirm the stub + compose-android classpath actually resolves the symbols the
+  Android emitter produces (`ComponentActivity`, `setContent`, the compose-android `Modifier`/material3
+  surface). If it does, this is the gate.
+
+- **Recorded fallback** if the stub proves insufficient: a **GitHub-hosted** `android-actions/setup-android`
+  Gradle `compileDebugKotlin` gate (GitHub-only, secondary host; Forgejo required checks stay as they
+  are). **Provisioning the SDK on the homelab runner is rejected up front** — the OOM risk on a
+  4c/6GB box shared with HomeFlow outweighs the primary-host fidelity, and the fallback already covers
+  the "real AGP" case if we ever need it.
+
+**Rationale.** Mirroring ADR-018 keeps the Android gate as fast, self-contained, and Forgejo-native as
+the desktop one, and it means one compile-gate harness rather than two — the marginal cost is a second
+classpath, not a second CI system. Compiling against stubs is exactly what an SDK's `android.jar` *is*
+(platform stubs, not an implementation), so an in-process compile is a faithful "does it compile"
+check even without the SDK; visual/behavioral parity is a separate emulator concern (PROJECT_PLAN §2
+exit #3), not this gate's job. Keeping the required check on Forgejo preserves the branch-flow model
+(hosting notes) instead of moving a gate onto the mirror.
+
+**Rejected.** **Provision the Android SDK on `ct109-runner`** — real ongoing OOM risk on an
+already-strained shared box, for fidelity the stub already delivers for a *compile* check. **A
+GitHub-hosted Gradle assemble as the primary gate** — moves a required check off the primary host onto
+the mirror and is heavier/slower; kept only as the documented fallback. **An emulator/instrumented gate
+in CI** — that verifies runtime behavior, not compilation, and needs hardware acceleration the runners
+lack; parity is checked against a device/emulator out of band (exit #3), not as the compile gate.
+**Skipping the compile gate for Android** — unacceptable; it is the exact guarantee (ADR-018) that keeps
+codegen honest.
+
+**Consequences.** #219 becomes a bounded task: add the android compile fixture beside `codegen-verify`
+and run the stub-classpath spike; if green, the Android gate lands on the existing runner with no infra
+change and no OOM exposure. If the spike fails, the GitHub-hosted fallback is pre-decided, so #219 does
+not stall on a topology debate. Accepted: the in-process gate proves *compilation*, not runtime/visual
+parity (that is the emulator screenshot-diff, exit #3), and the gate is only as faithful as the stub
+jar — pinned in the catalog (rule 9) and re-verified on Compose/AGP bumps.
 
 ---
 

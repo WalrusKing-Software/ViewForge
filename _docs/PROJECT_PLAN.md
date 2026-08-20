@@ -1,6 +1,7 @@
 # ViewForge — Project Plan
 
-**Status:** Phase 1 (Compose Desktop) **shipping as v0.1.0-alpha-1**; Phase 2 (Android) planned next.
+**Status:** Phase 1 (Compose Desktop) **shipped as v0.2.0-alpha-1**; Phase 2 (Android) **in progress**
+(kickoff ADRs recorded — ADR-036/037/038, #217).
 **Last updated:** August 2026
 
 ---
@@ -125,10 +126,12 @@ ADR-035, v0.2.0), independent of the target work.
    round-trips losslessly through the schema-7 format (with a passing `M6to7` migration fixture).
 5. Golden codegen tests cover the Android target output and the responsive-override emission.
 
-**Prerequisite design decisions (record before coding):** ADR-030 (responsive data model — decided);
-still to decide at Phase-2 kickoff — the responsive *codegen* strategy (window-size-class branching vs
-`commonMain` base only), and the exact Android scaffold (min/target SDK, AGP/Compose-Android versions,
-pinned in the catalog per DS-1).
+**Prerequisite design decisions (recorded at Phase-2 kickoff, #217):** ADR-030 (responsive data model);
+**ADR-036** (Android scaffold — one KMP multi-target export with `commonMain`/`androidMain`/`jvmMain`
+source-set routing, and min/target SDK + AGP + Compose-Android pinned in the catalog per DS-1);
+**ADR-037** (responsive *codegen* strategy — base value in M13, `BoxWithConstraints` threshold branching
+in M14, thresholds owned by the Android `TargetDefinition`); **ADR-038** (the Android compile gate runs
+in-process, without the Android SDK, on the existing Forgejo runner).
 
 ### Phase 3 — iOS target *(blocked: requires macOS hardware)*
 
