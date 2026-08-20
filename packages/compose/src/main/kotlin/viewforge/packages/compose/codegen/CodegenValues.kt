@@ -123,28 +123,40 @@ internal object CodegenValues {
         else -> throw CodegenException("bool prop must be a literal or expression, got $value")
     }
 
-    /** A `Text`'s content: a string literal (escaped by KotlinPoet, GC-2) or a raw expression (GC-4). */
-    fun text(value: PropValue?): CodeBlock = when (value) {
+    /**
+     * A `Text`'s content: a string literal (escaped by KotlinPoet, GC-2) or a raw expression (GC-4). A state
+     * binding emits as member access; when [numericBinding] is set (the bound field is INT/FLOAT), it is coerced
+     * with `.toString()` so a live number can be shown as text (#298) — the emitter decides via [resolveBindingType].
+     */
+    fun text(value: PropValue?, numericBinding: Boolean = false): CodeBlock = when (value) {
         null -> CodeBlock.of("%S", "")
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
-        is PropValue.StateBinding -> binding(value)
+        is PropValue.StateBinding -> stringBinding(value, numericBinding)
         else -> throw CodegenException("Text 'text' must be a string literal or expression, got $value")
     }
 
     /**
      * A nullable string prop (e.g. an `Image`'s `contentDescription`): a string literal (escaped by
-     * KotlinPoet, GC-2), an explicit `null` when absent, or a raw expression (GC-4).
+     * KotlinPoet, GC-2), an explicit `null` when absent, or a raw expression (GC-4). A numeric state binding is
+     * coerced with `.toString()` (#298), like [text].
      */
-    fun nullableString(value: PropValue?): CodeBlock = when (value) {
+    fun nullableString(value: PropValue?, numericBinding: Boolean = false): CodeBlock = when (value) {
         null -> CodeBlock.of("null")
         is PropValue.Literal -> CodeBlock.of("%S", value.value.content)
         is PropValue.RawExpression -> raw(value)
         is PropValue.ParamRef -> param(value)
-        is PropValue.StateBinding -> binding(value)
+        is PropValue.StateBinding -> stringBinding(value, numericBinding)
         else -> throw CodegenException("Expected a string literal, null, or expression, got $value")
     }
+
+    /**
+     * A [PropValue.StateBinding] into a String-typed prop: bare member access (`count`, `item.name`), or
+     * `<path>.toString()` when [numeric] (the bound field is INT/FLOAT) so it satisfies the String parameter (#298).
+     */
+    private fun stringBinding(value: PropValue.StateBinding, numeric: Boolean): CodeBlock =
+        if (numeric) CodeBlock.of("%L.toString()", binding(value)) else binding(value)
 
     /**
      * An `Image`'s `painter`: a `ResourceRef` resolved to its asset's project-relative path, emitted as
