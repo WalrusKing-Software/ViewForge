@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 6,
+  "id": "01J8INTTEXT",
+  "name": "IntText",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_tally",
+      "name": "Tally",
+      "root": {
+        "id": "n_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_count",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "count"
+              }
+            }
+          },
+          {
+            "id": "n_ratio",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "ratio"
+              }
+            }
+          },
+          {
+            "id": "n_add",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "n_add_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Add"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "adjust",
+                  "target": "count",
+                  "by": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "count",
+          "type": {
+            "kind": "scalar",
+            "scalar": "INT"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": 0
+          }
+        },
+        {
+          "name": "ratio",
+          "type": {
+            "kind": "scalar",
+            "scalar": "FLOAT"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": 0.5
+          }
+        }
+      ]
+    }
+  ]
+}

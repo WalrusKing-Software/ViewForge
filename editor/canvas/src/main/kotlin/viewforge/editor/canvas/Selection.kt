@@ -42,6 +42,7 @@ import viewforge.editor.state.EditorState
 import viewforge.model.ChildAddress
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Repeater
 import viewforge.model.allChildren
 import viewforge.model.findById
 import kotlin.math.abs
@@ -73,15 +74,54 @@ class NodeBounds {
 }
 
 /**
+ * Every recorded bound for the IR node [id]: its own rect, plus each repeat-expanded copy (#297). A node
+ * inside a `vforge.repeat` template renders once per row under a suffixed id (`n_name#0`, `n_name#1`, and
+ * `n_name#0#1` for a nested repeat — [viewforge.model.Repeater] expansion), while the IR still holds the single
+ * template node; this maps that one IR id back to all its rendered copies. An ordinary node yields one rect (its
+ * exact key); a `vforge.repeat` node yields none of its own (it is spliced out of the render, having no element),
+ * so its bounds come from [subtreeRects] instead. The `#` separator never appears in an IR id, so the prefix
+ * match is unambiguous (`n_name` never matches `n_name2#0`). Pure, so it is unit-tested without a UI harness.
+ */
+fun rectsForNode(rects: Map<String, Rect>, id: NodeId): List<Rect> {
+    val prefix = id.value + "#"
+    return rects.mapNotNull { (key, rect) -> rect.takeIf { key == id.value || key.startsWith(prefix) } }
+}
+
+/**
  * The deepest node in [root]'s subtree whose recorded bounds contain [point] (content space), or null
  * (a click on empty canvas → deselect). Children and slot children are tested before the node itself,
- * so the *innermost* hit wins (FEATURES C2). Pure and Compose-free: unit-tested without a UI harness.
+ * so the *innermost* hit wins (FEATURES C2). A node inside a repeat template is hit through **any** of its
+ * rendered rows and resolves to its single IR id ([rectsForNode], #297). Pure and Compose-free: unit-tested
+ * without a UI harness.
  */
 fun hitTest(rects: Map<String, Rect>, root: Node, point: Offset): NodeId? {
     if (root.hidden) return null // hidden nodes are neither rendered nor selectable (DATA_MODEL §5)
     root.allChildren().forEach { child -> hitTest(rects, child, point)?.let { return it } }
-    val rect = rects[root.id.value]
-    return if (rect != null && rect.contains(point)) root.id else null
+    return if (rectsForNode(rects, root.id).any { it.contains(point) }) root.id else null
+}
+
+/**
+ * The content-space rectangles to outline for a selected or hovered IR [node] (#297). A `vforge.repeat` has no
+ * rendered element of its own, so it outlines the **union** of its expanded subtree — one box around the whole
+ * repeated block, reading as a single container selection. Every other node outlines each of its recorded copies:
+ * one rect for an ordinary node, one **per row** for a node inside a repeat template (so selecting it highlights
+ * every cell it renders as). Pure and Compose-free, so it is unit-tested without a UI harness.
+ */
+fun nodeOutlineRects(rects: Map<String, Rect>, node: Node): List<Rect> {
+    // A repeat has no rendered element of its own → the union of its subtree; anything else → its own copies.
+    if (node.type == Repeater.TYPE) return listOfNotNull(unionRect(subtreeRects(rects, node)))
+    return rectsForNode(rects, node.id)
+}
+
+/** Every recorded copy of [node] and its whole subtree — the raw material for a repeat's union outline (#297). */
+private fun subtreeRects(rects: Map<String, Rect>, node: Node): List<Rect> =
+    rectsForNode(rects, node.id) + node.allChildren().flatMap { subtreeRects(rects, it) }
+
+/** The smallest rectangle enclosing every rect in [list], or null when it is empty. */
+private fun unionRect(list: List<Rect>): Rect? = if (list.isEmpty()) {
+    null
+} else {
+    Rect(list.minOf { it.left }, list.minOf { it.top }, list.maxOf { it.right }, list.maxOf { it.bottom })
 }
 
 /**
@@ -104,8 +144,9 @@ fun marqueeSelection(rects: Map<String, Rect>, root: Node, marquee: Rect): List<
 
 private fun collectMarquee(rects: Map<String, Rect>, node: Node, marquee: Rect, out: MutableList<NodeId>) {
     if (node.hidden) return
-    val rect = rects[node.id.value]
-    if (rect != null && !node.locked && marquee.enclosesRect(rect)) {
+    // A node inside a repeat template renders as several rows; it is enclosed only when *every* copy is (#297).
+    val copies = rectsForNode(rects, node.id)
+    if (copies.isNotEmpty() && !node.locked && copies.all { marquee.enclosesRect(it) }) {
         out += node.id // enclosed and selectable: take it and stop — its children would be redundant
         return
     }
@@ -708,21 +749,27 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
             drawOutline(screen, MARQUEE_STROKE_COLOR, MARQUEE_STROKE)
             return@Canvas
         }
+        // Outlines resolve an IR node id to its rendered rect(s) via [nodeOutlineRects]: one for an ordinary
+        // node, one per row for a repeat-template node, and the union for a `vforge.repeat` itself (#297).
+        val allRects = bounds.snapshot()
+        val outline = { id: NodeId, color: Color, stroke: Float ->
+            root.findById(id)?.let { node ->
+                nodeOutlineRects(allRects, node).forEach { drawOutline(rectToScreen(it), color, stroke) }
+            }
+        }
         // Hover first, selection on top: when a node is both, the selection outline wins visually. A locked
         // node draws no hover outline — it isn't selectable, so a "clickable" cue would mislead (T4).
         hovered?.takeIf { !state.isSelected(it) && root.findById(it)?.locked != true }?.let { id ->
-            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), HOVER_COLOR, HOVER_STROKE) }
+            outline(id, HOVER_COLOR, HOVER_STROKE)
         }
         // Every selected node is outlined (C10); the secondary selections draw faded, the primary solid
         // and on top so it reads as the focused node.
         val primary = state.selectedId
         state.selectedIds.forEach { id ->
             if (id == primary) return@forEach
-            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), MULTI_SELECTION_COLOR, SELECTION_STROKE) }
+            outline(id, MULTI_SELECTION_COLOR, SELECTION_STROKE)
         }
-        primary?.let { id ->
-            bounds.boundsOf(id)?.let { drawOutline(rectToScreen(it), SELECTION_COLOR, SELECTION_STROKE) }
-        }
+        primary?.let { id -> outline(id, SELECTION_COLOR, SELECTION_STROKE) }
         // Static alignment guides (C11, #118): while the mode is on, draw a line wherever the primary
         // selection's edges/centre line up with a sibling or the parent. Reuses the content-space transform.
         if (state.showGuides) {
