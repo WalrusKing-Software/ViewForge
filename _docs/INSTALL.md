@@ -29,7 +29,7 @@ Every artifact ships a `<file>.sha256` sidecar. Verify before installing:
 - **`ViewForge-<version>.exe`** — the same installer as a self-contained executable, for contexts
   where an `.exe` is preferred over an `.msi`.
 - **Signing:** a signed release is Authenticode-signed and Windows SmartScreen shows the verified
-  publisher. **The v0.1.0-alpha-1 build is unsigned.** SmartScreen fires only on a file carrying the
+  publisher. **The alpha builds (through v0.2.0-alpha-1) are unsigned.** SmartScreen fires only on a file carrying the
   Mark-of-the-Web (i.e. one **downloaded** from the internet); a locally built and installed `.msi` has
   no MOTW and shows no warning. So a *downloaded* unsigned alpha may warn, while a local build won't.
 

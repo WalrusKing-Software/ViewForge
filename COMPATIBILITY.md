@@ -20,7 +20,7 @@ summary.
 | App version | Released | Reads `.vforge` up to | Writes | Notes |
 |---|---|---|---|---|
 | `v0.1.0-alpha-1` | 2026-08-17 | **v2** | **v2** | First public alpha (Phase 1, Compose Desktop). |
-| `v0.2.0-alpha-1` | *upcoming* | **v6** | **v6** | Read-only data binding + interactive state & events (ADR-034, ADR-035). |
+| `v0.2.0-alpha-1` | 2026-08-20 | **v6** | **v6** | Read-only data binding + interactive state & events (ADR-034, ADR-035). |
 
 "Reads up to" is the highest `schemaVersion` a build understands. A build opens **any file at or
 below** that version (older files are migrated forward on load — see below) and **refuses** a file

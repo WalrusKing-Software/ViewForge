@@ -5,17 +5,78 @@ All notable changes to ViewForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> The `.vforge` project file carries its own `schemaVersion` (currently **2**), versioned and migrated
+> The `.vforge` project file carries its own `schemaVersion` (currently **6**), versioned and migrated
 > independently of the application version. Feature IDs in parentheses (e.g. `C5`, `D4`, `G10`) refer to
 > [`_docs/FEATURES.md`](_docs/FEATURES.md).
 
 ## [Unreleased]
 
+## [0.2.0-alpha-1] - 2026-08-20
+
+Second alpha of **Phase 1: Compose Desktop.** This release adds read-only **data binding** and
+**interactive state & events**, a cross-project **component library**, the ability to re-open
+ViewForge-generated **Kotlin**, and **macOS** packaging. The `.vforge` schema advances **2 → 6**; every
+older project migrates automatically on load. Still early software — expect rough edges.
+
 ### Added
-- **macOS `.dmg` packaging** on the `macos-latest` CI runner — ViewForge now builds installers for all
-  three desktop platforms (Windows `.msi`/`.exe`, Linux `.deb`/`.rpm`, macOS `.dmg`). The alpha `.dmg`
-  is unsigned/un-notarized and uses jpackage's default icon; Developer ID signing/notarization and a
-  branded `.icns` are follow-ups (see [`_docs/INSTALL.md`](_docs/INSTALL.md)). (#291)
+
+**Data binding — read-only** (ADR-034)
+- Screen-level state (`Screen.state`): scalar fields (String/Int/Float/Bool) and lists of flat records,
+  declared and edited with typed sample values in the inspector.
+- `StateBinding` — bind a component prop to a dotted state path resolved by structural lookup, never
+  evaluated; an unresolved path renders a loud placeholder instead of failing silently.
+- `vforge.repeat` — a data-driven repeater that renders its template once per row of a bound list, with
+  inline `forEach` and scrolling `LazyColumn` layouts.
+- Populated dropdown (`vforge.dropdown`) bound to a list field, showing a chosen record field.
+- Nested lists — a record may contain a list, and a repeat inside a repeat binds `item.<listField>`.
+- Component-local state — reusable components carry their own `state`.
+- The canvas previews the sample data (never live evaluation); codegen seeds a runnable data stub
+  (generated `data class`es + `// TODO: replace with your real data source`) and emits bindings as
+  structural member access.
+
+**Interactive state & events** (ADR-035)
+- State is writable at runtime; event handlers on catalog components run a closed, structured action
+  model (`SetState` / `Toggle` / `Adjust` / `Navigate`, plus list mutations) dispatched by `when` — no
+  expression evaluation anywhere.
+- Interactive preview (run mode) operates the live UI ephemerally; the design canvas stays static.
+- Codegen emits real interactive Compose (`var … by remember { mutableStateOf(…) }` + structural handler
+  lambdas). `Navigate` emits a compilable `// TODO(#214)` placeholder until the nav host lands.
+- A light per-project acknowledgment on first use of run mode.
+
+**Components & reuse**
+- Save a screen as a reusable palette component (#184).
+- Cross-project component **library** — store, insert, drag, rename, with a transitive dependency closure
+  copied into the project on use (#209, #234; ADR-033).
+- Export includes every transitively-referenced component (#213).
+
+**Import**
+- Re-open ViewForge-generated `.kt` via its IR sidecar — a narrow round-trip of the editor's own output,
+  not arbitrary hand-written Kotlin (#22; ADR-032).
+
+**Editor**
+- Keyboard shortcuts to toggle the four panels (Ctrl/Cmd + 1–4) (#208).
+- A visual color picker (A/R/G/B channels + hex + presets) replacing the inert swatch (#293).
+
+**Packaging & docs**
+- macOS `.dmg` packaging on the `macos-latest` CI runner — installers now cover all three desktop
+  platforms (Windows `.msi`/`.exe`, Linux `.deb`/`.rpm`, macOS `.dmg`). The alpha `.dmg` is
+  unsigned/un-notarized and uses jpackage's default icon; Developer ID signing/notarization and a branded
+  `.icns` are follow-ups (see [`_docs/INSTALL.md`](_docs/INSTALL.md)). (#291)
+- `COMPATIBILITY.md` schema↔app support matrix (#292) and a root `CONTRIBUTING.md` (#210).
+
+### Changed
+- `.vforge` schema **2 → 6**, applied by automatic migrations on load: `M2to3` (data binding), `M3to4`
+  (nested lists), `M4to5` (component-local state), `M5to6` (interactive state & events).
+
+### Fixed
+- Selection and hover overlays now cover `vforge.repeat` rows and template descendants, and a repeat
+  selects as a single union box (#297).
+- Numeric state can bind to a text prop, coerced with `.toString()` (#298).
+- The inspector reliably reverts to screen-state scope and offers an explicit "← Back to <screen>"
+  switch when editing a component (#299).
+- Clicking or dragging the canvas clears focus from a focused inspector text field (#300).
+- The tree and inspector label a component instance by its component name rather than its raw type
+  (#305).
 
 ## [0.1.0-alpha-1] - 2026-08-17
 
