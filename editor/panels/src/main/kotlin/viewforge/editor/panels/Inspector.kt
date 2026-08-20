@@ -77,7 +77,7 @@ fun Inspector(state: EditorState, modifier: Modifier = Modifier) {
 private fun InspectorBody(state: EditorState, node: Node) {
     val theme = state.document.theme
     PanelColumn(Modifier.padding(bottom = 12.dp)) {
-        Text(displayLabel(node), style = MaterialTheme.typography.titleSmall)
+        Text(displayLabel(node, state.componentOfInstance(node)?.name), style = MaterialTheme.typography.titleSmall)
         Text(node.type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionLabel("Identity")

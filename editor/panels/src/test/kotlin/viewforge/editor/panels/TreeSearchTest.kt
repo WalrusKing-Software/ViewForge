@@ -35,6 +35,18 @@ class TreeSearchTest {
     }
 
     @Test
+    fun `matches a component instance by its resolved name (#305)`() {
+        val instance = Node(id = NodeId("inst"), type = "vforge.userComponent")
+        val resolver = { n: Node -> if (n.id.value == "inst") "ProfileCard" else null }
+        assertTrue(nodeMatchesQuery(instance, "profile", resolver)) // matches the resolved component name
+        assertTrue(nodeMatchesQuery(instance, "usercomponent", resolver)) // raw type still searchable
+        assertFalse(nodeMatchesQuery(instance, "profile")) // without a resolver, no name to match
+        val treeWithInstance =
+            Node(id = NodeId("r"), type = "compose.foundation.layout.Column", children = listOf(instance))
+        assertEquals(setOf("inst", "r"), searchKeepSet(treeWithInstance, "profile", resolver))
+    }
+
+    @Test
     fun `a blank query matches nothing and applies no filter`() {
         assertFalse(nodeMatchesQuery(header, "   "))
         assertNull(searchKeepSet(root, ""))
