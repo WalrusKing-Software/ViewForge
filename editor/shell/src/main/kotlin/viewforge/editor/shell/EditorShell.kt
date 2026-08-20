@@ -233,8 +233,9 @@ fun FrameWindowScope.EditorShell(
                 Toolbar(state, export, onOpenThemeEditor = { showThemeEditor = true })
                 HorizontalDivider()
                 // The screen switcher (D6) — or, while a component is open for in-place editing (#61), a
-                // breadcrumb back to the screen in its place (you don't switch screens inside a component).
-                if (state.editingComponentId != null) ComponentEditBar(state) else ScreenSwitcher(state)
+                // breadcrumb back to the screen in its place (you don't switch screens inside a component). Keyed on
+                // the resolved signal so a stale open id (component deleted/undone) reverts to the switcher (#299).
+                if (state.isEditingComponent) ComponentEditBar(state) else ScreenSwitcher(state)
                 HorizontalDivider()
                 // A light, one-time-per-project notice that generated code will now include mutable state and
                 // event handlers (ADR-035, #277). Informational, not a gate — nothing is blocked (the closed

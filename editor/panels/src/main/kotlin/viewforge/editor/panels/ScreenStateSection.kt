@@ -4,6 +4,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -44,9 +45,19 @@ import viewforge.model.StateType
  */
 @Composable
 internal fun ScreenStateSection(state: EditorState) {
-    val isComponent = state.editingComponentId != null
+    val isComponent = state.isEditingComponent
     PanelColumn(Modifier.padding(bottom = 12.dp)) {
-        SectionLabel(if (isComponent) "Component State" else "Screen State")
+        // The state scope follows the active edit surface (a component's own state vs the screen's), keyed on the
+        // resolved signal so a stale open id can't strand the header in "Component State". While a component is
+        // open, offer an explicit way back to the screen right here in the inspector, not only via the top
+        // breadcrumb — the concrete switch between the two views (#299).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel(if (isComponent) "Component State" else "Screen State")
+            if (isComponent) {
+                Spacer(Modifier.weight(1f))
+                ActionText("← Back to ${state.activeScreen?.name ?: "screen"}") { state.closeComponent() }
+            }
+        }
         if (state.activeEditRootId == null) {
             MutedText("No surface to hold data.")
             return@PanelColumn
