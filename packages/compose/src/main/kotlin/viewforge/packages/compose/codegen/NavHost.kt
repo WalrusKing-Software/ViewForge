@@ -9,9 +9,11 @@ import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.UNIT
 import viewforge.model.Action
+import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.Project
 import viewforge.model.Screen
+import viewforge.model.UserComponent
 
 /**
  * Screen-to-screen navigation codegen (ADR-039, #214). A [Action.Navigate] is lowered — like every other
@@ -41,16 +43,25 @@ internal object NavHost {
     /**
      * Whether [root]'s tree contains any [Action.Navigate] handler — i.e. the composable must take [ON_NAVIGATE].
      * Skips hidden subtrees exactly as the emitter does (a hidden node emits nothing, so it can't navigate), and
-     * walks children and slots. A `Navigate` inside a user-component instance is **not** counted here — an
-     * instance node carries no handler; the component's own tree does, and forwarding through instances is #324.
+     * walks children and slots. **Transitive through user components (#324):** a `vforge.userComponent` instance
+     * carries no handler of its own but navigates when the component it references does, so the instancing
+     * screen/component also gains [ON_NAVIGATE] and forwards it (`ComponentEmitter.userComponentCall`). Resolving
+     * an instance to its definition needs [components]; the walk is cycle-safe via a visited set, though a valid
+     * document never contains a component cycle (PF-3, [Project.reachableComponents]).
      */
-    fun navigates(root: Node): Boolean {
+    fun navigates(root: Node, components: List<ComponentDef> = emptyList()): Boolean {
+        val byId = components.associateBy { it.id }
+        val visited = HashSet<String>()
         var found = false
         fun walk(node: Node) {
             if (found || node.hidden) return
             if (node.handlers.values.any { actions -> actions.any { it is Action.Navigate } }) {
                 found = true
                 return
+            }
+            // An instance navigates iff its referenced component does — recurse into that definition's tree.
+            UserComponent.componentIdOf(node)?.let { id ->
+                if (visited.add(id)) byId[id]?.let { walk(it.root) }
             }
             node.children.forEach(::walk)
             node.slots.values.forEach { it.forEach(::walk) }
@@ -60,7 +71,7 @@ internal object NavHost {
     }
 
     /** Whether any screen in [project] navigates — the trigger for emitting [appHost] and routing entry points to it. */
-    fun projectNavigates(project: Project): Boolean = project.screens.any { navigates(it.root) }
+    fun projectNavigates(project: Project): Boolean = project.screens.any { navigates(it.root, project.components) }
 
     /**
      * The `App()` host source: `var current by remember { mutableStateOf(<firstScreenId>) }` and a `when (current)`
@@ -76,8 +87,8 @@ internal object NavHost {
         val body = CodeBlock.builder()
             .add("var current by %M { %M(%S) }\n", ComposeNames.remember, ComposeNames.mutableStateOf, startId)
             .beginControlFlow("when (current)")
-        screens.forEach { screen -> body.addStatement("%S -> %L", screen.id, screenCall(screen)) }
-        body.addStatement("else -> %L", screenCall(screens.first()))
+        screens.forEach { screen -> body.addStatement("%S -> %L", screen.id, screenCall(screen, project.components)) }
+        body.addStatement("else -> %L", screenCall(screens.first(), project.components))
         body.endControlFlow()
 
         val fn = FunSpec.builder(APP_FN)
@@ -97,9 +108,9 @@ internal object NavHost {
     }
 
     /** One `when` arm's screen call: `Screen(onNavigate = { current = it })`, or a plain `Screen()` if it never navigates. */
-    private fun screenCall(screen: Screen): CodeBlock {
+    private fun screenCall(screen: Screen, components: List<ComponentDef>): CodeBlock {
         val fn = MemberName("", KotlinIdentifiers.requireFunctionName(screen.name))
-        return if (navigates(screen.root)) {
+        return if (navigates(screen.root, components)) {
             CodeBlock.of("%M(%N = { current = it })", fn, ON_NAVIGATE)
         } else {
             CodeBlock.of("%M()", fn)

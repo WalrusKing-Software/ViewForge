@@ -157,7 +157,6 @@ class ComposeCodeGenerator : CodeGenerator {
         component.parameters,
         component.state,
         images = images,
-        allowNavigation = false,
     )
 
     /**
@@ -207,21 +206,15 @@ class ComposeCodeGenerator : CodeGenerator {
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
         images: ImageResources = ImageResources.Desktop,
-        allowNavigation: Boolean = true,
     ): String {
         val emitter = ComponentEmitter(theme, assets, components, recordSpans, state, imageResources = images)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
-        // Screen-to-screen navigation (ADR-039, #214): a screen whose tree carries a `Navigate` handler takes an
-        // injected `onNavigate: (String) -> Unit = {}` callback, and `Navigate` lowers to a call on it. Forwarding
-        // it through a user-component instance is #324, so a `Navigate` inside a component fails loud here rather
-        // than emitting a call to a parameter that doesn't exist (CLAUDE.md: fail loudly over degrading silently).
-        val navigates = body != null && NavHost.navigates(root)
-        if (navigates && !allowNavigation) {
-            throw CodegenException(
-                "Navigate action is only supported in screen handlers, not inside a component (#324)",
-            )
-        }
+        // Screen-to-screen navigation (ADR-039, #214/#324): a composable whose tree carries a `Navigate` handler —
+        // directly, or transitively through a user-component instance ([NavHost.navigates] resolves via [components])
+        // — takes an injected `onNavigate: (String) -> Unit = {}` callback, onto which `Navigate` lowers as a call,
+        // and forwards it to every navigating instance it emits (`ComponentEmitter.userComponentCall`).
+        val navigates = body != null && NavHost.navigates(root, components)
         // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as
         // member access. A field written by a handler (a writable target, #277) is a `var … by remember {
         // mutableStateOf(…) }`; a read-only field stays a `val`. Omitted for a hidden root (no body) and for

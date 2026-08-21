@@ -148,6 +148,17 @@ class GoldenCodegenTest {
         assertGeneratedFile(files, "PrimaryButton.kt", "ReusableComponent.PrimaryButton")
     }
 
+    // Component-level navigation (#324): the NavCard component's own tree navigates, so NavCard.kt gains its own
+    // `onNavigate: (String) -> Unit = {}` param and lowers Navigate onto it; the Hub screen navigates transitively
+    // and forwards `onNavigate = onNavigate` to the instance call. One .vforge, two files asserted apart.
+    @Test
+    fun componentNavigation() {
+        val project = ProjectCodec.decode(resource("/golden/ComponentNavigation.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "Hub.kt", "ComponentNavigation")
+        assertGeneratedFile(files, "NavCard.kt", "ComponentNavigation.NavCard")
+    }
+
     // Component-local state (ADR-034 Amendment, #269): a component carries BOTH a parameter and its own
     // state, so ProfileCard.kt emits `title: String` as a fn arg *and* seeds `heading`/`badges` locals with a
     // `data class Badge`, its repeat lowered to `badges.forEach { item -> … }` — params and StateBindings

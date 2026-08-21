@@ -16,8 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Screen-to-screen navigation** (ADR-039, #214) — a `Navigate` action on an event handler now generates real
   navigation: a navigating screen takes an injected `onNavigate` callback, and the exporter emits a small
   generated `App()` host that switches screens, so an exported multi-screen app connects its pages. No
-  navigation dependency, no `.vforge` schema change. Live screen switching in the canvas preview (#325) and
-  navigation from inside a reusable component (#324) are follow-ups.
+  navigation dependency, no `.vforge` schema change.
+- **Navigation through reusable components** (ADR-039, #324) — a `Navigate` placed inside a user component now
+  works: the component's generated composable takes the same injected `onNavigate` callback and each instance
+  forwards it, so a shared "nav card" or menu component can drive screen changes. Live screen switching in the
+  canvas preview (#325) remains a follow-up.
 
 ## [0.2.0-alpha-1] - 2026-08-20
 
