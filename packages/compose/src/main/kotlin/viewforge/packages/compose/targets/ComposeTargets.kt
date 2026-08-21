@@ -104,6 +104,17 @@ object AndroidTarget : TargetDefinition {
 /** Every preview profile the Compose package offers the editor (desktop windows + Android devices, #220). */
 val COMPOSE_PREVIEW_PROFILES: List<PreviewProfile> = DesktopTarget.previewProfiles + AndroidTarget.previewProfiles
 
+/**
+ * The responsive breakpoint id active at a viewport [widthDp] (#314): the largest [breakpoints] entry whose
+ * `minWidthDp` the width meets, or `null` for the base/`compact` case below the smallest threshold. This is
+ * the render-time twin of codegen's `BoxWithConstraints` branching (ADR-037) — both read a real width and
+ * pick a breakpoint against the *same* target thresholds, so the canvas previews exactly what will generate.
+ * Width-based (not platform-based), so a wide desktop frame previews the same `expanded` overrides an Android
+ * tablet would, matching the generated `BoxWithConstraints` that reads its own width on either target.
+ */
+fun breakpointForWidth(widthDp: Float, breakpoints: List<ResponsiveBreakpoint> = AndroidTarget.breakpoints): String? =
+    breakpoints.filter { widthDp >= it.minWidthDp }.maxByOrNull { it.minWidthDp }?.id
+
 internal const val COMMON_MAIN = "commonMain"
 internal const val JVM_MAIN = "jvmMain"
 internal const val ANDROID_MAIN = "androidMain"
