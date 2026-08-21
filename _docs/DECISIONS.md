@@ -1793,7 +1793,8 @@ surface that needs its own goldens (rule 5) under the ADR-038 gate.
 
 ## ADR-037 — Responsive codegen: base value in M13, `BoxWithConstraints` threshold branching in M14
 
-**Status:** Accepted (Phase-2 kickoff, #217). Settles the codegen strategy ADR-030 deferred.
+**Status:** Accepted (Phase-2 kickoff, #217); M14 branching landed in #222. Settles the codegen strategy
+ADR-030 deferred.
 
 **Context.** ADR-030 decided *where* responsive per-breakpoint overrides live (an additive
 `Node.responsive: Map<breakpointId, Map<prop, PropValue>>`, schema 6 → 7 / `M6to7`) but explicitly left
@@ -1846,10 +1847,19 @@ opaque-id decision.
 
 **Consequences.** #221 is a contained schema-7 slice (field + `M6to7` + fixture + resolution) with
 zero codegen change; #222 adds one branching emitter path with goldens against both targets. The base
-value is always emitted, so an old-schema or override-free node is byte-for-byte unchanged. Accepted:
-until M14, a populated `responsive` field renders responsively on the canvas but generates only the base
-value — a *known, staged* gap (the canvas is honest; the code is a superset-later), not silent data loss,
-because the field still round-trips losslessly in the schema-7 file.
+value is always emitted, so an old-schema or override-free node is byte-for-byte unchanged.
+
+**Landed (#222/M14).** `ComponentEmitter` builds each component's arguments as `(name, value)` pairs; a node
+whose `responsive` map is non-empty runs the same arg builder once per active breakpoint (via
+`effectiveProps`), and any argument whose value differs across the base and the breakpoints is hoisted into a
+`val name = if (maxWidth >= 840.dp) … else if (maxWidth >= 600.dp) … else <base>` (largest-first) inside a
+`BoxWithConstraints`, with the call referencing the local; the thresholds come from `AndroidTarget.breakpoints`
+(`medium` 600, `expanded` 840). An override equal to the base or under an unknown breakpoint id hoists nothing
+(no wrapper). Two boundaries **fail loud** rather than emit broken code (CLAUDE.md): an override that introduces
+a prop absent at the base breakpoint (no `else` value), and responsive on the custom-emission nodes
+(`Scaffold`/`TopAppBar`/`vforge.repeat`/`dropdown`/`userComponent`). Golden `Responsive` + the compile gate
+cover it. Render-time resolution and the canvas active-breakpoint UX are the follow-up **#314**; the Android
+validation warnings the M14 milestone also names moved to **#315**.
 
 ---
 

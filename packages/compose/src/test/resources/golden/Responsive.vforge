@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 7,
+  "id": "01J8RESPONSIVE",
+  "name": "Responsive",
+  "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+  "screens": [
+    {
+      "id": "scr_resp",
+      "name": "Adaptive",
+      "root": {
+        "id": "col_01",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "t_adaptive",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Adaptive" },
+              "fontSize": { "kind": "literal", "value": 14 },
+              "textAlign": { "kind": "literal", "value": "Start" }
+            },
+            "responsive": {
+              "medium": {
+                "fontSize": { "kind": "literal", "value": 16 }
+              },
+              "expanded": {
+                "fontSize": { "kind": "literal", "value": 20 },
+                "textAlign": { "kind": "literal", "value": "Center" }
+              }
+            }
+          },
+          {
+            "id": "t_plain",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": { "kind": "literal", "value": "Fixed" },
+              "fontSize": { "kind": "literal", "value": 14 }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

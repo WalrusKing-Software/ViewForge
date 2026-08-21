@@ -49,6 +49,10 @@ internal object ComposeNames {
     val Column = MemberName("androidx.compose.foundation.layout", "Column")
     val Row = MemberName("androidx.compose.foundation.layout", "Row")
     val Box = MemberName("androidx.compose.foundation.layout", "Box")
+
+    // Responsive codegen (#222, ADR-037): wraps a node whose props carry per-breakpoint overrides so the
+    // hoisted `val`s can branch on the `maxWidth` its scope exposes.
+    val BoxWithConstraints = MemberName("androidx.compose.foundation.layout", "BoxWithConstraints")
     val Spacer = MemberName("androidx.compose.foundation.layout", "Spacer")
     val LazyColumn = MemberName("androidx.compose.foundation.lazy", "LazyColumn")
     val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")

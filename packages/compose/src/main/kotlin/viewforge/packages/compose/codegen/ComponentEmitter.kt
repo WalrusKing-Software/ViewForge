@@ -14,8 +14,11 @@ import viewforge.model.ScalarType
 import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.model.UserComponent
+import viewforge.model.effectiveProps
 import viewforge.model.resolveBindingType
 import viewforge.model.resolveListShape
+import viewforge.packages.compose.targets.AndroidTarget
+import viewforge.packages.compose.targets.ResponsiveBreakpoint
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
@@ -30,6 +33,9 @@ import viewforge.model.resolveListShape
  * [components] resolves a `vforge.userComponent` instance to the definition it references, so the
  * instance emits a call to that component's generated composable (ADR-024) — one definition, many call
  * sites, which is how an edit to the definition reaches every instance.
+ *
+ * [breakpoints] are the responsive thresholds codegen branches on (ADR-037, #222); defaulted from the
+ * Android target that owns them (`core` keeps breakpoint ids opaque, ADR-030).
  */
 internal class ComponentEmitter(
     private val theme: Theme,
@@ -37,12 +43,17 @@ internal class ComponentEmitter(
     components: List<ComponentDef> = emptyList(),
     private val recordSpans: Boolean = false,
     private val state: List<StateField> = emptyList(),
+    private val breakpoints: List<ResponsiveBreakpoint> = AndroidTarget.breakpoints,
 ) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
 
     /** The binding scope at the surface root: the owner's declared [state], with no repeat item in scope yet. */
     private val screenScope: BindingTypeScope get() = BindingTypeScope(fields = state)
+
+    /** A named call argument, `name = value`. Kept split (not pre-joined) so responsive codegen can hoist an
+     *  overridden prop's [value] into a `val` and rename the argument to reference that local (#222). */
+    private data class Arg(val name: String, val value: CodeBlock)
 
     /**
      * Whether [value] is a [PropValue.StateBinding] to a numeric (INT/FLOAT) field under [scope] — the case a
@@ -96,48 +107,45 @@ internal class ComponentEmitter(
         return when (node.type) {
             // Row/Column establish the RowScope/ColumnScope their direct children may `weight` into (#158).
             "compose.foundation.layout.Column" ->
-                layout(ComposeNames.Column, node, mod, columnArgs(node), scope, childrenGetWeight = true)
+                layout(ComposeNames.Column, node, mod, scope, childrenGetWeight = true) { columnArgs(it) }
             "compose.foundation.layout.Row" ->
-                layout(ComposeNames.Row, node, mod, rowArgs(node), scope, childrenGetWeight = true)
-            "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, boxArgs(node), scope)
-            "compose.foundation.layout.Spacer" -> call(ComposeNames.Spacer, modifierArg(mod), content = null)
-            "compose.foundation.lazy.LazyColumn" -> lazyList(
-                ComposeNames.LazyColumn,
-                node,
-                mod,
-                columnArgs(node),
-                scope,
-            )
-            "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, rowArgs(node), scope)
-            "compose.material3.Text" -> call(ComposeNames.Text, textArgs(node, mod, scope), content = null)
+                layout(ComposeNames.Row, node, mod, scope, childrenGetWeight = true) { rowArgs(it) }
+            "compose.foundation.layout.Box" -> layout(ComposeNames.Box, node, mod, scope) { boxArgs(it) }
+            "compose.foundation.layout.Spacer" ->
+                responsiveCall(node, ComposeNames.Spacer, content = null) { modifierArg(mod) }
+            "compose.foundation.lazy.LazyColumn" -> lazyList(ComposeNames.LazyColumn, node, mod, scope) {
+                columnArgs(it)
+            }
+            "compose.foundation.lazy.LazyRow" -> lazyList(ComposeNames.LazyRow, node, mod, scope) { rowArgs(it) }
+            "compose.material3.Text" ->
+                responsiveCall(node, ComposeNames.Text, content = null) { textArgs(it, mod, scope) }
             "compose.material3.Button" -> button(ComposeNames.Button, node, mod, scope)
             "compose.material3.OutlinedButton" -> button(ComposeNames.OutlinedButton, node, mod, scope)
             "compose.material3.TextButton" -> button(ComposeNames.TextButton, node, mod, scope)
-            "compose.material3.Slider" -> call(ComposeNames.Slider, sliderArgs(node, mod), content = null)
-            "compose.material3.TextField" -> call(
-                ComposeNames.TextField,
-                textFieldArgs(node, mod, scope),
-                content = null,
-            )
+            "compose.material3.Slider" ->
+                responsiveCall(node, ComposeNames.Slider, content = null) { sliderArgs(it, mod) }
+            "compose.material3.TextField" ->
+                responsiveCall(node, ComposeNames.TextField, content = null) { textFieldArgs(it, mod, scope) }
             "compose.material3.OutlinedTextField" ->
-                call(ComposeNames.OutlinedTextField, textFieldArgs(node, mod, scope), content = null)
+                responsiveCall(node, ComposeNames.OutlinedTextField, content = null) { textFieldArgs(it, mod, scope) }
             "compose.material3.CircularProgressIndicator" ->
-                call(ComposeNames.CircularProgressIndicator, modifierArg(mod), content = null)
+                responsiveCall(node, ComposeNames.CircularProgressIndicator, content = null) { modifierArg(mod) }
             "compose.material3.LinearProgressIndicator" ->
-                call(ComposeNames.LinearProgressIndicator, modifierArg(mod), content = null)
-            "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, emptyList(), scope)
-            "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, emptyList(), scope)
-            "compose.material3.HorizontalDivider" -> call(
-                ComposeNames.HorizontalDivider,
-                dividerArgs(node, mod),
-                content = null,
-            )
-            "compose.material3.Checkbox" -> call(ComposeNames.Checkbox, toggleArgs(node, mod), content = null)
-            "compose.material3.Switch" -> call(ComposeNames.Switch, toggleArgs(node, mod), content = null)
-            "compose.foundation.Image" -> call(ComposeNames.Image, imageArgs(node, mod, scope), content = null)
-            "compose.material3.Icon" -> call(ComposeNames.Icon, iconArgs(node, mod, scope), content = null)
+                responsiveCall(node, ComposeNames.LinearProgressIndicator, content = null) { modifierArg(mod) }
+            "compose.material3.Card" -> layout(ComposeNames.Card, node, mod, scope) { emptyList() }
+            "compose.material3.Surface" -> layout(ComposeNames.Surface, node, mod, scope) { emptyList() }
+            "compose.material3.HorizontalDivider" ->
+                responsiveCall(node, ComposeNames.HorizontalDivider, content = null) { dividerArgs(it, mod) }
+            "compose.material3.Checkbox" ->
+                responsiveCall(node, ComposeNames.Checkbox, content = null) { toggleArgs(it, mod) }
+            "compose.material3.Switch" ->
+                responsiveCall(node, ComposeNames.Switch, content = null) { toggleArgs(it, mod) }
+            "compose.foundation.Image" ->
+                responsiveCall(node, ComposeNames.Image, content = null) { imageArgs(it, mod, scope) }
+            "compose.material3.Icon" ->
+                responsiveCall(node, ComposeNames.Icon, content = null) { iconArgs(it, mod, scope) }
             "compose.material3.TopAppBar" -> topAppBar(node, mod, scope)
-            "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, emptyList(), scope)
+            "compose.material3.BottomAppBar" -> layout(ComposeNames.BottomAppBar, node, mod, scope) { emptyList() }
             "compose.material3.Scaffold" -> scaffold(node, mod, scope)
             UserComponent.TYPE -> userComponentCall(node, mod)
             Repeater.TYPE -> repeater(node, parentAllowsWeight, scope)
@@ -156,6 +164,7 @@ internal class ComponentEmitter(
      * than emitting a call that won't compile (CLAUDE.md: a visible error beats a silent wrong emit).
      */
     private fun userComponentCall(node: Node, mod: CodeBlock?): CodeBlock {
+        guardNoResponsive(node)
         val id = (node.props[UserComponent.COMPONENT_ID_PROP] as? PropValue.Literal)?.value?.content
         val def = id?.let { componentsById[it] }
             ?: throw CodegenException("Unresolved user-component instance: no component with id '${id ?: "?"}'")
@@ -188,6 +197,7 @@ internal class ComponentEmitter(
      *   `LazyItemScope`, not the parent Row/Column, so `weight` does not apply and is not forwarded.
      */
     private fun repeater(node: Node, parentAllowsWeight: Boolean, scope: BindingTypeScope): CodeBlock {
+        guardNoResponsive(node)
         val source = Repeater.sourceOf(node)
             ?: throw CodegenException("vforge.repeat node '${node.id.value}' has no source binding")
         val sourceRef = CodegenValues.bindingPath(source)
@@ -228,6 +238,7 @@ internal class ComponentEmitter(
      * the developer (read-only this release, no selection persisted; PF-4). Options/label absent → fail loud.
      */
     private fun dropdown(node: Node, mod: CodeBlock?): CodeBlock {
+        guardNoResponsive(node)
         val source = Dropdown.optionsOf(node)?.takeIf { it.isNotBlank() }
             ?: throw CodegenException("vforge.dropdown node '${node.id.value}' has no options binding")
         val sourceRef = CodegenValues.bindingPath(source)
@@ -258,14 +269,14 @@ internal class ComponentEmitter(
     }
 
     /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */
-    private fun componentCall(fnName: String, args: List<CodeBlock>): CodeBlock {
+    private fun componentCall(fnName: String, args: List<Arg>): CodeBlock {
         val b = CodeBlock.builder()
         when {
             args.isEmpty() -> b.add("%L()", fnName)
-            args.size == 1 -> b.add("%L(%L)", fnName, args[0])
+            args.size == 1 -> b.add("%L(%L = %L)", fnName, args[0].name, args[0].value)
             else -> {
                 b.add("%L(\n", fnName).indent()
-                args.forEach { b.add("%L,\n", it) }
+                args.forEach { b.add("%L = %L,\n", it.name, it.value) }
                 b.unindent().add(")")
             }
         }
@@ -273,27 +284,29 @@ internal class ComponentEmitter(
     }
 
     // --- per-component argument lists (order mirrors the renderer's Composable call) --------------
+    // Each takes a props map (not the node) so responsiveCall can rebuild the list per breakpoint from
+    // effectiveProps; modifier/scope are constant across breakpoints and passed through.
 
-    private fun columnArgs(node: Node): List<CodeBlock> = buildList {
-        node.props["verticalArrangement"]?.let {
+    private fun columnArgs(props: Map<String, PropValue>): List<Arg> = buildList {
+        props["verticalArrangement"]?.let {
             add(named("verticalArrangement", CodegenValues.enum("verticalArrangement", it)))
         }
-        node.props["horizontalAlignment"]?.let {
+        props["horizontalAlignment"]?.let {
             add(named("horizontalAlignment", CodegenValues.enum("horizontalAlignment", it)))
         }
     }
 
-    private fun rowArgs(node: Node): List<CodeBlock> = buildList {
-        node.props["horizontalArrangement"]?.let {
+    private fun rowArgs(props: Map<String, PropValue>): List<Arg> = buildList {
+        props["horizontalArrangement"]?.let {
             add(named("horizontalArrangement", CodegenValues.enum("horizontalArrangement", it)))
         }
-        node.props["verticalAlignment"]?.let {
+        props["verticalAlignment"]?.let {
             add(named("verticalAlignment", CodegenValues.enum("verticalAlignment", it)))
         }
     }
 
-    private fun boxArgs(node: Node): List<CodeBlock> = buildList {
-        node.props["contentAlignment"]?.let {
+    private fun boxArgs(props: Map<String, PropValue>): List<Arg> = buildList {
+        props["contentAlignment"]?.let {
             add(named("contentAlignment", CodegenValues.enum("contentAlignment", it)))
         }
     }
@@ -302,67 +315,70 @@ internal class ComponentEmitter(
     // fontSize, fontStyle, fontWeight, letterSpacing, textDecoration, textAlign, lineHeight, overflow,
     // maxLines, style. Each optional arg is emitted only when the prop is present, so a plain Text
     // stays `Text(text = …)`.
-    private fun textArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
-        add(named("text", CodegenValues.text(node.props["text"], numericBinding(node.props["text"], scope))))
-        if (mod != null) add(named("modifier", mod))
-        node.props["color"]?.let { add(named("color", CodegenValues.color(it, theme))) }
-        node.props["fontSize"]?.let { add(named("fontSize", CodegenValues.sp(it))) }
-        node.props["fontStyle"]?.let { add(named("fontStyle", CodegenValues.enum("fontStyle", it))) }
-        node.props["fontWeight"]?.let { add(named("fontWeight", CodegenValues.enum("fontWeight", it))) }
-        node.props["letterSpacing"]?.let { add(named("letterSpacing", CodegenValues.sp(it))) }
-        node.props["textDecoration"]?.let { add(named("textDecoration", CodegenValues.enum("textDecoration", it))) }
-        node.props["textAlign"]?.let { add(named("textAlign", CodegenValues.enum("textAlign", it))) }
-        node.props["lineHeight"]?.let { add(named("lineHeight", CodegenValues.sp(it))) }
-        node.props["overflow"]?.let { add(named("overflow", CodegenValues.enum("overflow", it))) }
-        node.props["maxLines"]?.let { add(named("maxLines", CodegenValues.int(it))) }
-        node.props["style"]?.let { add(named("style", CodegenValues.typography(it, theme))) }
-    }
+    private fun textArgs(props: Map<String, PropValue>, mod: CodeBlock?, scope: BindingTypeScope): List<Arg> =
+        buildList {
+            add(named("text", CodegenValues.text(props["text"], numericBinding(props["text"], scope))))
+            if (mod != null) add(named("modifier", mod))
+            props["color"]?.let { add(named("color", CodegenValues.color(it, theme))) }
+            props["fontSize"]?.let { add(named("fontSize", CodegenValues.sp(it))) }
+            props["fontStyle"]?.let { add(named("fontStyle", CodegenValues.enum("fontStyle", it))) }
+            props["fontWeight"]?.let { add(named("fontWeight", CodegenValues.enum("fontWeight", it))) }
+            props["letterSpacing"]?.let { add(named("letterSpacing", CodegenValues.sp(it))) }
+            props["textDecoration"]?.let { add(named("textDecoration", CodegenValues.enum("textDecoration", it))) }
+            props["textAlign"]?.let { add(named("textAlign", CodegenValues.enum("textAlign", it))) }
+            props["lineHeight"]?.let { add(named("lineHeight", CodegenValues.sp(it))) }
+            props["overflow"]?.let { add(named("overflow", CodegenValues.enum("overflow", it))) }
+            props["maxLines"]?.let { add(named("maxLines", CodegenValues.int(it))) }
+            props["style"]?.let { add(named("style", CodegenValues.typography(it, theme))) }
+        }
 
     // Arg order mirrors the `Image` composable signature (and RenderImage): painter, contentDescription,
     // modifier, alignment, contentScale, alpha. Each optional arg is emitted only when its prop is set.
-    private fun imageArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
-        add(named("painter", CodegenValues.painter(node.props["source"], assetsById)))
-        add(
-            named(
-                "contentDescription",
-                CodegenValues.nullableString(
-                    node.props["contentDescription"],
-                    numericBinding(node.props["contentDescription"], scope),
+    private fun imageArgs(props: Map<String, PropValue>, mod: CodeBlock?, scope: BindingTypeScope): List<Arg> =
+        buildList {
+            add(named("painter", CodegenValues.painter(props["source"], assetsById)))
+            add(
+                named(
+                    "contentDescription",
+                    CodegenValues.nullableString(
+                        props["contentDescription"],
+                        numericBinding(props["contentDescription"], scope),
+                    ),
                 ),
-            ),
-        )
-        if (mod != null) add(named("modifier", mod))
-        node.props["alignment"]?.let { add(named("alignment", CodegenValues.enum("alignment", it))) }
-        node.props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
-        node.props["alpha"]?.let { add(named("alpha", CodegenValues.float(it))) }
-    }
+            )
+            if (mod != null) add(named("modifier", mod))
+            props["alignment"]?.let { add(named("alignment", CodegenValues.enum("alignment", it))) }
+            props["contentScale"]?.let { add(named("contentScale", CodegenValues.enum("contentScale", it))) }
+            props["alpha"]?.let { add(named("alpha", CodegenValues.float(it))) }
+        }
 
     /** `Icon`: imageVector (a curated `Icons.Filled.*`), contentDescription, modifier (order mirrors the renderer). */
-    private fun iconArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
-        add(named("imageVector", CodegenValues.enum("icon", node.props["icon"])))
-        add(
-            named(
-                "contentDescription",
-                CodegenValues.nullableString(
-                    node.props["contentDescription"],
-                    numericBinding(node.props["contentDescription"], scope),
+    private fun iconArgs(props: Map<String, PropValue>, mod: CodeBlock?, scope: BindingTypeScope): List<Arg> =
+        buildList {
+            add(named("imageVector", CodegenValues.enum("icon", props["icon"])))
+            add(
+                named(
+                    "contentDescription",
+                    CodegenValues.nullableString(
+                        props["contentDescription"],
+                        numericBinding(props["contentDescription"], scope),
+                    ),
                 ),
-            ),
-        )
-        if (mod != null) add(named("modifier", mod))
-    }
+            )
+            if (mod != null) add(named("modifier", mod))
+        }
 
-    private fun dividerArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
+    private fun dividerArgs(props: Map<String, PropValue>, mod: CodeBlock?): List<Arg> = buildList {
         if (mod != null) add(named("modifier", mod))
-        node.props["thickness"]?.let { add(named("thickness", CodegenValues.dpProp(it))) }
+        props["thickness"]?.let { add(named("thickness", CodegenValues.dpProp(it))) }
     }
 
     /** `Checkbox`/`Switch` share a signature: checked, onCheckedChange, modifier, enabled (order mirrors the renderer). */
-    private fun toggleArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
-        add(named("checked", CodegenValues.bool(node.props["checked"])))
-        add(named("onCheckedChange", CodegenValues.lambda(node.props["onCheckedChange"])))
+    private fun toggleArgs(props: Map<String, PropValue>, mod: CodeBlock?): List<Arg> = buildList {
+        add(named("checked", CodegenValues.bool(props["checked"])))
+        add(named("onCheckedChange", CodegenValues.lambda(props["onCheckedChange"])))
         if (mod != null) add(named("modifier", mod))
-        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+        props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
     }
 
     // --- shape helpers ---------------------------------------------------------------------------
@@ -370,15 +386,20 @@ internal class ComponentEmitter(
     /**
      * A layout container: its own args, then children (hidden dropped) as the trailing lambda.
      * [childrenGetWeight] is true only for Row/Column, whose direct children may carry a `weight` (#158).
+     * [extraArgs] builds the container's props-derived args from a props map so responsiveCall can rebuild
+     * them per breakpoint; the modifier is prepended (and, being breakpoint-invariant, never hoisted).
      */
     private fun layout(
         callee: MemberName,
         node: Node,
         mod: CodeBlock?,
-        extra: List<CodeBlock>,
         scope: BindingTypeScope,
         childrenGetWeight: Boolean = false,
-    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = body(node.children, scope, childrenGetWeight))
+        extraArgs: (Map<String, PropValue>) -> List<Arg>,
+    ): CodeBlock {
+        val content = body(node.children, scope, childrenGetWeight)
+        return responsiveCall(node, callee, content) { props -> modifierArg(mod) + extraArgs(props) }
+    }
 
     /**
      * A lazy list (`LazyColumn`/`LazyRow`): same args as its eager twin, but each static child is
@@ -389,9 +410,12 @@ internal class ComponentEmitter(
         callee: MemberName,
         node: Node,
         mod: CodeBlock?,
-        extra: List<CodeBlock>,
         scope: BindingTypeScope,
-    ): CodeBlock = call(callee, modifierArg(mod) + extra, content = lazyBody(node.children, scope))
+        extraArgs: (Map<String, PropValue>) -> List<Arg>,
+    ): CodeBlock {
+        val content = lazyBody(node.children, scope)
+        return responsiveCall(node, callee, content) { props -> modifierArg(mod) + extraArgs(props) }
+    }
 
     /** Children as `item { … }` entries; hidden nodes excluded from codegen (DATA_MODEL §5). */
     private fun lazyBody(children: List<Node>, scope: BindingTypeScope): CodeBlock {
@@ -407,6 +431,7 @@ internal class ComponentEmitter(
      * screen for an `@OptIn(ExperimentalMaterial3Api::class)` annotation.
      */
     private fun topAppBar(node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
+        guardNoResponsive(node)
         requiresMaterial3OptIn = true
         val args = buildList {
             add(slotArg("title", node.slots["title"].orEmpty(), scope))
@@ -416,13 +441,16 @@ internal class ComponentEmitter(
     }
 
     /** A named slot emitted as a `name = { … }` lambda argument (hidden children dropped). */
-    private fun slotArg(name: String, children: List<Node>, scope: BindingTypeScope): CodeBlock = CodeBlock.builder()
-        .add("%L = {\n", name)
-        .indent()
-        .add(body(children, scope))
-        .unindent()
-        .add("}")
-        .build()
+    private fun slotArg(name: String, children: List<Node>, scope: BindingTypeScope): Arg = Arg(
+        name,
+        CodeBlock.builder()
+            .add("{\n")
+            .indent()
+            .add(body(children, scope))
+            .unindent()
+            .add("}")
+            .build(),
+    )
 
     /**
      * `Button`/`OutlinedButton`/`TextButton` share a signature: onClick, modifier, enabled, shape,
@@ -431,17 +459,20 @@ internal class ComponentEmitter(
      * outlined/text variants would need their own factories if ever extended.
      */
     private fun button(callee: MemberName, node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
-        val args = buildList {
-            add(named("onClick", onClickArg(node)))
-            if (mod != null) add(named("modifier", mod))
-            node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
-            node.props["shape"]?.let { add(named("shape", CodegenValues.shape(it, theme))) }
-            CodegenValues.buttonColors(node.props["containerColor"], node.props["contentColor"], theme)
-                ?.let { add(named("colors", it)) }
-            node.props["elevation"]?.let { add(named("elevation", CodegenValues.buttonElevation(it))) }
-            node.props["contentPadding"]?.let { add(named("contentPadding", CodegenValues.contentPadding(it))) }
-        }
-        return call(callee, args, content = body(node.slots["content"].orEmpty(), scope))
+        val content = body(node.slots["content"].orEmpty(), scope)
+        return responsiveCall(node, callee, content) { props -> buttonArgs(props, node, mod) }
+    }
+
+    /** The filled button's args from a props map ([button]); `onClick` reads the node's handlers, not props. */
+    private fun buttonArgs(props: Map<String, PropValue>, node: Node, mod: CodeBlock?): List<Arg> = buildList {
+        add(named("onClick", onClickArg(node)))
+        if (mod != null) add(named("modifier", mod))
+        props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+        props["shape"]?.let { add(named("shape", CodegenValues.shape(it, theme))) }
+        CodegenValues.buttonColors(props["containerColor"], props["contentColor"], theme)
+            ?.let { add(named("colors", it)) }
+        props["elevation"]?.let { add(named("elevation", CodegenValues.buttonElevation(it))) }
+        props["contentPadding"]?.let { add(named("contentPadding", CodegenValues.contentPadding(it))) }
     }
 
     /**
@@ -461,26 +492,27 @@ internal class ComponentEmitter(
     }
 
     /** `Slider`: value, onValueChange, modifier, enabled (order mirrors the renderer). */
-    private fun sliderArgs(node: Node, mod: CodeBlock?): List<CodeBlock> = buildList {
-        add(named("value", CodegenValues.float(node.props["value"])))
-        add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
+    private fun sliderArgs(props: Map<String, PropValue>, mod: CodeBlock?): List<Arg> = buildList {
+        add(named("value", CodegenValues.float(props["value"])))
+        add(named("onValueChange", CodegenValues.lambda(props["onValueChange"])))
         if (mod != null) add(named("modifier", mod))
-        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+        props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
     }
 
     /** `TextField`/`OutlinedTextField` share: value (String), onValueChange, modifier, enabled. */
-    private fun textFieldArgs(node: Node, mod: CodeBlock?, scope: BindingTypeScope): List<CodeBlock> = buildList {
-        add(named("value", CodegenValues.text(node.props["value"], numericBinding(node.props["value"], scope))))
-        add(named("onValueChange", CodegenValues.lambda(node.props["onValueChange"])))
-        if (mod != null) add(named("modifier", mod))
-        node.props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
-    }
+    private fun textFieldArgs(props: Map<String, PropValue>, mod: CodeBlock?, scope: BindingTypeScope): List<Arg> =
+        buildList {
+            add(named("value", CodegenValues.text(props["value"], numericBinding(props["value"], scope))))
+            add(named("onValueChange", CodegenValues.lambda(props["onValueChange"])))
+            if (mod != null) add(named("modifier", mod))
+            props["enabled"]?.let { add(named("enabled", CodegenValues.bool(it))) }
+        }
 
     /** The `modifier = <chain>` argument, or nothing when a non-root node has no modifiers. */
-    private fun modifierArg(mod: CodeBlock?): List<CodeBlock> =
+    private fun modifierArg(mod: CodeBlock?): List<Arg> =
         if (mod == null) emptyList() else listOf(named("modifier", mod))
 
-    private fun named(name: String, value: CodeBlock): CodeBlock = CodeBlock.of("%L = %L", name, value)
+    private fun named(name: String, value: CodeBlock): Arg = Arg(name, value)
 
     /**
      * Children as a trailing-lambda body; hidden nodes excluded from codegen (DATA_MODEL §5). [allowWeight]
@@ -494,23 +526,109 @@ internal class ComponentEmitter(
     }
 
     /**
+     * Emits [node] as a component call, applying responsive per-breakpoint overrides (#222, ADR-037). With no
+     * overrides (the common case) this is exactly [call] on the base args, so output is byte-identical to before.
+     * With overrides, each argument whose value differs across the base and the node's breakpoints is hoisted
+     * into a `val` selected by `maxWidth` inside a `BoxWithConstraints`, and the call references that local — the
+     * base (compact) value is the final `else`. [argsFor] rebuilds the arg list from a props map, so it can be
+     * run once per breakpoint via [effectiveProps]; the [content], modifiers and handlers do not vary by
+     * breakpoint and stay inline.
+     *
+     * Fails loud (CLAUDE.md) on an override that introduces a prop absent at the base breakpoint — there is no
+     * `else` value to fall back to, so a base value must be set.
+     */
+    private fun responsiveCall(
+        node: Node,
+        callee: MemberName,
+        content: CodeBlock?,
+        contentParam: String? = null,
+        argsFor: (Map<String, PropValue>) -> List<Arg>,
+    ): CodeBlock {
+        val baseArgs = argsFor(node.props)
+        // Only the breakpoints this node actually overrides, largest-first for the if/else chain. An id the
+        // target doesn't define (opaque to core) contributes nothing to branch on.
+        val activeBps = breakpoints
+            .filter { it.id in node.responsive.keys }
+            .sortedByDescending { it.minWidthDp }
+        if (activeBps.isEmpty()) return call(callee, baseArgs, content, contentParam)
+
+        val baseByName = baseArgs.associate { it.name to it.value }
+        val perBp: Map<ResponsiveBreakpoint, Map<String, CodeBlock>> =
+            activeBps.associateWith { bp -> argsFor(effectiveProps(node, bp.id)).associate { it.name to it.value } }
+        perBp.forEach { (bp, byName) ->
+            byName.keys.forEach { name ->
+                if (name !in baseByName) {
+                    throw CodegenException(
+                        "Responsive override at breakpoint '${bp.id}' introduces '$name' not set at the base " +
+                            "breakpoint on node '${node.id.value}' — set a base value for it",
+                    )
+                }
+            }
+        }
+
+        val hoists = CodeBlock.builder()
+        var hoisted = false
+        val mergedArgs = baseArgs.map { arg ->
+            val differs = activeBps.any { bp ->
+                perBp.getValue(bp).getValue(arg.name).toString() != arg.value.toString()
+            }
+            if (!differs) {
+                arg
+            } else {
+                hoisted = true
+                hoists.add("val %L = ", arg.name)
+                activeBps.forEach { bp ->
+                    hoists.add("if (maxWidth >= %L.%M) {\n", bp.minWidthDp, ComposeNames.dp)
+                        .indent()
+                        .add("%L\n", perBp.getValue(bp).getValue(arg.name))
+                        .unindent()
+                        .add("} else ")
+                }
+                hoists.add("{\n").indent().add("%L\n", arg.value).unindent().add("}\n")
+                Arg(arg.name, CodeBlock.of("%L", arg.name))
+            }
+        }
+        // Every override equalled the base (nothing to branch on): emit the plain call, no wrapper.
+        if (!hoisted) return call(callee, baseArgs, content, contentParam)
+
+        return CodeBlock.builder()
+            .add("%M {\n", ComposeNames.BoxWithConstraints)
+            .indent()
+            .add(hoists.build())
+            .add("%L\n", call(callee, mergedArgs, content, contentParam))
+            .unindent()
+            .add("}")
+            .build()
+    }
+
+    /** Fails loud when a node carrying responsive overrides reaches an emitter that does not support them yet. */
+    private fun guardNoResponsive(node: Node) {
+        if (node.responsive.isNotEmpty()) {
+            throw CodegenException(
+                "Responsive per-breakpoint overrides are not supported on '${node.type}' " +
+                    "(node '${node.id.value}') in this release",
+            )
+        }
+    }
+
+    /**
      * Formats a call: 0 args → `Foo()` (or `Foo` when a trailing lambda follows), 1 arg → single
      * line, ≥2 → one per line with a trailing comma. [content] non-null appends a `{ … }` lambda;
      * [contentParam] names its single parameter (`{ innerPadding -> … }`) for slots that receive one.
      */
     private fun call(
         callee: MemberName,
-        args: List<CodeBlock>,
+        args: List<Arg>,
         content: CodeBlock?,
         contentParam: String? = null,
     ): CodeBlock {
         val b = CodeBlock.builder()
         when {
             args.isEmpty() -> if (content == null) b.add("%M()", callee) else b.add("%M", callee)
-            args.size == 1 -> b.add("%M(%L)", callee, args[0])
+            args.size == 1 -> b.add("%M(%L = %L)", callee, args[0].name, args[0].value)
             else -> {
                 b.add("%M(\n", callee).indent()
-                args.forEach { b.add("%L,\n", it) }
+                args.forEach { b.add("%L = %L,\n", it.name, it.value) }
                 b.unindent().add(")")
             }
         }
@@ -529,6 +647,7 @@ internal class ComponentEmitter(
      * so canvas and output still agree (TECHNICAL_NOTES §2). `Scaffold` itself is stable (no opt-in).
      */
     private fun scaffold(node: Node, mod: CodeBlock?, scope: BindingTypeScope): CodeBlock {
+        guardNoResponsive(node)
         val args = buildList {
             if (mod != null) add(named("modifier", mod))
             node.slots["topBar"].orEmpty().let { if (it.isNotEmpty()) add(slotArg("topBar", it, scope)) }

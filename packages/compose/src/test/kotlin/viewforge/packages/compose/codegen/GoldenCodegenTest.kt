@@ -126,6 +126,12 @@ class GoldenCodegenTest {
     // structural lambda — `Adjust`→`count += 1`, `Toggle`→`expanded = !expanded`, `SetState`→`count = 0`.
     @Test fun interactive() = assertGolden("Interactive")
 
+    // Responsive per-breakpoint overrides (ADR-037, #222): a Text with `fontSize`/`textAlign` overridden at
+    // the `medium`/`expanded` breakpoints lowers to a `BoxWithConstraints { }` that hoists each overridden prop
+    // into a `val name = if (maxWidth >= 840.dp) … else if (maxWidth >= 600.dp) … else <base>` selected by width,
+    // largest-first. The override-free sibling stays a plain `Text` — no wrapper leaks onto a non-responsive node.
+    @Test fun responsive() = assertGolden("Responsive")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.
