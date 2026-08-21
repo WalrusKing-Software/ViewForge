@@ -39,6 +39,8 @@ import viewforge.editor.state.BindingChoice
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.acceptsScalar
 import viewforge.editor.state.isBindableProp
+import viewforge.model.Advisory
+import viewforge.model.AdvisorySeverity
 import viewforge.model.Dropdown
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
@@ -124,6 +126,15 @@ private fun InspectorBody(state: EditorState, node: Node) {
                 // Any props the schema doesn't describe are shown read-only rather than hidden.
                 node.props.filterKeys { it !in known }.forEach { (k, v) -> KeyValueRow(k, formatPropValue(v)) }
             }
+        }
+
+        // Accessibility advisories (#315): non-blocking hints (missing contentDescription, sub-48dp touch
+        // target) the framework package produces for this node. Shown here so a problem fails loud in the
+        // inspector, never at codegen — data-driven, like the prop rows, so a new check needs no UI code.
+        val advisories = state.advisories(node)
+        if (advisories.isNotEmpty()) {
+            SectionLabel("Accessibility")
+            advisories.forEach { AdvisoryRow(it) }
         }
 
         // Event handlers (ADR-035, #277): a data-driven action editor for every event slot the catalog declares
@@ -262,6 +273,24 @@ private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinitio
             themeable = def.themeable,
             assets = state.document.assets,
         )
+    }
+}
+
+/** One non-blocking accessibility advisory (#315): a severity-coloured glyph + message; never a gate. */
+@Composable
+private fun AdvisoryRow(advisory: Advisory) {
+    val color = when (advisory.severity) {
+        AdvisorySeverity.WARNING -> MaterialTheme.colorScheme.error
+        AdvisorySeverity.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            if (advisory.severity == AdvisorySeverity.WARNING) "⚠" else "ⓘ",
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(end = 6.dp),
+        )
+        Text(advisory.message, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

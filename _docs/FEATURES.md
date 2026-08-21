@@ -115,7 +115,7 @@ into issues directly.
 | I5 | Live update | P0 | Canvas reflects edits within one frame; no apply button. |
 | I6 | Raw expression escape hatch | P1 | Advanced-only; node flagged "unverified"; canvas shows a placeholder. |
 | I7 | Reset to default | P1 | Per-prop revert. |
-| I8 | Validation feedback | P1 | Invalid values are shown inline before codegen ever runs. |
+| I8 | Validation feedback | P1 | Invalid values are shown inline before codegen ever runs. Plus non-blocking **accessibility advisories** in the inspector (#315): missing `contentDescription` on an image/icon, and a tappable control pinned below the 48dp touch target — guidance, never a codegen/load gate. |
 | I9 | Responsive overrides | P2 | Per-breakpoint prop values (needed for Phase 2). |
 
 > **Per-component prop coverage (issue #17):** fleshing out each component's editable props toward its

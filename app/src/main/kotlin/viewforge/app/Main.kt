@@ -21,6 +21,7 @@ import viewforge.editor.state.PaletteEntry
 import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
 import viewforge.editor.state.RegenerationReport
+import viewforge.model.Advisory
 import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
 import viewforge.model.EventSlotDefinition
@@ -30,6 +31,7 @@ import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.Repeater
 import viewforge.model.Screen
+import viewforge.packages.compose.catalog.ComposeAdvisories
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
@@ -317,6 +319,10 @@ private object ComposeCatalog : ComponentCatalog {
         ComposeModifiers.offeredFor(parentType)
 
     override fun modifierDef(type: String): ModifierDefinition? = ComposeModifiers.definitionFor(type)
+
+    // Accessibility advisories (#315) come from the package, like the prop schema — the inspector surfaces
+    // them without naming the framework. A core `vforge.*` node (repeat/dropdown) earns none.
+    override fun advisories(node: Node): List<Advisory> = ComposeAdvisories.forNode(node)
 
     // A screen name must be a legal Kotlin identifier to become a composable/file name (GC-3);
     // delegate to the package's validator so the hard-keyword list stays single-sourced.

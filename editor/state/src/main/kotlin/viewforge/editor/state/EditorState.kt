@@ -32,6 +32,7 @@ import viewforge.command.importAsset
 import viewforge.command.promoteScreenToComponent
 import viewforge.command.promoteToParameter
 import viewforge.model.Action
+import viewforge.model.Advisory
 import viewforge.model.Asset
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
@@ -1383,6 +1384,9 @@ class EditorState(
 
     /** The event slots [node]'s component type exposes (ADR-035) — the handler points the action editor offers. */
     fun eventSlots(node: Node): List<EventSlotDefinition> = catalog.eventSlotsOf(node.type)
+
+    /** The non-blocking accessibility/UX advisories [node] earns (#315), for the inspector to surface. */
+    fun advisories(node: Node): List<Advisory> = catalog.advisories(node)
 
     /**
      * Set node [nodeId]'s event-handler [slot] to the ordered [actions] (ADR-035) — the one undoable command
