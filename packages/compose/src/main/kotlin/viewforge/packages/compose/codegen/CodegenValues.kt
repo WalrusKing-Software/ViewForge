@@ -173,10 +173,13 @@ internal object CodegenValues {
             when (images) {
                 is ImageResources.Desktop -> CodeBlock.of("%M(%S)", ComposeNames.painterResource, asset.path)
                 is ImageResources.Multiplatform -> CodeBlock.of(
-                    "%M(%T.drawable.%N)",
+                    // The accessor is a %M (imported member), not a %N (bare name): `Res.drawable.<x>` is an
+                    // extension property in the resources package that must be imported, or the KMP build fails to
+                    // compile (#322). %T imports `Res`; the second %M imports the accessor.
+                    "%M(%T.drawable.%M)",
                     ComposeNames.painterResourceMultiplatform,
                     ComposeNames.resClass(images.resPackage),
-                    DrawableResources.accessor(asset),
+                    ComposeNames.drawableAccessor(images.resPackage, DrawableResources.accessor(asset)),
                 )
             }
         }

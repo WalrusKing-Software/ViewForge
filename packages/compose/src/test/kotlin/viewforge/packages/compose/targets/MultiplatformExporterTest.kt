@@ -145,6 +145,11 @@ class MultiplatformExporterTest {
         assertContains(screen, "import dev.viewforge.image.generated.resources.Res")
         assertContains(screen, "painter = painterResource(Res.drawable.hero)")
         assertContains(screen, "painter = painterResource(Res.drawable.icon)")
+        // Each `Res.drawable.<x>` accessor is a top-level extension property, so it must be imported too — not just
+        // `Res`. Without these imports the KMP build fails with `Unresolved reference` (#322); the string-only golden
+        // could not catch that because the accessor output is not compiled in-process (ADR-021).
+        assertContains(screen, "import dev.viewforge.image.generated.resources.hero")
+        assertContains(screen, "import dev.viewforge.image.generated.resources.icon")
         assertFalse("androidx.compose.ui.res.painterResource" in screen, "must not use the desktop image API")
         // Each referenced asset is shipped into the resources source set under its accessor file name, where the
         // resources plugin turns it into the Res.drawable accessor codegen references.

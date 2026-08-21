@@ -87,6 +87,11 @@ internal object ComposeNames {
     val painterResourceMultiplatform = MemberName("org.jetbrains.compose.resources", "painterResource")
 
     fun resClass(resPackage: String): ClassName = ClassName(resPackage, "Res")
+
+    // The generated `Res.drawable.<name>` accessor is a top-level extension property in the resources package, so
+    // referencing it requires importing it (not just `Res`) — emit it as a MemberName so KotlinPoet adds the
+    // import, else the KMP export fails to compile with `Unresolved reference '<name>'` (#322).
+    fun drawableAccessor(resPackage: String, name: String): MemberName = MemberName(resPackage, name)
     val Icon = MemberName("androidx.compose.material3", "Icon")
     val TopAppBar = MemberName("androidx.compose.material3", "TopAppBar")
     val BottomAppBar = MemberName("androidx.compose.material3", "BottomAppBar")
