@@ -109,7 +109,7 @@ internal object StateEmitter {
      * A handler slot's body (ADR-035, #277): its [actions] lowered to structural statements, one per line, for a
      * `{ … }` lambda. Every action is a **named, typed, closed** operation built with the KotlinPoet API — no
      * string concatenation (GC-1/GC-2), no evaluation (PF-4): `SetState`→ `f = v`, `Toggle`→ `f = !f`, `Adjust`→
-     * `f += by`, `AppendRow`/`RemoveRow`→ list rebuilds, `Navigate`→ a `// TODO` (#214, no nav host yet). Values
+     * `f += by`, `AppendRow`/`RemoveRow`→ list rebuilds, `Navigate`→ `onNavigate("id")` (ADR-039, #214). Values
      * are literals (typed via the target's declared [ScalarType]) or read [PropValue.StateBinding] member access.
      */
     fun handlerBody(actions: List<Action>, state: List<StateField>): CodeBlock {
@@ -153,9 +153,10 @@ internal object StateEmitter {
                 actionValue(action.index, ScalarType.INT),
             )
 
-        // No navigation host is generated yet (#214) — a compilable, honest no-op stub, mirroring ADR-034's
-        // seeded-data `// TODO`. Replaced with a real navigation call when screen nav lands.
-        is Action.Navigate -> CodeBlock.of("// TODO(#214): navigate to screen %S", action.screenId)
+        // Screen-to-screen navigation (ADR-039, #214): a call on the injected `onNavigate` callback with the
+        // target screen id — a string looked up by the generated `App()` host, never evaluated (PF-4). The
+        // screen carries `onNavigate` only when it navigates; standalone it defaults to `{}` (an honest no-op).
+        is Action.Navigate -> CodeBlock.of("%N(%S)", NavHost.ON_NAVIGATE, action.screenId)
     }
 
     /**

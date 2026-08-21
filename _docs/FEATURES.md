@@ -199,10 +199,14 @@ Recorded so they're decisions, not oversights:
   let a record field itself be a list. Interactivity (ADR-035, schema v6): state is **writable** and a node's
   event slots (`onClick`) hold an ordered, **closed `Action` list** — `SetState`/`Toggle`/`Adjust`/`AppendRow`/
   `RemoveRow`/`Navigate` — that mutates declared state; C13 run-mode operates it live, and codegen emits real
-  `remember { mutableStateOf(...) }` + structural handler lambdas. Still excluded: **free-form / expression
-  evaluation** of handlers — a handler is a named, typed operation, never user-authored Kotlin (PF-4 / SECURITY
-  IA-*); complex logic is served by editing the generated code.
-- Navigation graph editing
+  `remember { mutableStateOf(...) }` + structural handler lambdas. **Screen-to-screen navigation** (`Navigate`,
+  ADR-039, #214) generates a callback + a `when`-host so an exported multi-screen app switches pages (no
+  navigation dependency, no schema change). Still excluded: **free-form / expression evaluation** of handlers —
+  a handler is a named, typed operation, never user-authored Kotlin (PF-4 / SECURITY IA-*); complex logic is
+  served by editing the generated code.
+- Navigation **graph** editing (a visual routes/back-stack graph editor). *Exception:* basic screen-to-screen
+  navigation via the `Navigate` action **is** shipped (ADR-039, #214) — the graph editor and a generated back
+  stack remain out of scope.
 - Backend, API, or database integration
 - Real-time collaboration
 - AI-assisted generation

@@ -6,6 +6,7 @@ import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.DrawableResources
 import viewforge.packages.compose.codegen.ImageResources
 import viewforge.packages.compose.codegen.KotlinFormatter
+import viewforge.packages.compose.codegen.NavHost
 import viewforge.project.BinaryFile
 import viewforge.project.ExportFile
 import viewforge.project.TextFile
@@ -47,6 +48,11 @@ object MultiplatformExporter {
             // so they are placed directly rather than routed, avoiding a mis-route of a screen named "Main".
             gen.generate(project, images).forEach { file ->
                 add(TextFile(kotlinPath(COMMON_MAIN, file.path), KotlinFormatter.format(file.content)))
+            }
+            // The screen-switching host (ADR-039, #214) → commonMain, so both entry points render App(); only
+            // when some screen navigates, else the KMP bundle is unchanged.
+            if (NavHost.projectNavigates(project)) {
+                add(TextFile(kotlinPath(COMMON_MAIN, NavHost.APP_KT), NavHost.appHost(project)))
             }
             // Referenced image assets → the resources source set, where the plugin generates their Res.drawable
             // accessors (#223). Skipped when the bytes can't be resolved, like the desktop exporter.

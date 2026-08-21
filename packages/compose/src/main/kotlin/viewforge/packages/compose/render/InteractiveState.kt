@@ -73,7 +73,8 @@ internal fun applyAction(state: Map<String, SampleValue>, action: Action): Map<S
         }
     }
 
-    // Navigation is a host concern (screen switching), not a change to this screen's state store.
+    // Navigation is a host concern (screen switching), not a change to this screen's state store. Codegen wires
+    // it to the generated App() host (ADR-039, #214); live screen switching in the C13 preview is deferred (#325).
     is Action.Navigate -> state
 }
 

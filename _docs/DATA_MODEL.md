@@ -586,5 +586,7 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
 4. **Interaction/navigation.** *Resolved (ADR-035, schema v6):* state is now **writable** and a node's
    `handlers` map event slots to ordered, closed `Action` lists (§5) — `SetState`/`Toggle`/`Adjust`/
    `AppendRow`/`RemoveRow`/`Navigate` — dispatched by a `when`, never evaluated (PF-4 / SECURITY IA-*).
-   `Navigate` is the structural hook for screen-to-screen navigation (#214, no generated host yet). Free-form
+   `Navigate` drives screen-to-screen navigation (#214, ADR-039): a navigating screen takes an injected
+   `onNavigate: (String) -> Unit` and the exporter emits a generated `App()` `when`-host that switches screens —
+   no navigation dependency, no schema change (live canvas-preview switching is deferred, #325). Free-form
    expression handlers stay **out of scope** — complex logic is served by editing the generated code.
