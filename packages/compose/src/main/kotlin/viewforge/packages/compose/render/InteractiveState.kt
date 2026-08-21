@@ -73,9 +73,23 @@ internal fun applyAction(state: Map<String, SampleValue>, action: Action): Map<S
         }
     }
 
-    // Navigation is a host concern (screen switching), not a change to this screen's state store. Codegen wires
-    // it to the generated App() host (ADR-039, #214); live screen switching in the C13 preview is deferred (#325).
+    // Navigation is a host concern (screen switching), not a change to this screen's state store. The state
+    // reducer leaves it untouched; the run-mode host picks it up separately via [nextScreen] (#325). Codegen
+    // wires the exported app's equivalent to the generated App() host (ADR-039, #214).
     is Action.Navigate -> state
+}
+
+/**
+ * The screen the run-mode preview host should show after a handler's [actions] fire (#325). The **last**
+ * [Action.Navigate] whose target resolves to a screen in [knownIds] wins; an unknown target, or an action list
+ * with no navigation, leaves [currentId] unchanged (PF-6 — a dangling navigate is a no-op, never a crash, exactly
+ * as an unresolved binding is). Pure and Compose-free so screen switching is unit-tested without a composition,
+ * like [applyAction]; the host holds `currentId` in `remember` and swaps the rendered root when this returns a
+ * new id (the per-screen [InteractiveState] store is keyed on that root, so it re-seeds for the new screen).
+ */
+internal fun nextScreen(currentId: String, actions: List<Action>, knownIds: Set<String>): String {
+    val target = actions.asSequence().filterIsInstance<Action.Navigate>().lastOrNull()?.screenId
+    return if (target != null && target in knownIds) target else currentId
 }
 
 /**

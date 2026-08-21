@@ -1974,10 +1974,14 @@ not run (PF-4). Decided with the user via AskUserQuestion (2026-08-21): the ligh
 - **No schema change.** `Navigate(screenId)` is already schema v6 (ADR-035); this ADR only changes codegen and
   the exporter scaffold. No migration, no fixture bump.
 
-- **The design canvas stays static; live preview switching is deferred (#325).** As ADR-035 established,
-  interactivity is C13-run-mode only. Live screen-switching in the run-mode preview (swapping the rendered root
-  when a `Navigate` fires) touches the selection/hit-testing surface and is filed as **#325**; until then the
-  run-mode reducer leaves `Navigate` a no-op, and navigation is verified by the exported app + the compile gate.
+- **The design canvas stays static; live preview switching lands in slices (#325).** As ADR-035 established,
+  interactivity is C13-run-mode only. **Slice 1 (renderer host, shipped):** `ComposeRenderer.RenderInteractiveProject`
+  hosts a multi-screen run-mode preview and swaps the rendered root when a `Navigate` fires, its decision the pure
+  `nextScreen` (last known-screen target wins, unknown = no-op PF-6) — self-contained in the renderer and unit-tested.
+  The state reducer still leaves `Navigate` a no-op in the *state fold*; navigation is surfaced separately via an
+  `onNavigate` callback so the store and the host stay decoupled. **Slice 2 (deferred):** wiring the editor to call
+  this host — which touches the tree-selection/hit-testing surface and the "exit run-mode restores the edited screen"
+  UX — remains **#325**. Until Slice 2, exported-app navigation is still verified by the compile gate.
 
 - **`Navigate` inside a user component is forwarded (#324, shipped).** A `vforge.userComponent` instance
   navigates when the component it references does: the `navigates` predicate is now **transitive** (resolving an
