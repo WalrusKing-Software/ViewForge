@@ -80,6 +80,13 @@ internal object ComposeNames {
     val DropdownMenuItem = MemberName("androidx.compose.material3", "DropdownMenuItem")
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
+
+    // Multiplatform resources (#223, ADR-021): `org.jetbrains.compose.resources.painterResource(Res.drawable.x)`.
+    // The `Res` accessor is generated into a per-project package (configured on the scaffold), so its ClassName
+    // is built dynamically from that package rather than pinned here.
+    val painterResourceMultiplatform = MemberName("org.jetbrains.compose.resources", "painterResource")
+
+    fun resClass(resPackage: String): ClassName = ClassName(resPackage, "Res")
     val Icon = MemberName("androidx.compose.material3", "Icon")
     val TopAppBar = MemberName("androidx.compose.material3", "TopAppBar")
     val BottomAppBar = MemberName("androidx.compose.material3", "BottomAppBar")

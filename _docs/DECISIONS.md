@@ -572,7 +572,7 @@ no obvious replacement target.
 
 ## ADR-021 — Image codegen via the desktop `painterResource(String)` in Phase 1
 
-**Status:** Accepted
+**Status:** Accepted; the multiplatform migration landed in Phase 2 (#223) — see the Phase-2 update below.
 
 **Context.** M9 (Phase 1 complete) adds the `Image` component required by exit criterion #1. Generated
 image code must (a) compile with zero manual fixes, and (b) keep the in-process compile gate
@@ -612,6 +612,21 @@ of `Image` rows rendering blank in an exported app — was this gap: the missing
 already-placed title/buttons survived. **Still deferred:** importing asset files from disk into a
 project (an "Assets" surface + guarded copy); and loose-file export (G4) stays screens-only, since a
 pasted screen has no canonical resources dir — its assets are the host project's responsibility.
+
+*Update (Phase 2, #223 — multiplatform migration):* the **KMP export now emits the Compose Multiplatform
+resources API** — `org.jetbrains.compose.resources.painterResource(Res.drawable.<x>)`, a `commonMain` API, so
+an image renders on Android as well as desktop. Codegen gained an `ImageResources` strategy: `Desktop` (the
+original `painterResource(String)`) stays the default and the **desktop-only export keeps it**, so the whole
+in-process compile gate is unchanged — no image golden or `CompilationTest` fixture regressed. The
+`MultiplatformExporter` selects `Multiplatform(resPackage)`, routes each referenced asset into
+`src/commonMain/composeResources/drawable/<accessor>.<ext>` (`DrawableResources` derives the accessor and file
+so the emitter's `Res.drawable.<accessor>` and the placed file agree), and the scaffold applies the resources
+plugin with a fixed `packageOfResClass` (`dev.viewforge.<slug>.generated.resources`) so the generated import is
+deterministic. As the original Rejected note foresaw, the `Res.drawable` output **cannot be compiled by the
+in-process gate** (the plugin can't run in kotlin-compile-testing and `DrawableResource` has an internal
+constructor), so it is verified structurally — golden/`MultiplatformExporterTest` — and by a real Gradle build,
+the same honesty boundary as the rest of the KMP scaffold (ADR-036/#218). Loose-file (G4) export stays on the
+desktop strategy (a pasted screen has no resources dir).
 
 ---
 

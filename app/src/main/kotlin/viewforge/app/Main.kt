@@ -267,9 +267,11 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
         // from the same source the canvas loads from — the project dir first, then the classpath.
         ExportMode.GRADLE_PROJECT ->
             DesktopExporter.gradleProject(project) { asset -> assetBytes(projectDir(), asset.path) }
-        // The KMP multi-target project (desktop + Android, ADR-036). Image assets are not wired yet — they
-        // await the multiplatform-resources migration (#223) — so no asset resolver is threaded here.
-        ExportMode.MULTIPLATFORM_PROJECT -> MultiplatformExporter.multiplatformProject(project)
+        // The KMP multi-target project (desktop + Android, ADR-036). Image assets are wired via the
+        // multiplatform resources API (#223): the resolver ships each asset into commonMain/composeResources,
+        // from the same source the canvas and desktop export read.
+        ExportMode.MULTIPLATFORM_PROJECT ->
+            MultiplatformExporter.multiplatformProject(project) { asset -> assetBytes(projectDir(), asset.path) }
     }
 }
 

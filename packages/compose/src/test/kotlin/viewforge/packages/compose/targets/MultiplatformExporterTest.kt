@@ -136,6 +136,35 @@ class MultiplatformExporterTest {
     }
 
     @Test
+    fun `image assets use the multiplatform Res drawable API and ship into composeResources (#223)`() {
+        val project = ProjectCodec.decode(resourceText("/golden/Image.vforge"))
+        val files = MultiplatformExporter.multiplatformProject(project) { byteArrayOf(1, 2, 3) }
+        val screen = textOf(files, "src/commonMain/kotlin/ImageScreen.kt")
+        // The commonMain resources API (renders on Android too), not the desktop painterResource(String).
+        assertContains(screen, "import org.jetbrains.compose.resources.painterResource")
+        assertContains(screen, "import dev.viewforge.image.generated.resources.Res")
+        assertContains(screen, "painter = painterResource(Res.drawable.hero)")
+        assertContains(screen, "painter = painterResource(Res.drawable.icon)")
+        assertFalse("androidx.compose.ui.res.painterResource" in screen, "must not use the desktop image API")
+        // Each referenced asset is shipped into the resources source set under its accessor file name, where the
+        // resources plugin turns it into the Res.drawable accessor codegen references.
+        val paths = files.map { it.path }.toSet()
+        assertContains(paths, "src/commonMain/composeResources/drawable/hero.png")
+        assertContains(paths, "src/commonMain/composeResources/drawable/icon.png")
+        // The scaffold wires the resources dependency + the deterministic accessor package the import matches.
+        val build = textOf(files, "build.gradle.kts")
+        assertContains(build, "implementation(compose.components.resources)")
+        assertContains(build, "packageOfResClass = \"dev.viewforge.image.generated.resources\"")
+    }
+
+    @Test
+    fun `an unresolved image asset is skipped, shipping no drawable`() {
+        val project = ProjectCodec.decode(resourceText("/golden/Image.vforge"))
+        val files = MultiplatformExporter.multiplatformProject(project) { null }
+        assertFalse(files.any { it.path.startsWith("src/commonMain/composeResources/") })
+    }
+
+    @Test
     fun `desktop Main entry point is unchanged from the desktop export after the shared refactor`() {
         val project = demoProject()
         val kmpMain = textOf(MultiplatformExporter.multiplatformProject(project), "src/jvmMain/kotlin/Main.kt")

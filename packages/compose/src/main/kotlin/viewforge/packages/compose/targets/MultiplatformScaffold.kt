@@ -67,6 +67,7 @@ internal object MultiplatformScaffold {
                     implementation(compose.foundation)
                     implementation(compose.material3)
                     implementation(compose.ui)
+                    implementation(compose.components.resources)
                 }
                 jvmMain.dependencies {
                     implementation(compose.desktop.currentOs)
@@ -93,6 +94,14 @@ internal object MultiplatformScaffold {
                 sourceCompatibility = JavaVersion.VERSION_${GradleScaffold.JVM_TOOLCHAIN}
                 targetCompatibility = JavaVersion.VERSION_${GradleScaffold.JVM_TOOLCHAIN}
             }
+        }
+
+        // Compose Multiplatform resources (#223): generate the `Res` accessor into a fixed package so the
+        // generated `commonMain` UI's `Res.drawable.*` imports are deterministic. Drawables live under
+        // `src/commonMain/composeResources/drawable/`.
+        compose.resources {
+            publicResClass = true
+            packageOfResClass = "$appId.generated.resources"
         }
 
         compose.desktop {

@@ -26,7 +26,15 @@ import viewforge.spi.GeneratedFile
  * caller's modifier comes first (DATA_MODEL §12.1).
  */
 class ComposeCodeGenerator : CodeGenerator {
-    override fun generate(project: Project): List<GeneratedFile> {
+    /** The SPI entry: desktop image resources (ADR-021), the self-contained, compile-gated default. */
+    override fun generate(project: Project): List<GeneratedFile> = generate(project, ImageResources.Desktop)
+
+    /**
+     * Like [generate], but selects how `Image` assets are emitted ([images], #223): the desktop
+     * `painterResource(String)` default, or the Compose Multiplatform `Res.drawable.x` the KMP export needs so
+     * an image renders on Android too. Only the `Image` painter differs; every other emission is identical.
+     */
+    fun generate(project: Project, images: ImageResources): List<GeneratedFile> {
         val sourceName = project.name.ifBlank { "Project" }
         val screens = project.screens.map { screen ->
             GeneratedFile(
@@ -39,6 +47,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.assets,
                     project.components,
                     screen.state,
+                    images = images,
                 ),
             )
         }
@@ -55,6 +64,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.schemaVersion,
                     project.assets,
                     project.components,
+                    images = images,
                 ),
             )
         }
@@ -80,6 +90,7 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
         state: List<StateField> = emptyList(),
+        images: ImageResources = ImageResources.Desktop,
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(screen.name),
         screen.root,
@@ -89,6 +100,7 @@ class ComposeCodeGenerator : CodeGenerator {
         assets,
         components,
         state = state,
+        images = images,
     )
 
     /**
@@ -133,6 +145,7 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        images: ImageResources = ImageResources.Desktop,
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(component.name),
         component.root,
@@ -143,6 +156,7 @@ class ComposeCodeGenerator : CodeGenerator {
         components,
         component.parameters,
         component.state,
+        images = images,
     )
 
     /**
@@ -191,8 +205,9 @@ class ComposeCodeGenerator : CodeGenerator {
         parameters: List<Parameter> = emptyList(),
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
+        images: ImageResources = ImageResources.Desktop,
     ): String {
-        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state)
+        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state, imageResources = images)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
         // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as

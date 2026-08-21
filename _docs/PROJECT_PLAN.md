@@ -340,7 +340,8 @@ tests that encode intent so context survives gaps between work sessions.
 | M12 | Android device preview | `DeviceProfiles` gains Android profiles with density + safe-area/system-bar insets; the framed canvas scales by density and draws inset chrome. |
 | M13 | Responsive overrides | Schema **6 → 7** (`M6to7` + fixture; v3 taken by ADR-034, v4 by nested lists #255, v5 by component-local state #266, v6 by ADR-035 interactive state & events); node `responsive` field (ADR-030) — schema slice landed in #221. Render-time active-breakpoint resolution + a canvas breakpoint selector + inspector per-breakpoint editing (edit-what-you-see) landed in **#314**. |
 | M14 | Android validation + codegen | Responsive-override codegen (`BoxWithConstraints` threshold branching, ADR-037) with golden coverage — landed in **#222**. Android-specific validation warnings (touch targets, missing `contentDescription`) split to **#315**. |
-| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. |
+| — | Image → multiplatform resources | `Image` codegen migrates to the Compose Multiplatform `Res.drawable` API for the KMP export so images render on Android; assets ship into `commonMain/composeResources` (ADR-021) — landed in **#223** (the desktop-only export keeps `painterResource(String)`, so the compile gate is unchanged). |
+| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. (Remaining before declaring complete: a real KMP build with zero manual fixes, the user's toolchain.) |
 
 ---
 

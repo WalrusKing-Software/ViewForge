@@ -159,16 +159,26 @@ internal object CodegenValues {
         if (numeric) CodeBlock.of("%L.toString()", binding(value)) else binding(value)
 
     /**
-     * An `Image`'s `painter`: a `ResourceRef` resolved to its asset's project-relative path, emitted as
-     * `painterResource("<path>")` (the Phase-1 desktop resource API — ADR-021), or a raw expression.
-     * Fails loudly on a reference to an asset the project doesn't list, so codegen never emits a path
-     * that isn't in the exported bundle.
+     * An `Image`'s `painter`: a `ResourceRef` resolved to its asset, or a raw expression. The [images] strategy
+     * (#223, ADR-021) picks the API: [ImageResources.Desktop] emits the Phase-1 `painterResource("<path>")`
+     * (desktop classpath resource); [ImageResources.Multiplatform] emits `painterResource(Res.drawable.<x>)` (the
+     * `commonMain` resources API that also renders on Android), the accessor and file agreed via
+     * [DrawableResources]. Fails loudly on a reference to an asset the project doesn't list, so codegen never
+     * emits a resource that isn't in the exported bundle.
      */
-    fun painter(value: PropValue?, assets: Map<String, Asset>): CodeBlock = when (value) {
+    fun painter(value: PropValue?, assets: Map<String, Asset>, images: ImageResources): CodeBlock = when (value) {
         is PropValue.ResourceRef -> {
             val asset = assets[value.assetId]
                 ?: throw CodegenException("Image references unknown asset '${value.assetId}'")
-            CodeBlock.of("%M(%S)", ComposeNames.painterResource, asset.path)
+            when (images) {
+                is ImageResources.Desktop -> CodeBlock.of("%M(%S)", ComposeNames.painterResource, asset.path)
+                is ImageResources.Multiplatform -> CodeBlock.of(
+                    "%M(%T.drawable.%N)",
+                    ComposeNames.painterResourceMultiplatform,
+                    ComposeNames.resClass(images.resPackage),
+                    DrawableResources.accessor(asset),
+                )
+            }
         }
         is PropValue.RawExpression -> raw(value)
         else -> throw CodegenException("Image 'source' must be a resource reference or expression, got $value")
