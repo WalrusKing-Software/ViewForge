@@ -93,6 +93,36 @@ class InteractiveStateTest {
         assertEquals(state, applyAction(state, Action.Navigate("other")))
     }
 
+    // Run-mode preview screen switching (#325): nextScreen is the pure host decision (which screen to show next).
+    private val screenIds = setOf("home", "details", "settings")
+
+    @Test
+    fun `nextScreen switches to a Navigate target that is a known screen (#325)`() {
+        assertEquals("details", nextScreen("home", listOf(Action.Navigate("details")), screenIds))
+    }
+
+    @Test
+    fun `nextScreen ignores a Navigate to an unknown screen, staying put (PF-6, #325)`() {
+        assertEquals("home", nextScreen("home", listOf(Action.Navigate("ghost")), screenIds))
+    }
+
+    @Test
+    fun `nextScreen stays on the current screen when no action navigates (#325)`() {
+        val actions = listOf(Action.Toggle("expanded"), Action.Adjust("count", PropValue.Literal(JsonPrimitive(1))))
+        assertEquals("home", nextScreen("home", actions, screenIds))
+        assertEquals("home", nextScreen("home", emptyList(), screenIds))
+    }
+
+    @Test
+    fun `nextScreen takes the last Navigate when a handler has several, and fires alongside state actions (#325)`() {
+        val actions = listOf(
+            Action.SetState("count", PropValue.Literal(JsonPrimitive(0))),
+            Action.Navigate("details"),
+            Action.Navigate("settings"),
+        )
+        assertEquals("settings", nextScreen("home", actions, screenIds))
+    }
+
     @Test
     fun `an unresolved target or value is a no-op (PF-6)`() {
         val state = mapOf<String, SampleValue>("count" to scalar(1))

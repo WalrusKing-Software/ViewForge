@@ -11,9 +11,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import viewforge.model.Action
 import viewforge.model.ComponentDef
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Screen
 import viewforge.model.StateField
 import viewforge.model.Theme
 import viewforge.model.resolvedForBreakpoint
@@ -44,6 +46,7 @@ object ComposeRenderer {
         interactive: Boolean = false,
         editorAffordances: Boolean = false,
         activeBreakpoint: String? = null,
+        onNavigate: (List<Action>) -> Unit = {},
     ) {
         ProjectTheme(theme, dark) {
             val ctx = RenderContext(
@@ -65,7 +68,8 @@ object ComposeRenderer {
                 // C13 run mode (ADR-035): back the writable state with an ephemeral store seeded from the
                 // samples, re-resolve bindings against the LIVE values each change, and hand each widget a
                 // reducer that applies its handler actions to that store. Nothing is persisted to the IR.
-                InteractiveScreen(resolved, state, ctx)
+                // [onNavigate] receives each fired handler's actions so a run-mode host can switch screens (#325).
+                InteractiveScreen(resolved, state, ctx, onNavigate)
             } else {
                 // Static design canvas (ADR-034): bindings become sample literals and repeats expand to their
                 // rows, so RenderNode only ever sees an ordinary tree. Remembered on (root, state) so it
@@ -82,12 +86,68 @@ object ComposeRenderer {
      * keyed on [root] so a structural edit resets it — and no evaluation (the reducer is a `when`, PF-4).
      */
     @Composable
-    private fun InteractiveScreen(root: Node, state: List<StateField>, ctx: RenderContext) {
+    private fun InteractiveScreen(
+        root: Node,
+        state: List<StateField>,
+        ctx: RenderContext,
+        onNavigate: (List<Action>) -> Unit = {},
+    ) {
         var live by remember(root) { mutableStateOf(initialInteractiveState(state)) }
         val expanded = remember(root, live) {
             expandScreenState(root, state.map { it.copy(sample = live[it.name] ?: it.sample) })
         }
-        RenderNode(expanded, ctx.copy(dispatch = { actions -> live = applyActions(live, actions) }))
+        // A fired handler's actions both mutate this screen's store AND may ask the host to navigate (#325).
+        // Navigation is a no-op in the state fold ([applyAction]); it is surfaced separately via [onNavigate].
+        RenderNode(
+            expanded,
+            ctx.copy(dispatch = { actions ->
+                live = applyActions(live, actions)
+                onNavigate(actions)
+            }),
+        )
+    }
+
+    /**
+     * The C13 run-mode host for a **multi-screen** preview (#325): renders the current screen interactively and
+     * switches to another when a widget's handler fires a [Action.Navigate] whose target is a real screen in
+     * [screens] (resolved by [nextScreen] — an unknown id is a no-op, PF-6). Screen switching is purely a preview
+     * concern here — nothing is persisted to the IR, and the static design canvas is untouched (ADR-035). The new
+     * screen's [InteractiveState] store re-seeds automatically because [InteractiveScreen] keys it on the root.
+     *
+     * The editor wires this in a later slice; keeping the host in the renderer means live navigation is a
+     * self-contained, testable capability (its decision is the pure [nextScreen]).
+     */
+    @Composable
+    fun RenderInteractiveProject(
+        screens: List<Screen>,
+        startScreenId: String,
+        theme: Theme,
+        dark: Boolean,
+        instrument: (NodeId) -> Modifier = { Modifier },
+        imageLoader: (assetId: String) -> ImageBitmap? = { null },
+        components: List<ComponentDef> = emptyList(),
+        editorAffordances: Boolean = false,
+        activeBreakpoint: String? = null,
+    ) {
+        require(screens.isNotEmpty()) { "RenderInteractiveProject requires at least one screen" }
+        val knownIds = remember(screens) { screens.mapTo(HashSet()) { it.id } }
+        var currentId by remember(screens, startScreenId) {
+            mutableStateOf(if (startScreenId in knownIds) startScreenId else screens.first().id)
+        }
+        val screen = remember(screens, currentId) { screens.firstOrNull { it.id == currentId } ?: screens.first() }
+        RenderScreen(
+            root = screen.root,
+            theme = theme,
+            dark = dark,
+            instrument = instrument,
+            imageLoader = imageLoader,
+            components = components,
+            state = screen.state,
+            interactive = true,
+            editorAffordances = editorAffordances,
+            activeBreakpoint = activeBreakpoint,
+            onNavigate = { actions -> currentId = nextScreen(currentId, actions, knownIds) },
+        )
     }
 
     /**
