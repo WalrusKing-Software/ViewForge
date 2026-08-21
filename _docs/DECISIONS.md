@@ -1979,10 +1979,13 @@ not run (PF-4). Decided with the user via AskUserQuestion (2026-08-21): the ligh
   when a `Navigate` fires) touches the selection/hit-testing surface and is filed as **#325**; until then the
   run-mode reducer leaves `Navigate` a no-op, and navigation is verified by the exported app + the compile gate.
 
-- **`Navigate` inside a user component fails loud (#324).** Forwarding `onNavigate` through a
-  `vforge.userComponent` instance is extra plumbing (transitive navigation + instance-call forwarding); until
-  **#324**, a `Navigate` in a component's tree throws a `CodegenException` at export rather than emitting a call
-  to a parameter that doesn't exist (CLAUDE.md: fail loudly over degrading silently).
+- **`Navigate` inside a user component is forwarded (#324, shipped).** A `vforge.userComponent` instance
+  navigates when the component it references does: the `navigates` predicate is now **transitive** (resolving an
+  instance to its definition and recursing, cycle-safe via PF-3), a navigating component's composable gains the
+  same injected `onNavigate` param, and the instance call forwards `onNavigate = onNavigate`. The forwarding is
+  sound because the *same* transitive predicate flags the enclosing scope as navigating, so `onNavigate` is
+  always in scope where forwarded. (Before #324 this threw a `CodegenException` at export rather than emit a call
+  to a missing parameter — fail loudly over degrading silently; that guard is now removed.)
 
 **Rationale.** The callback + `when`-host is the option that lands **entirely inside ViewForge's existing
 model**: it adds no dependency (rule 9), is plain `commonMain` that renders identically on desktop and Android
@@ -2009,8 +2012,8 @@ navigation-graph editor stays a non-feature (FEATURES §10).
 **Consequences.** An exported ViewForge project with a button that navigates now **actually switches screens** —
 desktop and Android, from shared code, with zero added dependencies and PF-4 intact. What becomes easier:
 multi-screen apps and (next) UX-path simulation (#215) have a real runtime to build on. What becomes harder /
-deferred: navigation from **inside a user component** (#324) and **live preview** screen switching (#325) are
-follow-ups; a back stack / deep links are a user edit away, not generated. What we accept: **one closed
+deferred: **live preview** screen switching (#325) is a follow-up (navigation from **inside a user component**
+shipped as #324); a back stack / deep links are a user edit away, not generated. What we accept: **one closed
 navigation primitive** (go-to-screen by id), a **target-only screen has no generated back affordance** (it
 matches the IR — add a `Navigate` to give it one), and **run-mode-only** interactivity per ADR-035.
 

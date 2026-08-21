@@ -10,18 +10,19 @@ import viewforge.model.Project
 import viewforge.model.PropValue
 import viewforge.model.Screen
 import viewforge.model.Theme
+import viewforge.model.UserComponent
 import viewforge.packages.compose.targets.ComposeEntryPoints
 import kotlin.test.Test
 import kotlin.test.assertContains
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Screen-to-screen navigation codegen (ADR-039, #214). The per-screen lowering (`Navigate` → `onNavigate("id")`
- * + the injected callback param) is pinned by the `Navigation` golden and the compile gate; this covers the
- * host [NavHost] emits, the navigating/non-navigating parameter split, the fail-loud component guard (#324),
- * and that the exporter entry points render `App()` when the project navigates.
+ * Screen-to-screen navigation codegen (ADR-039, #214; component forwarding #324). The per-screen lowering
+ * (`Navigate` → `onNavigate("id")` + the injected callback param) is pinned by the `Navigation` golden and the
+ * compile gate; this covers the host [NavHost] emits, the navigating/non-navigating parameter split, the
+ * transitive `navigates` predicate and callback forwarding through user-component instances (#324), and that the
+ * exporter entry points render `App()` when the project navigates.
  */
 class NavHostTest {
     private fun text(id: String, value: String) =
@@ -47,8 +48,28 @@ class NavHostTest {
         screens = listOf(home, details),
     )
 
-    private fun gen(screen: Screen) =
-        ComposeCodeGenerator().generateScreen(screen, Theme(), sourceName = "Nav", schemaVersion = 6)
+    /** A `vforge.userComponent` instance node referencing the component with id [componentId]. */
+    private fun instance(id: String, componentId: String) = Node(
+        NodeId(id),
+        UserComponent.TYPE,
+        props = mapOf(UserComponent.COMPONENT_ID_PROP to PropValue.Literal(JsonPrimitive(componentId))),
+    )
+
+    // A component whose own tree navigates, and a "hub" screen that merely *instances* it (#324). The hub carries
+    // no Navigate handler of its own — it navigates purely transitively, through the instance.
+    private val navCard =
+        ComponentDef(id = "cmp", name = "NavCard", root = column("c_col", navButton("c_go", "details")))
+    private val hub = Screen("hub", "Hub", column("hub_col", instance("hub_card", "cmp")))
+    private val cmpProject = navProject.copy(screens = listOf(hub, details), components = listOf(navCard))
+
+    private fun gen(screen: Screen, components: List<ComponentDef> = emptyList()) =
+        ComposeCodeGenerator().generateScreen(
+            screen,
+            Theme(),
+            sourceName = "Nav",
+            schemaVersion = 6,
+            components = components,
+        )
 
     @Test
     fun `navigates is true for a screen with a Navigate handler and false for a target-only screen`() {
@@ -87,14 +108,25 @@ class NavHostTest {
     }
 
     @Test
-    fun `a Navigate inside a user component fails loud rather than emitting a call to a missing parameter (#324)`() {
-        val component = ComponentDef(
-            id = "cmp",
-            name = "NavCard",
-            root = column("c_col", navButton("c_go", "details")),
-        )
-        val project = navProject.copy(components = listOf(component))
-        assertFailsWith<CodegenException> { ComposeCodeGenerator().generate(project) }
+    fun `navigates is transitive through a user-component instance, only when the components resolve (#324)`() {
+        // The hub screen has no Navigate handler of its own; it navigates solely because its instance references
+        // a navigating component — and only when that component is supplied for resolution.
+        assertTrue(NavHost.navigates(hub.root, listOf(navCard)))
+        assertFalse(NavHost.navigates(hub.root), "without the component list the instance cannot be resolved")
+        assertTrue(NavHost.projectNavigates(cmpProject))
+    }
+
+    @Test
+    fun `a Navigate inside a user component forwards onNavigate through the instance instead of failing (#324)`() {
+        val files = ComposeCodeGenerator().generate(cmpProject)
+        val card = files.first { it.path == "NavCard.kt" }.content
+        val hubScreen = files.first { it.path == "Hub.kt" }.content
+        // The component gains its own onNavigate param and lowers Navigate onto it.
+        assertContains(card, "fun NavCard(onNavigate: (String) -> Unit = {}, modifier: Modifier = Modifier)")
+        assertContains(card, "onNavigate(\"details\")")
+        // The instancing screen navigates transitively: it too carries onNavigate, and forwards it to the instance.
+        assertContains(hubScreen, "fun Hub(onNavigate: (String) -> Unit = {}, modifier: Modifier = Modifier)")
+        assertContains(hubScreen, "NavCard(onNavigate = onNavigate)")
     }
 
     @Test

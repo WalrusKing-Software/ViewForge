@@ -40,7 +40,7 @@ import viewforge.spi.Breakpoint
 internal class ComponentEmitter(
     private val theme: Theme,
     assets: List<Asset> = emptyList(),
-    components: List<ComponentDef> = emptyList(),
+    private val components: List<ComponentDef> = emptyList(),
     private val recordSpans: Boolean = false,
     private val state: List<StateField> = emptyList(),
     private val breakpoints: List<Breakpoint> = AndroidTarget.breakpoints,
@@ -181,6 +181,12 @@ internal class ComponentEmitter(
                     )
                     // else: parameter has a default — omit the argument so the default applies.
                 }
+            }
+            // Forward the navigation callback when the referenced component navigates (#324). The enclosing
+            // composable always carries `onNavigate` in this case, because the same transitive predicate
+            // ([NavHost.navigates]) flags it as navigating too — so this reference is always in scope.
+            if (NavHost.navigates(def.root, components)) {
+                add(named(NavHost.ON_NAVIGATE, CodeBlock.of("%N", NavHost.ON_NAVIGATE)))
             }
             if (mod != null) add(named("modifier", mod))
         }

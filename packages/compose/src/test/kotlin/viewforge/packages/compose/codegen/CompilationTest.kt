@@ -123,6 +123,22 @@ class CompilationTest {
     }
 
     @Test
+    fun `generated component navigation forwards onNavigate and compiles with its screen and host (#324)`() {
+        // Component-level navigation (#324): the NavCard component's tree navigates, so it gains its own
+        // `onNavigate` param and lowers Navigate onto it; the Hub screen navigates transitively and forwards
+        // `onNavigate = onNavigate` to the instance call; the App() host wires the screen. The component, both
+        // screens and the host must all compile together — proving the forwarded callback resolves end-to-end.
+        val project = ProjectCodec.decode(
+            requireNotNull(
+                javaClass.getResourceAsStream("/golden/ComponentNavigation.vforge"),
+            ).bufferedReader().readText(),
+        )
+        val files = ComposeCodeGenerator().generate(project).map { SourceFile.kotlin(it.path, it.content) }
+        val host = SourceFile.kotlin(NavHost.APP_KT, NavHost.appHost(project))
+        assertCompiles(files + host, "generated component-navigation bundle did not compile")
+    }
+
+    @Test
     fun `generated theme wrapper compiles with its screen`() {
         // The AppTheme wrapper (H4) and a screen that emits an inline TextStyle for a custom typography
         // token must compile against real Compose/Material3 — the H4 half of the compile gate (M8).

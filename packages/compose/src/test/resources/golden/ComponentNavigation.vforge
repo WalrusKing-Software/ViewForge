@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 6,
+  "id": "01NAVCOMPONENT",
+  "name": "ComponentNavigation",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_hub",
+      "name": "Hub",
+      "root": {
+        "id": "hub_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "hub_card",
+            "type": "vforge.userComponent",
+            "props": {
+              "componentId": {
+                "kind": "literal",
+                "value": "cmp_navcard"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_details",
+      "name": "Details",
+      "root": {
+        "id": "d_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "d_t",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "literal",
+                "value": "Details"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_navcard",
+      "name": "NavCard",
+      "root": {
+        "id": "c_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "c_go",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "c_go_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Go to details"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_details"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
