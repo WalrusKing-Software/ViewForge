@@ -35,10 +35,10 @@ import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
+import viewforge.packages.compose.targets.COMPOSE_BREAKPOINTS
 import viewforge.packages.compose.targets.COMPOSE_PREVIEW_PROFILES
 import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.packages.compose.targets.MultiplatformExporter
-import viewforge.packages.compose.targets.breakpointForWidth
 import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
 import viewforge.project.CrashReporter
@@ -94,7 +94,12 @@ private fun runEditor() {
     // the shell — its Restore prompt wins over whatever is seeded here.
     // The Compose package's targets contribute the canvas device-preview frames (desktop windows + Android
     // devices, #220); the editor names no framework, so the app injects them (ADR-026 Phase-2 amendment).
-    val state = EditorState(sampleProject(), ComposeCatalog, previewProfiles = COMPOSE_PREVIEW_PROFILES)
+    val state = EditorState(
+        sampleProject(),
+        ComposeCatalog,
+        previewProfiles = COMPOSE_PREVIEW_PROFILES,
+        breakpoints = COMPOSE_BREAKPOINTS,
+    )
     when (val seed = resolveStartupSeed(prefs)) {
         StartupSeed.FirstRunSample -> Unit // keep the sample the state was constructed with
         StartupSeed.Blank -> state.newDocument()
@@ -142,8 +147,9 @@ private fun runEditor() {
                 // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
                 editorAffordances = true,
                 // Responsive preview (#314): resolve per-breakpoint overrides for the breakpoint the active
-                // device frame's width falls into, so the canvas shows what codegen would emit at that width.
-                activeBreakpoint = breakpointForWidth(state.activeDeviceProfile.width),
+                // device frame's width falls into (EditorState derives it), so the canvas shows what codegen
+                // would emit at that width.
+                activeBreakpoint = state.previewBreakpoint,
             )
         }
 

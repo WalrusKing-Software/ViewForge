@@ -345,6 +345,7 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
                     onClick = state::toggleInteractivePreview,
                 )
                 DeviceProfileSelector(state)
+                BreakpointIndicator(state)
                 // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
                 ToolbarButton(
                     if (state.canvasDark) "◐ Dark" else "◑ Light",
@@ -355,6 +356,23 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
             }
         }
     }
+}
+
+/**
+ * The active responsive breakpoint (#314): a read-only chip showing which breakpoint the current device
+ * frame's width resolves to (Compact/Medium/Expanded), so it is clear which per-breakpoint overrides the
+ * canvas is previewing. Shown only when the app injects a breakpoint set. Slice 2b turns this into the
+ * selector that pins the canvas to a breakpoint for editing (edit-what-you-see).
+ */
+@Composable
+private fun BreakpointIndicator(state: EditorState) {
+    if (state.breakpoints.isEmpty()) return
+    Text(
+        "⤢ ${state.previewBreakpointLabel}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    )
 }
 
 /**

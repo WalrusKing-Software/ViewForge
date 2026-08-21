@@ -1,5 +1,6 @@
 package viewforge.packages.compose.targets
 
+import viewforge.spi.Breakpoint
 import viewforge.spi.GeneratedFile
 import viewforge.spi.PreviewInsets
 import viewforge.spi.PreviewProfile
@@ -37,15 +38,6 @@ object DesktopTarget : TargetDefinition {
         PreviewProfile(id, "Desktop $w × $h", w.toFloat(), h.toFloat(), density = 1f, group = "Desktop")
 }
 
-/**
- * A responsive breakpoint (ADR-037, #222): a model breakpoint [id] (opaque to `core`, ADR-030) mapped to the
- * minimum viewport width in dp at which it applies. Owned by the target — the Compose Android target maps the
- * ids to Material **window size classes** — so codegen's `BoxWithConstraints` branching and (later, #314) the
- * canvas both compare a width against the *same* thresholds. The base ([Node.props][viewforge.model.Node.props])
- * is the `compact` (< the smallest threshold) case and is the final `else`, so it is not listed here.
- */
-data class ResponsiveBreakpoint(val id: String, val minWidthDp: Int)
-
 /** Android target: the `MainActivity` and the manifest live in `androidMain`; everything else is shared. */
 object AndroidTarget : TargetDefinition {
     /** The Android manifest file name; routed to `androidMain` (placed at the set root, not under `kotlin/`). */
@@ -54,13 +46,14 @@ object AndroidTarget : TargetDefinition {
     override val id: String = "android"
 
     /**
-     * The responsive breakpoints codegen branches on (ADR-037, #222): Material window size classes —
-     * `medium` ≥ 600dp and `expanded` ≥ 840dp, with `compact` (< 600dp) being the base/`else`. Largest-first
-     * emission is the emitter's job; this is just the id → threshold map the Android target owns.
+     * The responsive breakpoints codegen branches on and the canvas resolves against (ADR-037, #222/#314):
+     * Material window size classes — `medium` ≥ 600dp and `expanded` ≥ 840dp, with `compact` (< 600dp) being
+     * the base/`else` (no entry). Largest-first emission is the emitter's job; this is the id → threshold set
+     * the Android target owns, framework-neutral [Breakpoint] data the editor is handed like `previewProfiles`.
      */
-    val breakpoints: List<ResponsiveBreakpoint> = listOf(
-        ResponsiveBreakpoint("medium", 600),
-        ResponsiveBreakpoint("expanded", 840),
+    val breakpoints: List<Breakpoint> = listOf(
+        Breakpoint("medium", "Medium", 600),
+        Breakpoint("expanded", "Expanded", 840),
     )
 
     /**
@@ -104,16 +97,8 @@ object AndroidTarget : TargetDefinition {
 /** Every preview profile the Compose package offers the editor (desktop windows + Android devices, #220). */
 val COMPOSE_PREVIEW_PROFILES: List<PreviewProfile> = DesktopTarget.previewProfiles + AndroidTarget.previewProfiles
 
-/**
- * The responsive breakpoint id active at a viewport [widthDp] (#314): the largest [breakpoints] entry whose
- * `minWidthDp` the width meets, or `null` for the base/`compact` case below the smallest threshold. This is
- * the render-time twin of codegen's `BoxWithConstraints` branching (ADR-037) — both read a real width and
- * pick a breakpoint against the *same* target thresholds, so the canvas previews exactly what will generate.
- * Width-based (not platform-based), so a wide desktop frame previews the same `expanded` overrides an Android
- * tablet would, matching the generated `BoxWithConstraints` that reads its own width on either target.
- */
-fun breakpointForWidth(widthDp: Float, breakpoints: List<ResponsiveBreakpoint> = AndroidTarget.breakpoints): String? =
-    breakpoints.filter { widthDp >= it.minWidthDp }.maxByOrNull { it.minWidthDp }?.id
+/** The responsive breakpoints the Compose package offers the editor (the Android window size classes, #314). */
+val COMPOSE_BREAKPOINTS: List<Breakpoint> = AndroidTarget.breakpoints
 
 internal const val COMMON_MAIN = "commonMain"
 internal const val JVM_MAIN = "jvmMain"
