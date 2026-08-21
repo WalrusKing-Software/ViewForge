@@ -1,7 +1,10 @@
 package viewforge.packages.compose.targets
 
+import viewforge.model.Asset
 import viewforge.model.Project
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
+import viewforge.packages.compose.codegen.DrawableResources
+import viewforge.packages.compose.codegen.ImageResources
 import viewforge.packages.compose.codegen.KotlinFormatter
 import viewforge.project.BinaryFile
 import viewforge.project.ExportFile
@@ -21,23 +24,34 @@ import viewforge.spi.GeneratedFile
  * routing seam made real for the first time.
  *
  * Pure by design — returns bytes, never touches disk; writing goes through [viewforge.project.ProjectExporter]
- * with its path guard (CLAUDE.md rule 6). **Image assets are not wired here yet:** the desktop
- * `painterResource(String)` (ADR-021) is not a `commonMain` API, so image-bearing screens compile for
- * Android only once `Image` moves to multiplatform resources (#223); until then the multiplatform export
- * targets image-free projects.
+ * with its path guard (CLAUDE.md rule 6). **Image assets** are emitted via the Compose Multiplatform resources
+ * API (`Res.drawable.x`, #223, ADR-021) — a `commonMain` API, so an image renders on Android too — with each
+ * asset routed into `commonMain/composeResources/drawable/` for the resources plugin to turn into the `Res`
+ * accessor codegen references. [assetBytes] resolves each referenced asset's bytes; an unresolved asset is
+ * skipped (its `Res.drawable.x` reference then won't build, exactly as a missing desktop resource wouldn't).
  */
 object MultiplatformExporter {
-    fun multiplatformProject(project: Project): List<ExportFile> {
+    /** Where drawables land for the resources plugin — the accessor package is [MultiplatformScaffold]-configured. */
+    private const val DRAWABLE_DIR = "src/$COMMON_MAIN/composeResources/drawable"
+
+    fun multiplatformProject(project: Project, assetBytes: (Asset) -> ByteArray? = { null }): List<ExportFile> {
         val name = project.name.ifBlank { "Project" }
         val slug = GradleScaffold.slug(name)
         val gen = ComposeCodeGenerator()
         val themeSource = gen.generateTheme(project)
         val themed = themeSource != null
+        // The generated `Res` accessor package, configured on the scaffold so codegen's import is deterministic.
+        val images = ImageResources.Multiplatform("${MultiplatformScaffold.applicationId(slug)}.generated.resources")
         return buildList {
             // Shared UI → commonMain. Screens/components are commonMain by definition (not entry points),
             // so they are placed directly rather than routed, avoiding a mis-route of a screen named "Main".
-            gen.generate(project).forEach { file ->
+            gen.generate(project, images).forEach { file ->
                 add(TextFile(kotlinPath(COMMON_MAIN, file.path), KotlinFormatter.format(file.content)))
+            }
+            // Referenced image assets → the resources source set, where the plugin generates their Res.drawable
+            // accessors (#223). Skipped when the bytes can't be resolved, like the desktop exporter.
+            project.assets.forEach { asset ->
+                assetBytes(asset)?.let { add(BinaryFile("$DRAWABLE_DIR/${DrawableResources.fileName(asset)}", it)) }
             }
             // The project theme wrapper (H4), when the theme defines anything — commonMain via the seam.
             themeSource?.let {

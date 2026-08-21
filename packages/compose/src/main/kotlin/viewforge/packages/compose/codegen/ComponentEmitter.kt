@@ -44,6 +44,7 @@ internal class ComponentEmitter(
     private val recordSpans: Boolean = false,
     private val state: List<StateField> = emptyList(),
     private val breakpoints: List<Breakpoint> = AndroidTarget.breakpoints,
+    private val imageResources: ImageResources = ImageResources.Desktop,
 ) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
@@ -336,7 +337,7 @@ internal class ComponentEmitter(
     // modifier, alignment, contentScale, alpha. Each optional arg is emitted only when its prop is set.
     private fun imageArgs(props: Map<String, PropValue>, mod: CodeBlock?, scope: BindingTypeScope): List<Arg> =
         buildList {
-            add(named("painter", CodegenValues.painter(props["source"], assetsById)))
+            add(named("painter", CodegenValues.painter(props["source"], assetsById, imageResources)))
             add(
                 named(
                     "contentDescription",
