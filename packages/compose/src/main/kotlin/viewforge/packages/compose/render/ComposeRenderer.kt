@@ -16,6 +16,7 @@ import viewforge.model.Node
 import viewforge.model.NodeId
 import viewforge.model.StateField
 import viewforge.model.Theme
+import viewforge.model.resolvedForBreakpoint
 
 /**
  * The Compose framework package's public rendering entry point (ARCHITECTURE §6.2, renderer half).
@@ -42,6 +43,7 @@ object ComposeRenderer {
         state: List<StateField> = emptyList(),
         interactive: Boolean = false,
         editorAffordances: Boolean = false,
+        activeBreakpoint: String? = null,
     ) {
         ProjectTheme(theme, dark) {
             val ctx = RenderContext(
@@ -53,16 +55,22 @@ object ComposeRenderer {
                 interactive = interactive,
                 editorAffordances = editorAffordances,
             )
+            // Responsive resolution (ADR-030/037, #314): overlay the active breakpoint's per-breakpoint prop
+            // overrides before any binding/repeat expansion, so the canvas previews the same values codegen's
+            // `BoxWithConstraints` would pick at that width. Override-free trees resolve to the same instance
+            // (`resolvedForBreakpoint` returns `this`), so a non-responsive screen is untouched and the
+            // structural-sharing remember keys below stay stable.
+            val resolved = remember(root, activeBreakpoint) { root.resolvedForBreakpoint(activeBreakpoint) }
             if (interactive) {
                 // C13 run mode (ADR-035): back the writable state with an ephemeral store seeded from the
                 // samples, re-resolve bindings against the LIVE values each change, and hand each widget a
                 // reducer that applies its handler actions to that store. Nothing is persisted to the IR.
-                InteractiveScreen(root, state, ctx)
+                InteractiveScreen(resolved, state, ctx)
             } else {
                 // Static design canvas (ADR-034): bindings become sample literals and repeats expand to their
                 // rows, so RenderNode only ever sees an ordinary tree. Remembered on (root, state) so it
                 // recomputes only when the screen or its data changes, like bindParameters.
-                RenderNode(remember(root, state) { expandScreenState(root, state) }, ctx)
+                RenderNode(remember(resolved, state) { expandScreenState(resolved, state) }, ctx)
             }
         }
     }

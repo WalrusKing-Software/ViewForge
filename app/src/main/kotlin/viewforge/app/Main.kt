@@ -38,6 +38,7 @@ import viewforge.packages.compose.render.ComposeRenderer
 import viewforge.packages.compose.targets.COMPOSE_PREVIEW_PROFILES
 import viewforge.packages.compose.targets.DesktopExporter
 import viewforge.packages.compose.targets.MultiplatformExporter
+import viewforge.packages.compose.targets.breakpointForWidth
 import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
 import viewforge.project.CrashReporter
@@ -140,6 +141,9 @@ private fun runEditor() {
                 // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
                 // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
                 editorAffordances = true,
+                // Responsive preview (#314): resolve per-breakpoint overrides for the breakpoint the active
+                // device frame's width falls into, so the canvas shows what codegen would emit at that width.
+                activeBreakpoint = breakpointForWidth(state.activeDeviceProfile.width),
             )
         }
 
