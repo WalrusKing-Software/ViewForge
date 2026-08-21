@@ -18,7 +18,7 @@ import viewforge.model.effectiveProps
 import viewforge.model.resolveBindingType
 import viewforge.model.resolveListShape
 import viewforge.packages.compose.targets.AndroidTarget
-import viewforge.packages.compose.targets.ResponsiveBreakpoint
+import viewforge.spi.Breakpoint
 
 /**
  * Emits a node subtree as a KotlinPoet [CodeBlock], mirroring `render/Components.kt` component for
@@ -43,7 +43,7 @@ internal class ComponentEmitter(
     components: List<ComponentDef> = emptyList(),
     private val recordSpans: Boolean = false,
     private val state: List<StateField> = emptyList(),
-    private val breakpoints: List<ResponsiveBreakpoint> = AndroidTarget.breakpoints,
+    private val breakpoints: List<Breakpoint> = AndroidTarget.breakpoints,
 ) {
     private val assetsById: Map<String, Asset> = assets.associateBy { it.id }
     private val componentsById: Map<String, ComponentDef> = components.associateBy { it.id }
@@ -553,7 +553,7 @@ internal class ComponentEmitter(
         if (activeBps.isEmpty()) return call(callee, baseArgs, content, contentParam)
 
         val baseByName = baseArgs.associate { it.name to it.value }
-        val perBp: Map<ResponsiveBreakpoint, Map<String, CodeBlock>> =
+        val perBp: Map<Breakpoint, Map<String, CodeBlock>> =
             activeBps.associateWith { bp -> argsFor(effectiveProps(node, bp.id)).associate { it.name to it.value } }
         perBp.forEach { (bp, byName) ->
             byName.keys.forEach { name ->

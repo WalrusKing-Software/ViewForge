@@ -70,7 +70,10 @@ import viewforge.prefs.FavoriteComponents
 import viewforge.prefs.PanelLayout
 import viewforge.prefs.RecentProjects
 import viewforge.project.LibraryComponent
+import viewforge.spi.Breakpoint
 import viewforge.spi.PreviewProfile
+import viewforge.spi.breakpointForWidth
+import viewforge.spi.breakpointLabel
 import java.nio.file.Path
 
 /**
@@ -88,12 +91,15 @@ import java.nio.file.Path
  * Device preview frames (C6, ADR-026) are likewise injected: [previewProfiles] is the aggregate of every
  * target's [previewProfiles][viewforge.spi.TargetDefinition.previewProfiles] (desktop windows + Android
  * devices, #220), supplied by the app so the editor names no framework. Empty in headless/test use, where
- * resolution falls back to a plain desktop frame.
+ * resolution falls back to a plain desktop frame. [breakpoints] are injected the same way (#314): the target's
+ * responsive thresholds the canvas resolves the active frame width against, so the preview shows the same
+ * per-breakpoint overrides codegen emits (ADR-037). Empty in headless/test use → always the base breakpoint.
  */
 class EditorState(
     initial: Project,
     val catalog: ComponentCatalog,
     val previewProfiles: List<PreviewProfile> = emptyList(),
+    val breakpoints: List<Breakpoint> = emptyList(),
 ) {
     /** The live document — the single source of truth the UI renders (ARCHITECTURE §1). */
     var document: Project by mutableStateOf(initial)
@@ -776,6 +782,19 @@ class EditorState(
      */
     val activeDeviceProfile: PreviewProfile
         get() = DeviceProfiles.forId(activeScreen?.previewProfile, previewProfiles)
+
+    /**
+     * The responsive breakpoint the canvas currently previews (#314), derived from the active device frame's
+     * width against the injected [breakpoints] — the render twin of codegen's `BoxWithConstraints` (ADR-037),
+     * so a node's per-breakpoint overrides resolve on the canvas exactly as they generate. `null` is the base
+     * (`compact`) breakpoint. (Slice 2b lets the inspector pin this to the breakpoint being edited.)
+     */
+    val previewBreakpoint: String?
+        get() = breakpointForWidth(activeDeviceProfile.width, breakpoints)
+
+    /** The display label for the [previewBreakpoint] — a breakpoint's label, or "Compact" for the base. */
+    val previewBreakpointLabel: String
+        get() = breakpointLabel(previewBreakpoint, breakpoints)
 
     /** Set the active screen's device preview profile (C6); undoable, preview-only (no codegen effect). */
     fun setPreviewProfile(profileId: String) {
