@@ -24,6 +24,7 @@ import viewforge.command.SetModifiers
 import viewforge.command.SetNodeFlags
 import viewforge.command.SetPreviewProfile
 import viewforge.command.SetProp
+import viewforge.command.SetResponsiveOverride
 import viewforge.command.SetStateField
 import viewforge.command.SetTheme
 import viewforge.command.extractComponent
@@ -784,17 +785,40 @@ class EditorState(
         get() = DeviceProfiles.forId(activeScreen?.previewProfile, previewProfiles)
 
     /**
-     * The responsive breakpoint the canvas currently previews (#314), derived from the active device frame's
-     * width against the injected [breakpoints] — the render twin of codegen's `BoxWithConstraints` (ADR-037),
-     * so a node's per-breakpoint overrides resolve on the canvas exactly as they generate. `null` is the base
-     * (`compact`) breakpoint. (Slice 2b lets the inspector pin this to the breakpoint being edited.)
+     * Whether the canvas preview is **pinned** to a chosen breakpoint (#314, edit-what-you-see) rather than
+     * following the device frame's width. Set by the breakpoint selector so editing a per-breakpoint override
+     * shows on the canvas immediately; cleared ([unpinBreakpoint]) to follow the frame again.
+     */
+    var isBreakpointPinned: Boolean by mutableStateOf(false)
+        private set
+
+    /** The pinned breakpoint id when [isBreakpointPinned] (null = the base/`compact` breakpoint). */
+    var pinnedBreakpoint: String? by mutableStateOf(null)
+        private set
+
+    /**
+     * The responsive breakpoint the canvas currently previews (#314): the [pinnedBreakpoint] when the inspector
+     * has pinned one (edit-what-you-see), otherwise derived from the active device frame's width against the
+     * injected [breakpoints] — the render twin of codegen's `BoxWithConstraints` (ADR-037), so a node's
+     * per-breakpoint overrides resolve on the canvas exactly as they generate. `null` is the base (`compact`).
      */
     val previewBreakpoint: String?
-        get() = breakpointForWidth(activeDeviceProfile.width, breakpoints)
+        get() = if (isBreakpointPinned) pinnedBreakpoint else breakpointForWidth(activeDeviceProfile.width, breakpoints)
 
     /** The display label for the [previewBreakpoint] — a breakpoint's label, or "Compact" for the base. */
     val previewBreakpointLabel: String
         get() = breakpointLabel(previewBreakpoint, breakpoints)
+
+    /** Pin the canvas preview (and the inspector's editing target) to breakpoint [id] (null = base), #314. */
+    fun pinBreakpoint(id: String?) {
+        isBreakpointPinned = true
+        pinnedBreakpoint = id
+    }
+
+    /** Stop pinning: the preview follows the active device frame's width again (#314). */
+    fun unpinBreakpoint() {
+        isBreakpointPinned = false
+    }
 
     /** Set the active screen's device preview profile (C6); undoable, preview-only (no codegen effect). */
     fun setPreviewProfile(profileId: String) {
@@ -1324,6 +1348,38 @@ class EditorState(
     fun resetProp(nodeId: NodeId, def: PropDefinition) {
         setProp(nodeId, def.name, def.default)
     }
+
+    /**
+     * Set (or clear, when [value] is null) node [nodeId]'s override for prop [key] at [breakpointId] — the
+     * per-breakpoint twin of [setProp] (#314/ADR-037). Undoable and live; clearing reverts that breakpoint to
+     * the base value.
+     */
+    fun setResponsiveOverride(nodeId: NodeId, breakpointId: String, key: String, value: PropValue?) {
+        val rootId = activeEditRootId ?: return
+        execute(SetResponsiveOverride(rootId, nodeId, breakpointId, key, value), selectAfter = selectedId)
+    }
+
+    /**
+     * Edit prop [key] at whatever breakpoint the canvas currently previews (#314, edit-what-you-see): the base
+     * props at the base breakpoint (like [setProp]), or a per-breakpoint override otherwise — so an inspector
+     * edit always targets the breakpoint being shown.
+     */
+    fun setPropAtActiveBreakpoint(nodeId: NodeId, key: String, value: PropValue?) {
+        val bp = previewBreakpoint
+        if (bp == null) setProp(nodeId, key, value) else setResponsiveOverride(nodeId, bp, key, value)
+    }
+
+    /**
+     * The effective value of prop [key] on [node] at the previewed breakpoint (#314): the per-breakpoint
+     * override if one is set, else the base prop — mirroring the render/codegen `effectiveProps`, so an
+     * inspector control shows exactly what the canvas draws.
+     */
+    fun effectiveProp(node: Node, key: String): PropValue? =
+        previewBreakpoint?.let { node.responsive[it]?.get(key) } ?: node.props[key]
+
+    /** Whether prop [key] is overridden at the previewed (non-base) breakpoint on [node] (#314). */
+    fun isOverriddenAtActiveBreakpoint(node: Node, key: String): Boolean =
+        previewBreakpoint?.let { node.responsive[it]?.containsKey(key) == true } ?: false
 
     /** The event slots [node]'s component type exposes (ADR-035) — the handler points the action editor offers. */
     fun eventSlots(node: Node): List<EventSlotDefinition> = catalog.eventSlotsOf(node.type)

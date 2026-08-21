@@ -103,7 +103,10 @@ private fun InspectorBody(state: EditorState, node: Node) {
                 DropdownSource(state, node)
             }
             else -> {
-                SectionLabel("Props")
+                // At a non-base breakpoint the Props section edits that breakpoint's overrides (#314); the label
+                // names it so it is clear the edits are per-breakpoint, not to the base.
+                val bp = state.previewBreakpoint
+                SectionLabel(if (bp != null) "Props · ${state.previewBreakpointLabel}" else "Props")
                 // With several same-type nodes selected, a prop edit applies to all of them (C10).
                 val shared = state.sameTypeSelection().size
                 if (shared > 1) {
@@ -145,6 +148,13 @@ private fun InspectorBody(state: EditorState, node: Node) {
 
 @Composable
 private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: Theme) {
+    // When the canvas previews a non-base breakpoint (#314, edit-what-you-see), a prop edit targets that
+    // breakpoint's override, not the base props — a separate, simpler row (no bind/param/expression hatches,
+    // which are base concepts). At the base breakpoint the full base editor below is unchanged.
+    if (state.previewBreakpoint != null) {
+        ResponsivePropRow(state, node, def, theme)
+        return
+    }
     val value = node.props[def.name]
     // A prop bound to a component parameter (ADR-028) shows a read-only chip, not the literal controls.
     val isParam = value is PropValue.ParamRef
@@ -205,6 +215,52 @@ private fun PropRow(state: EditorState, node: Node, def: PropDefinition, theme: 
             } else {
                 null
             },
+        )
+    }
+}
+
+/**
+ * A prop row while the canvas previews a non-base breakpoint (#314): it edits that breakpoint's per-breakpoint
+ * override (ADR-030/037) rather than the base props. The control shows the effective value — the override if
+ * set, else the base — and a "clear override" action reverts this breakpoint to the base. A base value bound to
+ * a component parameter or screen state is edited at the base (Compact) breakpoint, so it is read-only here.
+ */
+@Composable
+private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinition, theme: Theme) {
+    val base = node.props[def.name]
+    if (base is PropValue.ParamRef || base is PropValue.StateBinding) {
+        Column(Modifier.padding(vertical = 4.dp)) {
+            Text(
+                def.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            MutedText(if (base is PropValue.ParamRef) "parameter — edit at Compact" else "bound — edit at Compact")
+        }
+        return
+    }
+    val overridden = state.isOverriddenAtActiveBreakpoint(node, def.name)
+    val labelColor = if (overridden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                def.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+                modifier = Modifier.weight(1f),
+            )
+            // Revert this breakpoint to the base value (removes the override).
+            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpoint(node.id, def.name, null) }
+        }
+        ValueControl(
+            type = def.type,
+            value = state.effectiveProp(node, def.name) ?: def.default,
+            theme = theme,
+            onChange = { state.setPropAtActiveBreakpoint(node.id, def.name, it) },
+            enumValues = def.enumValues,
+            range = def.range,
+            themeable = def.themeable,
+            assets = state.document.assets,
         )
     }
 }

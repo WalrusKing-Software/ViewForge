@@ -204,8 +204,9 @@ framework package's target (the Android target uses Material window size classes
 `medium` 600–840dp, `expanded` ≥ 840dp). The map is omitted when empty, so a non-responsive node serializes
 exactly as before v7. Codegen wraps a node carrying overrides in `BoxWithConstraints` and hoists each
 overridden prop into a `maxWidth`-selected `val` (largest-first), against the Android target's dp thresholds
-(ADR-037 M14, #222); an override-free node is byte-identical to before. Render-time resolution and the canvas
-active-breakpoint UX are a follow-up (#314).
+(ADR-037 M14, #222); an override-free node is byte-identical to before. The canvas previews the active
+breakpoint (resolved from the device frame's width, or pinned by the toolbar breakpoint selector), and the
+inspector edits per-breakpoint overrides while that breakpoint is shown — edit-what-you-see (#314).
 
 **`locked`** — editor-only protection (T4), scoped **per-node, not to the subtree**: a locked node is
 non-selectable (canvas click, marquee, tree click), non-draggable, cannot receive dropped children (a
@@ -580,7 +581,8 @@ public fun HomeScreen(modifier: Modifier = Modifier) {
    ADR-035 interactive state & events claimed v6, so responsive slid to v7.) A separate node-id-keyed override
    layer was rejected — see ADR-030. **Codegen** wraps an overridden node in `BoxWithConstraints` and hoists
    each overridden prop into a `maxWidth`-selected `val` against the Android target's thresholds (ADR-037 M14,
-   landed in **#222**); render-time resolution and the canvas active-breakpoint UX are a follow-up (**#314**).
+   landed in **#222**); the canvas previews the active breakpoint and the inspector edits per-breakpoint
+   overrides (a toolbar selector pins the previewed breakpoint — edit-what-you-see) in **#314**.
 4. **Interaction/navigation.** *Resolved (ADR-035, schema v6):* state is now **writable** and a node's
    `handlers` map event slots to ordered, closed `Action` lists (§5) — `SetState`/`Toggle`/`Adjust`/
    `AppendRow`/`RemoveRow`/`Navigate` — dispatched by a `when`, never evaluated (PF-4 / SECURITY IA-*).

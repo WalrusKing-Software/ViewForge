@@ -63,6 +63,7 @@ import viewforge.editor.state.CodePreviewService
 import viewforge.editor.state.DeviceProfiles
 import viewforge.editor.state.EditorState
 import viewforge.editor.state.ProjectExportService
+import viewforge.spi.Breakpoint
 import viewforge.spi.PreviewProfile
 import java.nio.file.Path
 
@@ -345,7 +346,7 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
                     onClick = state::toggleInteractivePreview,
                 )
                 DeviceProfileSelector(state)
-                BreakpointIndicator(state)
+                BreakpointSelector(state)
                 // Preview the project theme's light/dark values on the canvas (H2); label shows the mode.
                 ToolbarButton(
                     if (state.canvasDark) "◐ Dark" else "◑ Light",
@@ -359,20 +360,45 @@ internal fun Toolbar(state: EditorState, export: ExportController, onOpenThemeEd
 }
 
 /**
- * The active responsive breakpoint (#314): a read-only chip showing which breakpoint the current device
- * frame's width resolves to (Compact/Medium/Expanded), so it is clear which per-breakpoint overrides the
- * canvas is previewing. Shown only when the app injects a breakpoint set. Slice 2b turns this into the
- * selector that pins the canvas to a breakpoint for editing (edit-what-you-see).
+ * The responsive-breakpoint selector (#314, edit-what-you-see): shows the breakpoint the canvas is previewing
+ * (Compact/Medium/Expanded) and lets the user **pin** the preview to one so a per-breakpoint override edited in
+ * the inspector shows on the canvas immediately. "Auto (device frame)" unpins, so the preview follows the
+ * device frame's width again. Shown only when the app injects a breakpoint set.
  */
 @Composable
-private fun BreakpointIndicator(state: EditorState) {
+private fun BreakpointSelector(state: EditorState) {
     if (state.breakpoints.isEmpty()) return
-    Text(
-        "⤢ ${state.previewBreakpointLabel}",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 8.dp),
-    )
+    var expanded by remember { mutableStateOf(false) }
+    val suffix = if (state.isBreakpointPinned) " ●" else " (auto)"
+    Box {
+        ToolbarButton("⤢ ${state.previewBreakpointLabel}$suffix", enabled = true, onClick = { expanded = true })
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Auto (device frame)") },
+                onClick = {
+                    state.unpinBreakpoint()
+                    expanded = false
+                },
+            )
+            // The base (compact) breakpoint has no entry in the injected set — it is the default props.
+            DropdownMenuItem(
+                text = { Text(Breakpoint.BASE_LABEL) },
+                onClick = {
+                    state.pinBreakpoint(null)
+                    expanded = false
+                },
+            )
+            state.breakpoints.forEach { bp ->
+                DropdownMenuItem(
+                    text = { Text(bp.label) },
+                    onClick = {
+                        state.pinBreakpoint(bp.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
 }
 
 /**
