@@ -10,6 +10,7 @@ import com.squareup.kotlinpoet.TypeSpec
 import viewforge.model.Project
 import viewforge.packages.compose.codegen.KotlinFormatter
 import viewforge.packages.compose.codegen.KotlinIdentifiers
+import viewforge.packages.compose.codegen.NavHost
 
 /**
  * The generated **platform entry points** for an exported Compose project — the small per-target files
@@ -47,17 +48,16 @@ internal object ComposeEntryPoints {
      * screens it opens an empty themed window rather than failing.
      */
     fun desktopMain(project: Project, themed: Boolean): String {
-        val firstScreen = project.screens.firstOrNull()
+        val entry = entryComposable(project)
         val title = project.name.ifBlank { "ViewForge" }
         val theme = if (themed) appTheme else materialTheme
         val body = CodeBlock.builder()
             .beginControlFlow("%M", application)
             .beginControlFlow("%M(onCloseRequest = ::exitApplication, title = %S)", windowFn, title)
             .apply {
-                if (firstScreen != null) {
-                    val screenFn = MemberName("", KotlinIdentifiers.requireFunctionName(firstScreen.name))
+                if (entry != null) {
                     beginControlFlow("%M", theme)
-                    addStatement("%M()", screenFn)
+                    addStatement("%M()", entry)
                     endControlFlow()
                 } else {
                     addStatement("%M { }", theme)
@@ -83,7 +83,7 @@ internal object ComposeEntryPoints {
      * (androidMain depends on commonMain); the manifest binds it by the fully-qualified name `MainActivity`.
      */
     fun androidMainActivity(project: Project, themed: Boolean): String {
-        val firstScreen = project.screens.firstOrNull()
+        val entry = entryComposable(project)
         val theme = if (themed) appTheme else materialTheme
         val onCreate = FunSpec.builder("onCreate")
             .addModifiers(KModifier.OVERRIDE)
@@ -91,10 +91,9 @@ internal object ComposeEntryPoints {
             .addStatement("super.onCreate(savedInstanceState)")
             .beginControlFlow("%M", setContent)
             .apply {
-                if (firstScreen != null) {
-                    val screenFn = MemberName("", KotlinIdentifiers.requireFunctionName(firstScreen.name))
+                if (entry != null) {
                     beginControlFlow("%M", theme)
-                    addStatement("%M()", screenFn)
+                    addStatement("%M()", entry)
                     endControlFlow()
                 } else {
                     addStatement("%M { }", theme)
@@ -115,6 +114,16 @@ internal object ComposeEntryPoints {
             .build()
             .toString()
         return KotlinFormatter.format(file)
+    }
+
+    /**
+     * The composable an entry point renders: the generated [NavHost.APP_FN] host when the project has any
+     * screen-to-screen navigation (ADR-039, #214) — so the entry stands up the screen switcher — else the first
+     * screen directly (byte-identical to before navigation existed), or null when the project has no screens.
+     */
+    private fun entryComposable(project: Project): MemberName? = when {
+        NavHost.projectNavigates(project) -> MemberName("", NavHost.APP_FN)
+        else -> project.screens.firstOrNull()?.let { MemberName("", KotlinIdentifiers.requireFunctionName(it.name)) }
     }
 
     private fun sourceLine(project: Project): String =

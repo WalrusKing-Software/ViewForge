@@ -5,6 +5,7 @@ import viewforge.model.Project
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinFormatter
 import viewforge.packages.compose.codegen.KotlinIdentifiers
+import viewforge.packages.compose.codegen.NavHost
 import viewforge.project.BinaryFile
 import viewforge.project.ExportFile
 import viewforge.project.TextFile
@@ -52,6 +53,11 @@ object DesktopExporter {
             // The project theme's AppTheme wrapper (H4), when the theme defines anything; Main wraps the
             // screen in it so the compiled app is themed exactly like the canvas (ADR-018).
             if (themeSource != null) add(TextFile("$SOURCE_DIR/Theme.kt", themeSource))
+            // The screen-switching host (ADR-039, #214), only when some screen navigates — Main renders App()
+            // instead of the first screen. A non-navigating project ships no App.kt, exactly as before.
+            if (NavHost.projectNavigates(project)) {
+                add(TextFile("$SOURCE_DIR/${NavHost.APP_KT}", NavHost.appHost(project)))
+            }
             add(
                 TextFile(
                     "$SOURCE_DIR/${ComposeEntryPoints.MAIN_KT}",

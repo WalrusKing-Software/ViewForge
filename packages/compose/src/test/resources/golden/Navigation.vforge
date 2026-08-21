@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 6,
+  "id": "01NAVHOME",
+  "name": "Navigation",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_home",
+      "name": "Home",
+      "root": {
+        "id": "n_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_go",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "n_go_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Go to details"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_details"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

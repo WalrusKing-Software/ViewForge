@@ -126,6 +126,11 @@ class GoldenCodegenTest {
     // structural lambda — `Adjust`→`count += 1`, `Toggle`→`expanded = !expanded`, `SetState`→`count = 0`.
     @Test fun interactive() = assertGolden("Interactive")
 
+    // Screen-to-screen navigation (ADR-039, #214): a Button `onClick` whose handler is a `Navigate` action
+    // lowers to `onNavigate("scr_details")`, and the navigating screen gains an injected
+    // `onNavigate: (String) -> Unit = {}` parameter (before `modifier`). A non-navigating screen is unchanged.
+    @Test fun navigation() = assertGolden("Navigation")
+
     // Responsive per-breakpoint overrides (ADR-037, #222): a Text with `fontSize`/`textAlign` overridden at
     // the `medium`/`expanded` breakpoints lowers to a `BoxWithConstraints { }` that hoists each overridden prop
     // into a `val name = if (maxWidth >= 840.dp) … else if (maxWidth >= 600.dp) … else <base>` selected by width,

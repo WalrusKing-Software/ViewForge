@@ -1935,6 +1935,87 @@ jar — pinned in the catalog (rule 9) and re-verified on Compose/AGP bumps.
 
 ---
 
+## ADR-039 — Screen-to-screen navigation: a generated callback + `when`-host, no dependency, no new schema
+
+**Status:** Accepted (2026-08-21, #214). Builds on ADR-035 (the `Navigate` action already exists in schema v6).
+
+**Context.** ADR-035 shipped interactivity as a closed `Action` set and included `Navigate(screenId)` as the
+**structural hook** for screen-to-screen navigation (#214) — but deliberately left codegen a compilable
+`// TODO(#214)` no-op ("`Navigate`→ the navigation call (#214)"), because *how* an exported app switches
+screens is its own decision. #214 is that decision. The IR is done (`Action.Navigate`, serialized in v6), the
+inspector already offers a screen-target picker (`navigableScreens()`), and the project model is already
+multi-screen (`Project.screens`, `AddScreen`). What is missing is (a) what a `Navigate` **lowers to** in
+generated Kotlin, (b) what **hosts** the screen switch in an exported app, and (c) what happens in the
+**canvas preview**. The constraints that bound the choice: generated screens are framework-neutral `commonMain`
+(ADR-036), so whatever hosts navigation must work on desktop **and** Android from shared code; the project is
+**offline with pinned deps and no casual dependencies** (CLAUDE.md rules 7/9); codegen is **structural
+KotlinPoet, never string-built** (rule 4); and **no expression is ever evaluated** — a screen id is *looked up*,
+not run (PF-4). Decided with the user via AskUserQuestion (2026-08-21): the lightweight callback host over an
+`androidx.navigation` dependency.
+
+**Decision.** Emit navigation as a **generated `onNavigate` callback threaded into a tiny generated `when`-host**
+— no navigation library, no schema change. Concretely:
+
+- **A navigating screen takes an injected callback.** A screen whose tree contains a `Navigate` handler gains an
+  `onNavigate: (String) -> Unit = {}` parameter (before `modifier`; both defaulted, calls use named args). A
+  screen that never navigates is **byte-identical** to before — no parameter, no import. `Navigate(id)` lowers
+  to `onNavigate("id")` — a structural `CodeBlock`, the id a string looked up by the host, never evaluated
+  (PF-4). The default `{}` keeps a navigating screen compilable and runnable **standalone** (an unhosted
+  navigate is an honest no-op), so the per-screen codegen is golden- and compile-gated on its own.
+
+- **The exporter emits a `App()` host.** When any screen in the project navigates, the exporter adds one
+  `App.kt` (in the same default package / `commonMain` as the screens): `var current by remember {
+  mutableStateOf(<firstScreenId>) }` and a `when (current) { "id" -> Screen(onNavigate = { current = it }) … }`
+  that renders the matching screen and wires the switch. The platform entry points (`Main.kt` / `MainActivity`)
+  render `App()` instead of the first screen. A **target-only** screen (navigated *to* but with no `Navigate`
+  of its own) is called plainly — it has no way to leave, faithfully to its own handler-free IR. A
+  non-navigating project ships no `App.kt` and its entry points are unchanged.
+
+- **No schema change.** `Navigate(screenId)` is already schema v6 (ADR-035); this ADR only changes codegen and
+  the exporter scaffold. No migration, no fixture bump.
+
+- **The design canvas stays static; live preview switching is deferred (#325).** As ADR-035 established,
+  interactivity is C13-run-mode only. Live screen-switching in the run-mode preview (swapping the rendered root
+  when a `Navigate` fires) touches the selection/hit-testing surface and is filed as **#325**; until then the
+  run-mode reducer leaves `Navigate` a no-op, and navigation is verified by the exported app + the compile gate.
+
+- **`Navigate` inside a user component fails loud (#324).** Forwarding `onNavigate` through a
+  `vforge.userComponent` instance is extra plumbing (transitive navigation + instance-call forwarding); until
+  **#324**, a `Navigate` in a component's tree throws a `CodegenException` at export rather than emitting a call
+  to a parameter that doesn't exist (CLAUDE.md: fail loudly over degrading silently).
+
+**Rationale.** The callback + `when`-host is the option that lands **entirely inside ViewForge's existing
+model**: it adds no dependency (rule 9), is plain `commonMain` that renders identically on desktop and Android
+(ADR-036), is built with the same structural KotlinPoet the rest of codegen uses (rule 4), and never evaluates
+anything (PF-4) — the screen id is a `when` key, not code. It is also *generated code the user owns*: a user
+who wants a real back stack, deep links, or transitions edits the emitted host or swaps in a `NavHost`,
+exactly the "ViewForge emits, the user extends" posture ADR-035 took for complex handler logic. Keeping the
+per-screen lowering compile-gated on its own (default `{}`) means the risky part is the small, testable seam,
+while the host is an exporter concern assembled like `Main.kt`/`Theme.kt`.
+
+**Rejected.** **`androidx.navigation.compose` (a `NavHost`/`NavController`)** — the "standard" choice, but it
+adds a pinned dependency (rule 9), and for `commonMain` it must be the JetBrains multiplatform navigation
+artifact wired into the generated Gradle scaffold for every target; it couples generated output to a library's
+API and inflates the golden surface — all for back-stack/deep-link features **#214 does not ask for** (its ask
+is "connect a project's pages"). Its advantages don't cash out here while its costs are immediate; a user who
+needs them edits the generated host. **A CompositionLocal-provided navigator** — avoids threading a parameter,
+but hides the wiring behind implicit lookup, is less obvious in generated code a user is meant to read/extend,
+and still needs a host; the explicit callback is more legible. **Live design-canvas screen switching** — blurs
+the "canvas previews static sample data" invariant ADR-035 preserved and puts a running screen-switch under the
+selection/hit-testing surface; deferred to run-mode (#325). **A new schema field for a "start screen" / nav
+graph** — unnecessary: the first screen is the start, and `Navigate` edges already live in handlers; a visual
+navigation-graph editor stays a non-feature (FEATURES §10).
+
+**Consequences.** An exported ViewForge project with a button that navigates now **actually switches screens** —
+desktop and Android, from shared code, with zero added dependencies and PF-4 intact. What becomes easier:
+multi-screen apps and (next) UX-path simulation (#215) have a real runtime to build on. What becomes harder /
+deferred: navigation from **inside a user component** (#324) and **live preview** screen switching (#325) are
+follow-ups; a back stack / deep links are a user edit away, not generated. What we accept: **one closed
+navigation primitive** (go-to-screen by id), a **target-only screen has no generated back affordance** (it
+matches the IR — add a `Navigate` to give it one), and **run-mode-only** interactivity per ADR-035.
+
+---
+
 ## Template
 
 ```markdown

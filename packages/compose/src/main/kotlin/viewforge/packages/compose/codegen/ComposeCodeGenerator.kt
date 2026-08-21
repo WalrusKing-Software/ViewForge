@@ -157,6 +157,7 @@ class ComposeCodeGenerator : CodeGenerator {
         component.parameters,
         component.state,
         images = images,
+        allowNavigation = false,
     )
 
     /**
@@ -206,10 +207,21 @@ class ComposeCodeGenerator : CodeGenerator {
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
         images: ImageResources = ImageResources.Desktop,
+        allowNavigation: Boolean = true,
     ): String {
         val emitter = ComponentEmitter(theme, assets, components, recordSpans, state, imageResources = images)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
+        // Screen-to-screen navigation (ADR-039, #214): a screen whose tree carries a `Navigate` handler takes an
+        // injected `onNavigate: (String) -> Unit = {}` callback, and `Navigate` lowers to a call on it. Forwarding
+        // it through a user-component instance is #324, so a `Navigate` inside a component fails loud here rather
+        // than emitting a call to a parameter that doesn't exist (CLAUDE.md: fail loudly over degrading silently).
+        val navigates = body != null && NavHost.navigates(root)
+        if (navigates && !allowNavigation) {
+            throw CodegenException(
+                "Navigate action is only supported in screen handlers, not inside a component (#324)",
+            )
+        }
         // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as
         // member access. A field written by a handler (a writable target, #277) is a `var … by remember {
         // mutableStateOf(…) }`; a read-only field stays a `val`. Omitted for a hidden root (no body) and for
@@ -238,6 +250,18 @@ class ComposeCodeGenerator : CodeGenerator {
                     )
                     p.default?.let { spec.defaultValue(ParameterTypes.argValue(p.type, it, theme)) }
                     addParameter(spec.build())
+                }
+            }
+            .apply {
+                // The navigation callback precedes `modifier` (ADR-039, #214); both are defaulted and calls use
+                // named arguments, so position is well-formed. Omitted entirely when the screen never navigates,
+                // keeping a non-navigating screen's signature byte-identical to before.
+                if (navigates) {
+                    addParameter(
+                        ParameterSpec.builder(NavHost.ON_NAVIGATE, NavHost.callbackType)
+                            .defaultValue("{}")
+                            .build(),
+                    )
                 }
             }
             .addParameter(
