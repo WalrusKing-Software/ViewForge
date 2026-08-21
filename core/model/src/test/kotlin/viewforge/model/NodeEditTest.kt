@@ -136,6 +136,26 @@ class NodeEditTest {
     }
 
     @Test
+    fun `withResponsiveOverride sets, overwrites, and prunes a per-breakpoint override`() {
+        val text = Node(id = NodeId("t"), type = "compose.material3.Text")
+        val v = PropValue.Literal(kotlinx.serialization.json.JsonPrimitive(20))
+        val set = text.withResponsiveOverride("expanded", "fontSize", v)
+        assertEquals(v, set.responsive["expanded"]?.get("fontSize"))
+        // Setting the identical value is a no-op (same instance).
+        assertSame(set, set.withResponsiveOverride("expanded", "fontSize", v))
+        // Clearing the only override prunes the breakpoint entry, so responsive is empty again (not a stray map).
+        val cleared = set.withResponsiveOverride("expanded", "fontSize", null)
+        assertTrue(cleared.responsive.isEmpty())
+        // Removing an absent override changes nothing.
+        assertSame(text, text.withResponsiveOverride("expanded", "fontSize", null))
+        // A second override in the same breakpoint coexists; clearing one keeps the other.
+        val two = set.withResponsiveOverride("expanded", "textAlign", v)
+        assertEquals(setOf("fontSize", "textAlign"), two.responsive.getValue("expanded").keys)
+        val oneLeft = two.withResponsiveOverride("expanded", "fontSize", null)
+        assertEquals(setOf("textAlign"), oneLeft.responsive.getValue("expanded").keys)
+    }
+
+    @Test
     fun `withModifiers replaces the ordered chain and no-ops when equal`() {
         val m1 = ModifierEntry(id = "m1", type = "compose.padding")
         val node = Node(id = NodeId("n"), type = "compose.foundation.layout.Box", modifiers = listOf(m1))

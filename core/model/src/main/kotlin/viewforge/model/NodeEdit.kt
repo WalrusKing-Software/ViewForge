@@ -121,6 +121,32 @@ fun Node.withHandlers(slot: String, actions: List<Action>): Node {
 }
 
 /**
+ * A copy of this node with the responsive override for prop [key] at breakpoint [breakpointId] set to
+ * [value], or **removed** when [value] is null (revert that breakpoint to the base value, #314). An override
+ * map that becomes empty drops its breakpoint entry, and an empty [Node.responsive] is omitted, so a node
+ * with no live overrides serializes byte-identically to a non-responsive one (ADR-030 additive field).
+ * Returns the same instance if nothing changed. Only this node's [Node.responsive] map is rebuilt; children,
+ * props, and modifiers keep identity — the per-breakpoint twin of [withProp].
+ */
+fun Node.withResponsiveOverride(breakpointId: String, key: String, value: PropValue?): Node {
+    val current = responsive[breakpointId].orEmpty()
+    val updatedOverrides = if (value == null) {
+        if (key !in current) return this
+        current - key
+    } else {
+        if (current[key] == value) return this
+        current + (key to value)
+    }
+    val next = if (updatedOverrides.isEmpty()) {
+        responsive - breakpointId
+    } else {
+        responsive +
+            (breakpointId to updatedOverrides)
+    }
+    return copy(responsive = next)
+}
+
+/**
  * A copy of this [Project] with the screen [screenId]'s root transformed. Other screens keep their
  * identity, and if [transform] returns the same root instance the whole project is returned unchanged.
  */

@@ -1858,8 +1858,9 @@ whose `responsive` map is non-empty runs the same arg builder once per active br
 (no wrapper). Two boundaries **fail loud** rather than emit broken code (CLAUDE.md): an override that introduces
 a prop absent at the base breakpoint (no `else` value), and responsive on the custom-emission nodes
 (`Scaffold`/`TopAppBar`/`vforge.repeat`/`dropdown`/`userComponent`). Golden `Responsive` + the compile gate
-cover it. Render-time resolution and the canvas active-breakpoint UX are the follow-up **#314**; the Android
-validation warnings the M14 milestone also names moved to **#315**.
+cover it. Render-time resolution, the canvas breakpoint selector, and inspector per-breakpoint editing
+(edit-what-you-see) landed in **#314**; the Android validation warnings the M14 milestone also names moved to
+**#315**.
 
 ---
 
