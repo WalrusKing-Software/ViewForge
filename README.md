@@ -15,8 +15,8 @@ exports a non-trivial Compose Desktop screen, now with read-only **data binding*
 **state & events**, a cross-project component library, and re-opening of ViewForge-generated Kotlin. It
 ships **unsigned** installers for Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and macOS (`.dmg`) — a
 downloaded build may show a SmartScreen/Gatekeeper prompt. Early software: expect rough edges, and the
-`.vforge` schema (v6) may still evolve behind migrations. Phase 2 (Android) is planned — see
-[`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
+`.vforge` schema (v6) may still evolve behind migrations. **Phase 2 (Android)** is implemented on
+`develop` and awaiting a release — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
 ## Why this exists
 
@@ -33,8 +33,8 @@ open without over-designing for it.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| 1 | Compose Desktop (JVM) | **Feature-complete (latest: v0.2.0-alpha-1)** |
-| 2 | + Android | Planned (next) |
+| 1 | Compose Desktop (JVM) | **Feature-complete (latest release: v0.2.0-alpha-1)** |
+| 2 | + Android | **Implemented on `develop`, unreleased** — KMP export (desktop + Android), device preview frames, responsive overrides, screen navigation |
 | 3 | + iOS | Blocked on macOS hardware |
 | 4 | + Web (Kotlin/Wasm) | Planned, experimental |
 | 5 | Framework package SDK (non-Compose frameworks) | Future |
