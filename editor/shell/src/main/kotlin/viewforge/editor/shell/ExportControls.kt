@@ -42,8 +42,21 @@ internal class ExportController(private val state: EditorState, private val serv
     var blockedRegen by mutableStateOf<List<String>?>(null)
         private set
 
+    /**
+     * Reasons the project cannot be exported (#212/#338) — dangling component references, each with its
+     * location. Set when an export/regeneration is refused up-front; the shell shows them and nothing is written.
+     */
+    var exportBlockers by mutableStateOf<List<String>?>(null)
+        private set
+
     /** Pick a directory and export, deferring to an overwrite confirmation when files would clash. */
     fun start(mode: ExportMode) {
+        // Refuse a referentially-broken project before prompting for a destination: the user fixes the dangling
+        // reference here rather than choosing a directory only to hit a codegen failure mid-write (#338).
+        service.exportBlockers(state.document).takeIf { it.isNotEmpty() }?.let {
+            exportBlockers = it
+            return
+        }
         val dir = chooseDirectory("Export ${state.document.name}", state.defaultExportPath) ?: return
         runCatching { service.conflicts(state.document, dir, mode) }
             .fold(
@@ -74,6 +87,10 @@ internal class ExportController(private val state: EditorState, private val serv
      * otherwise-clean run applies straight away.
      */
     fun regenerate() {
+        service.exportBlockers(state.document).takeIf { it.isNotEmpty() }?.let {
+            exportBlockers = it
+            return
+        }
         val dir = chooseDirectory("Regenerate ${state.document.name}", state.defaultExportPath) ?: return
         val report = runCatching { service.regenerationReport(state.document, dir) }
             .getOrElse { e ->
@@ -99,6 +116,10 @@ internal class ExportController(private val state: EditorState, private val serv
 
     fun dismissBlockedRegen() {
         blockedRegen = null
+    }
+
+    fun dismissExportBlockers() {
+        exportBlockers = null
     }
 
     private fun applyRegen(dir: Path) {
@@ -185,6 +206,21 @@ internal fun ExportDialogs(controller: ExportController) {
                 )
             },
             confirmButton = { TextButton(onClick = controller::dismissBlockedRegen) { Text("OK") } },
+        )
+    }
+
+    controller.exportBlockers?.let { blockers ->
+        AlertDialog(
+            onDismissRequest = controller::dismissExportBlockers,
+            title = { Text("Cannot export yet") },
+            text = {
+                Text(
+                    "This project references ${blockers.size} component(s) it does not contain. " +
+                        "Fix or remove these instances, then export again:\n\n" +
+                        blockers.joinToString("\n"),
+                )
+            },
+            confirmButton = { TextButton(onClick = controller::dismissExportBlockers) { Text("OK") } },
         )
     }
 

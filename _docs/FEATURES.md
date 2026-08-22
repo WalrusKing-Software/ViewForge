@@ -162,6 +162,7 @@ into issues directly.
 | G8 | Copy composable to clipboard | P1 | For pasting into an existing project. |
 | G9 | Per-target source-set routing | P1 | Phase 2+: files land in `commonMain` vs `androidMain` correctly. |
 | G10 | Regeneration into an owned directory | P1 | Wholesale regeneration is safe and doesn't clobber user files. (#107: **shipped** — File → Regenerate Gradle project writes an `.viewforge/manifest.json` of owned paths and, on re-export, replaces ViewForge's own files, deletes its orphans, and **refuses** to overwrite unowned files (reported, not clobbered). Ownership = manifest, with the G6 header as a fallback signal for text files; manifest load is total (corrupt → nothing owned). Pure `planRegeneration` + `ProjectExporter.regenerate`/`regenerationPlan`, root-confined `GuardedWriter.delete`. ADR-029. No `.vforge` schema change.) |
+| G11 | Referential-completeness export gate | P1 | A project instancing a component it does not contain is **refused before writing**, with a located report of every dangling `vforge.userComponent` reference (screen/component + node id) — never a partial or non-compiling export. (#338/#212: pure `Project.danglingComponentReferences()` (`core/model`) backs both `ComposeCodeGenerator.generate` (throws the aggregated list) and the shell's pre-destination check via the `ProjectExportService.exportBlockers` seam default; the renderer already draws a loud placeholder for the same case. No `.vforge` schema change.) |
 
 ## 8. Editor shell
 
