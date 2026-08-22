@@ -198,4 +198,14 @@ class MultiplatformExporterTest {
             },
         )
     }
+
+    @Test
+    fun `the exported README explains Android SDK setup, not just the run command (#349)`() {
+        // A user's first Android build fails with AGP's "SDK location not found" unless the README tells them
+        // how to point Gradle at the SDK — so the README must document sdk.dir / ANDROID_HOME and assembleDebug.
+        val readme = textOf(MultiplatformExporter.multiplatformProject(demoProject()), "README.md")
+        assertContains(readme, "sdk.dir")
+        assertContains(readme, "ANDROID_HOME")
+        assertContains(readme, "assembleDebug")
+    }
 }

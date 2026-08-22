@@ -185,10 +185,27 @@ internal object MultiplatformScaffold {
         The composables under `src/commonMain/kotlin` are generated output — regenerate them from the
         editor rather than hand-editing, or they will be overwritten on the next export.
 
-        ## Run
+        ## Run — desktop
 
-            ./gradlew run           # desktop (JVM)
-            ./gradlew installDebug  # Android (requires the Android SDK)
+        The desktop target needs only a JDK (17+):
+
+            ./gradlew run
+
+        ## Run — Android
+
+        The Android target needs the **Android SDK**. Point Gradle at it in one of these ways: open this
+        folder in **Android Studio** (it writes `local.properties` for you), set the `ANDROID_HOME`
+        environment variable to the SDK path, or create a `local.properties` file in the project root with
+        the SDK path — use **forward slashes** even on Windows:
+
+            sdk.dir=C:/Users/you/AppData/Local/Android/Sdk
+
+        Then build:
+
+            ./gradlew assembleDebug   # build the APK -> build/outputs/apk/debug/
+            ./gradlew installDebug    # build and install to a connected device or emulator
+
+        `local.properties` is machine-specific and is already ignored by `.gitignore`.
         """.trimIndent() + "\n"
 
     private fun xmlEscape(s: String): String = s
