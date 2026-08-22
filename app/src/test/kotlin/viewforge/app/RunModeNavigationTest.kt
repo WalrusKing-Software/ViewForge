@@ -1,4 +1,4 @@
-package viewforge.packages.compose.render
+package viewforge.app
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,15 +16,21 @@ import viewforge.model.NodeId
 import viewforge.model.PropValue
 import viewforge.model.Screen
 import viewforge.model.Theme
+import viewforge.packages.compose.render.ComposeRenderer
 import kotlin.test.Test
 
 /**
  * The C13 run-mode **live screen switching** capability (#325, ADR-039): the composition-level integration the
- * pure [nextScreen] / [applyAction] unit tests can't reach — that a real pointer click on a rendered Button
- * fires its `onClick` handler, whose [Action.Navigate] threads through the interactive dispatch to the host's
- * `onNavigate`, swaps the host's current screen, and recomposes the target screen's tree. Memory flagged this
- * as GUI-only with no harness; this drives the real [ComposeRenderer.RenderInteractiveProject] through a
+ * renderer's pure `nextScreen` / `applyAction` unit tests can't reach — that a real pointer click on a rendered
+ * Button fires its `onClick` handler, whose [Action.Navigate] threads through the interactive dispatch to the
+ * host's `onNavigate`, swaps the host's current screen, and recomposes the target screen's tree. Memory flagged
+ * this as GUI-only with no harness; this drives the real [ComposeRenderer.RenderInteractiveProject] through a
  * synthesised click ([runComposeUiTest]), the desktop analogue of the render tests in editor/shell.
+ *
+ * It lives in :app rather than :packages:compose because it renders through Skiko: the codegen-verify CI gate
+ * runs `:packages:compose:test` without the headless graphics libraries, keeping that module a pure
+ * codegen/compile gate, whereas :app already renders in tests (`FidelityTest`) under the build gate that
+ * installs them — the same wiring boundary that lets :app name the Compose package (ARCHITECTURE §3).
  *
  * The two screens mirror `samples/SchemaV6Kitchen.vforge`: a Home with a "Go to Details" Button whose
  * `onClick` navigates to `scr_details`, and a Details showing "Details screen".

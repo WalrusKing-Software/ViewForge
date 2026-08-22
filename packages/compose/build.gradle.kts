@@ -42,15 +42,6 @@ dependencies {
     testImplementation(libs.kctfork.core)
     testImplementation(libs.kotlin.compiler.embeddable)
     testImplementation(libs.kotlin.compose.compiler.plugin.embeddable)
-
-    // Run-mode navigation composition test (#325): drives the real interactive host through a click and
-    // asserts the live screen switch. currentOs puts the OS-specific skiko native library on the *test*
-    // classpath (as editor/shell's ToolbarLayoutTest does); uiTestJUnit4 adds runComposeUiTest so the
-    // test can synthesise a pointer click on the rendered Button — the one thing ImageComposeScene can't
-    // do. Version-managed by the pinned compose plugin, so no dynamic version (CLAUDE.md rule 9). The
-    // compose DSL is used directly here, mirroring the shell/panels/:app render-test setup.
-    testImplementation(compose.desktop.currentOs)
-    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 // --- Android compile gate (#219, ADR-038) -------------------------------------------------------
