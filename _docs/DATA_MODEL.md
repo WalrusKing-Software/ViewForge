@@ -148,6 +148,15 @@ bump to schema 5 is the same "old builds silently drop it" reasoning as `Screen.
 itself. It is validated on load (`ProjectValidator`) and guarded again at render time
 (`RenderContext.expanding`), because the canvas renders mid-edit before load validation runs.
 
+**Referential completeness (export gate, #212/#338).** An instance whose `componentId` resolves to no
+component in the project — a *dangling reference* left by deleting a still-instanced component or by an
+import that omits one — cannot be rendered (the canvas draws a loud placeholder) or generated (the call
+would target an undefined composable). `Project.danglingComponentReferences()` (a pure query in
+`model.ComponentGraph`) reports every such instance with its location (screen or component + node id);
+`ComposeCodeGenerator.generate` refuses the whole project with that complete list rather than emitting
+code that will not compile (CLAUDE.md: fail loud early over a wrong emit). An empty result means every
+component *used by* a screen or another component is present and will be bundled.
+
 ---
 
 ## 5. Node — the central type

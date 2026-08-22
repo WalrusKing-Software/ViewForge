@@ -10,6 +10,49 @@ import kotlinx.serialization.json.JsonPrimitive
  * mid-edit — hence these are shared, Compose-free, and unit-tested independently of both.
  */
 
+/** Where a dangling instance lives — a project [Screen] or a user-[ComponentDef] definition — for a report. */
+sealed interface ComponentSurface {
+    /** A human-readable locator, e.g. `screen 'Home'` or `component 'ProfileCard'`. */
+    val label: String
+
+    data class OfScreen(val id: String, val name: String) : ComponentSurface {
+        override val label: String get() = "screen '$name'"
+    }
+
+    data class OfComponent(val id: String, val name: String) : ComponentSurface {
+        override val label: String get() = "component '$name'"
+    }
+}
+
+/**
+ * A `vforge.userComponent` instance whose referenced component id resolves to no [ComponentDef] in the project
+ * — a dangling reference. It can neither be rendered (the renderer draws a placeholder) nor generated (the
+ * emitter throws), so export must refuse it. [surface] and [instanceId] locate it; [missingComponentId] is the
+ * unresolved id (empty when the instance carries no id at all).
+ */
+data class DanglingComponentRef(val surface: ComponentSurface, val instanceId: NodeId, val missingComponentId: String)
+
+/**
+ * Every dangling user-component reference in the project (DATA_MODEL §4): each `vforge.userComponent` instance —
+ * on a screen or inside a component definition — whose referenced id is not one of this project's
+ * [components][Project.components]. An empty list means the project is *referentially complete*: every component
+ * used by a screen or another component is present, so codegen bundles it (#212). Pure and Compose-free, so the
+ * export gate and (later) the editor share one authoritative answer. Instances are matched by [UserComponent.TYPE]
+ * — the same dispatch the renderer and generator use — so a `TYPE` node carrying no/blank id counts as dangling too.
+ */
+fun Project.danglingComponentReferences(): List<DanglingComponentRef> {
+    val known = components.mapTo(HashSet()) { it.id }
+    fun scan(root: Node, surface: ComponentSurface): List<DanglingComponentRef> = root.selfAndDescendants()
+        .filter { it.type == UserComponent.TYPE }
+        .mapNotNull { node ->
+            val ref = UserComponent.componentIdOf(node).orEmpty()
+            if (ref in known) null else DanglingComponentRef(surface, node.id, ref)
+        }
+        .toList()
+    return screens.flatMap { scan(it.root, ComponentSurface.OfScreen(it.id, it.name)) } +
+        components.flatMap { scan(it.root, ComponentSurface.OfComponent(it.id, it.name)) }
+}
+
 /** Every component id referenced by an instance anywhere in this subtree (self included), deduplicated. */
 fun Node.referencedComponentIds(): Set<String> {
     val here = UserComponent.componentIdOf(this)?.let { setOf(it) } ?: emptySet()
