@@ -176,4 +176,26 @@ class MultiplatformExporterTest {
         val desktopMain = textOf(DesktopExporter.gradleProject(project), "src/main/kotlin/Main.kt")
         assertEquals(desktopMain, kmpMain)
     }
+
+    @Test
+    fun `a navigating project ships the App host in commonMain and renders it from MainActivity (#214)`() {
+        val nav = ProjectCodec.decode(resourceText("/golden/Navigation.vforge"))
+        val files = MultiplatformExporter.multiplatformProject(nav)
+        // The screen-switching host (ADR-039) is emitted to commonMain so both entry points can render it —
+        // without this the generated MainActivity calls App() with no definition and the KMP build fails.
+        assertContains(textOf(files, "src/commonMain/kotlin/App.kt"), "fun App()")
+        // The Android entry point renders the host, not a single screen directly.
+        assertContains(textOf(files, "src/androidMain/kotlin/MainActivity.kt"), "App()")
+    }
+
+    @Test
+    fun `a non-navigating project ships no App host, leaving the KMP bundle unchanged (#214)`() {
+        // Demo has a single screen and never navigates, so no host is emitted.
+        assertFalse(
+            MultiplatformExporter.multiplatformProject(demoProject()).any {
+                it.path ==
+                    "src/commonMain/kotlin/App.kt"
+            },
+        )
+    }
 }
