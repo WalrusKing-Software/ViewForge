@@ -42,7 +42,7 @@ migration rewrites the document's shape.
 | **v4** | `v0.2.0-alpha-1` | Nested lists — a `RecordField` carries a full `StateType`; a sample cell is a `SampleValue`. **Changes the serialized shape** of existing state. | ADR-034 (amend. #255) | `M3to4` (**transform**) |
 | **v5** | `v0.2.0-alpha-1` | Component-local state — `ComponentDef` gains its own `state`, resolved against itself. | ADR-034 (amend. #266) | `M4to5` (stamp) |
 | **v6** | `v0.2.0-alpha-1` | Interactive state & events — state becomes **writable**; `Node.handlers` maps an event slot to an ordered, closed `List<Action>`. No evaluator is introduced (PF-4). | ADR-035 | `M5to6` (stamp) |
-| **v7** *(reserved)* | Phase 2 | Node `responsive` per-breakpoint overrides. | ADR-030 | `M6to7` |
+| **v7** | Phase 2 *(on `develop`, unreleased)* | Node `responsive` per-breakpoint overrides — an additive map keyed by breakpoint id. | ADR-030 / ADR-037 | `M6to7` (stamp) |
 
 ---
 
