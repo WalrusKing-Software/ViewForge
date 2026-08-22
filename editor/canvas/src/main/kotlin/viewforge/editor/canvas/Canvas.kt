@@ -31,6 +31,7 @@ import viewforge.editor.state.CanvasFitBounds
 import viewforge.editor.state.EditorState
 import viewforge.model.Node
 import viewforge.model.NodeId
+import viewforge.model.Screen
 import viewforge.model.StateField
 import viewforge.spi.PreviewInsets
 
@@ -51,10 +52,20 @@ import viewforge.spi.PreviewInsets
  * `StateBinding` prop to its sample value and expands `vforge.repeat` over the sample rows before drawing.
  * It is Compose-free `core/model`, so passing it keeps the seam framework-agnostic. Empty for a screen with
  * no state and while a component is open for in-place editing (a component has no screen state).
+ *
+ * [RenderProject] is the multi-screen run-mode host (#325): when previewing a *screen* (not an in-place
+ * component), the editor hands the whole [screens] list and the [startScreenId] so a `Navigate` fired in the
+ * live tree switches the drawn screen — the preview half of ADR-039. Screen switching is purely visual and
+ * ephemeral: it never touches the document, the tree selection, or (since the overlay is off in preview) the
+ * selection surface, so leaving run mode returns to the edited screen. Each screen's own declared state is
+ * resolved from the [screens] entries, so no separate `state` argument is needed here.
  */
-fun interface CanvasRenderer {
+interface CanvasRenderer {
     @Composable
     fun Render(root: Node, interactive: Boolean, state: List<StateField>, instrument: (NodeId) -> Modifier)
+
+    @Composable
+    fun RenderProject(screens: List<Screen>, startScreenId: String, instrument: (NodeId) -> Modifier)
 }
 
 /**
@@ -124,12 +135,27 @@ fun EditorCanvas(state: EditorState, renderer: CanvasRenderer, modifier: Modifie
                         .background(Color.White),
                 ) {
                     Box(Modifier.matchParentSize().onGloballyPositioned { contentCoords = it }) {
-                        renderer.Render(editRoot, state.interactivePreview, state.activeScreenStateForRender) { id ->
+                        val instrument: (NodeId) -> Modifier = { id ->
                             Modifier.onGloballyPositioned { child ->
                                 contentCoords?.let {
                                     bounds.record(id, it.localBoundingBoxOf(child, clipBounds = false))
                                 }
                             }
+                        }
+                        // Run-mode preview of a *screen* uses the multi-screen host so a `Navigate` in the live
+                        // tree switches the drawn screen (#325). Editing a component in place has no screen list to
+                        // navigate, and the static design canvas always draws the single edited root as before.
+                        val liveScreenNav = state.interactivePreview && state.editingComponentId == null
+                        val startScreenId = state.activeScreenId
+                        if (liveScreenNav && startScreenId != null && state.document.screens.isNotEmpty()) {
+                            renderer.RenderProject(state.document.screens, startScreenId, instrument)
+                        } else {
+                            renderer.Render(
+                                editRoot,
+                                state.interactivePreview,
+                                state.activeScreenStateForRender,
+                                instrument,
+                            )
                         }
                     }
                     // The device's system-bar / safe-area chrome (#220), drawn over the content inside the

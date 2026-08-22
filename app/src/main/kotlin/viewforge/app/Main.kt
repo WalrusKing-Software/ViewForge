@@ -1,9 +1,11 @@
 package viewforge.app
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
@@ -27,10 +29,12 @@ import viewforge.model.Dropdown
 import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
+import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.Repeater
 import viewforge.model.Screen
+import viewforge.model.StateField
 import viewforge.packages.compose.catalog.ComposeAdvisories
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
@@ -135,24 +139,54 @@ private fun runEditor() {
     // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
     // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
-        CanvasRenderer { root, interactive, screenState, instrument ->
-            ComposeRenderer.RenderScreen(
-                root = root,
-                theme = state.document.theme,
-                dark = state.canvasDark,
-                instrument = instrument,
-                imageLoader = images::load,
-                components = state.document.components,
-                state = screenState,
-                interactive = interactive,
-                // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
-                // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
-                editorAffordances = true,
-                // Responsive preview (#314): resolve per-breakpoint overrides for the breakpoint the active
-                // device frame's width falls into (EditorState derives it), so the canvas shows what codegen
-                // would emit at that width.
-                activeBreakpoint = state.previewBreakpoint,
-            )
+        object : CanvasRenderer {
+            @Composable
+            override fun Render(
+                root: Node,
+                interactive: Boolean,
+                screenState: List<StateField>,
+                instrument: (NodeId) -> Modifier,
+            ) {
+                ComposeRenderer.RenderScreen(
+                    root = root,
+                    theme = state.document.theme,
+                    dark = state.canvasDark,
+                    instrument = instrument,
+                    imageLoader = images::load,
+                    components = state.document.components,
+                    state = screenState,
+                    interactive = interactive,
+                    // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
+                    // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
+                    editorAffordances = true,
+                    // Responsive preview (#314): resolve per-breakpoint overrides for the breakpoint the active
+                    // device frame's width falls into (EditorState derives it), so the canvas shows what codegen
+                    // would emit at that width.
+                    activeBreakpoint = state.previewBreakpoint,
+                )
+            }
+
+            // Run-mode screen switching (#325): the same interactive render, but hosted so a `Navigate` in the
+            // live tree swaps the drawn screen. Theme/dark/images/components/breakpoint come from the same
+            // editor state as [Render]; the host owns which screen is current and re-seeds its state on switch.
+            @Composable
+            override fun RenderProject(
+                screens: List<Screen>,
+                startScreenId: String,
+                instrument: (NodeId) -> Modifier,
+            ) {
+                ComposeRenderer.RenderInteractiveProject(
+                    screens = screens,
+                    startScreenId = startScreenId,
+                    theme = state.document.theme,
+                    dark = state.canvasDark,
+                    instrument = instrument,
+                    imageLoader = images::load,
+                    components = state.document.components,
+                    editorAffordances = true,
+                    activeBreakpoint = state.previewBreakpoint,
+                )
+            }
         }
 
     application {

@@ -1979,9 +1979,13 @@ not run (PF-4). Decided with the user via AskUserQuestion (2026-08-21): the ligh
   hosts a multi-screen run-mode preview and swaps the rendered root when a `Navigate` fires, its decision the pure
   `nextScreen` (last known-screen target wins, unknown = no-op PF-6) — self-contained in the renderer and unit-tested.
   The state reducer still leaves `Navigate` a no-op in the *state fold*; navigation is surfaced separately via an
-  `onNavigate` callback so the store and the host stay decoupled. **Slice 2 (deferred):** wiring the editor to call
-  this host — which touches the tree-selection/hit-testing surface and the "exit run-mode restores the edited screen"
-  UX — remains **#325**. Until Slice 2, exported-app navigation is still verified by the compile gate.
+  `onNavigate` callback so the store and the host stay decoupled. **Slice 2 (editor wiring, shipped):** the
+  `CanvasRenderer` seam gained a `RenderProject(screens, startScreenId, instrument)` method; `EditorCanvas` calls it
+  in run-mode preview **when editing a screen** (not an in-place component), so a `Navigate` in the live tree switches
+  the drawn screen. The feared tree-selection/hit-testing entanglement was already handled by the existing design —
+  the selection overlay is off in interactive preview (selection state untouched) — so the tree stays on the edited
+  screen and leaving run mode returns to it (preview navigation is purely visual and ephemeral). Editor-canvas
+  behaviour is GUI-verified; the renderer decision stays unit-tested via `nextScreen`.
 
 - **`Navigate` inside a user component is forwarded (#324, shipped).** A `vforge.userComponent` instance
   navigates when the component it references does: the `navigates` predicate is now **transitive** (resolving an
