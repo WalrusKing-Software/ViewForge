@@ -19,8 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   navigation dependency, no `.vforge` schema change.
 - **Navigation through reusable components** (ADR-039, #324) — a `Navigate` placed inside a user component now
   works: the component's generated composable takes the same injected `onNavigate` callback and each instance
-  forwards it, so a shared "nav card" or menu component can drive screen changes. Live screen switching in the
-  canvas preview (#325) remains a follow-up.
+  forwards it, so a shared "nav card" or menu component can drive screen changes.
+- **Live screen switching in the canvas preview** (ADR-039, #325) — in interactive run-mode, clicking a control
+  whose handler navigates now switches the previewed screen right on the canvas, so you can walk a multi-screen
+  flow without exporting. Preview navigation is ephemeral: leaving run mode returns to the screen you were editing.
 
 ## [0.2.0-alpha-1] - 2026-08-20
 
