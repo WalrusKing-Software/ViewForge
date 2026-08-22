@@ -49,4 +49,15 @@ class NodeTreeTest {
         // childB contributes no default children, only its slotted content.
         assertEquals(listOf(leafInSlot), childB.allChildren())
     }
+
+    @Test
+    fun `selfAndDescendants walks the whole subtree depth-first, self then children then slots`() {
+        // self, then childA, then childB and its slotted leaf — slots reached as well as default children.
+        assertEquals(
+            listOf(root, childA, childB, leafInSlot).map { it.id },
+            root.selfAndDescendants().map { it.id }.toList(),
+        )
+        // A leaf yields only itself.
+        assertEquals(listOf(childA), childA.selfAndDescendants().toList())
+    }
 }

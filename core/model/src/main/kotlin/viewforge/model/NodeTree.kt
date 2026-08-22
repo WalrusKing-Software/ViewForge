@@ -19,3 +19,14 @@ fun Node.findById(id: NodeId): Node? {
 
 /** Every direct child of this node, from [children] and all [slots], in a stable order (children first). */
 fun Node.allChildren(): List<Node> = children + slots.values.flatten()
+
+/**
+ * This node and every descendant, depth-first (self, then [children], then [slots]) — the whole-subtree
+ * counterpart of [allChildren]. Lazy so callers that only need the first match (or short-circuit) don't
+ * walk the entire tree.
+ */
+fun Node.selfAndDescendants(): Sequence<Node> = sequence {
+    yield(this@selfAndDescendants)
+    children.forEach { yieldAll(it.selfAndDescendants()) }
+    slots.values.forEach { list -> list.forEach { yieldAll(it.selfAndDescendants()) } }
+}

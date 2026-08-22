@@ -142,4 +142,52 @@ class ComponentGraphTest {
         val tree = box(UserComponent.instance("x"))
         assertEquals(setOf("x"), tree.remapComponentReferences(mapOf("y" to "z")).referencedComponentIds())
     }
+
+    // --- referential completeness (#212, #338) ----------------------------------------------------
+
+    private fun screen(id: String, root: Node) = Screen(id = id, name = id, root = root)
+
+    @Test
+    fun `danglingComponentReferences is empty for a referentially-complete project`() {
+        // 'b' instances 'a' (resolves); a screen instances 'a' (resolves). Nothing dangles.
+        val p = project(component("a"), component("b", "a"))
+            .copy(screens = listOf(screen("s", box(UserComponent.instance("a")))))
+        assertEquals(emptyList(), p.danglingComponentReferences())
+    }
+
+    @Test
+    fun `danglingComponentReferences finds a dangling reference on a screen, with its location`() {
+        val ghost = UserComponent.instance("ghost", NodeId("g"))
+        val p = project(component("a")).copy(screens = listOf(screen("home", box(ghost))))
+        val ref = p.danglingComponentReferences().single()
+        assertEquals("ghost", ref.missingComponentId)
+        assertEquals(NodeId("g"), ref.instanceId)
+        assertEquals(ComponentSurface.OfScreen("home", "home"), ref.surface)
+    }
+
+    @Test
+    fun `danglingComponentReferences finds a dangling reference inside a component definition`() {
+        val ref = project(component("a", "ghost")).danglingComponentReferences().single()
+        assertEquals("ghost", ref.missingComponentId)
+        assertTrue(ref.surface is ComponentSurface.OfComponent)
+    }
+
+    @Test
+    fun `danglingComponentReferences reports every offending instance and ignores the ones that resolve`() {
+        val p = project(component("a")).copy(
+            screens = listOf(
+                screen("s1", box(UserComponent.instance("a"), UserComponent.instance("x"))),
+                screen("s2", box(UserComponent.instance("y"))),
+            ),
+        )
+        assertEquals(listOf("x", "y"), p.danglingComponentReferences().map { it.missingComponentId }.sorted())
+    }
+
+    @Test
+    fun `a userComponent node carrying no id is itself dangling`() {
+        val bare = Node(NodeId("n"), UserComponent.TYPE) // an instance with no componentId prop at all
+        val ref = project().copy(screens = listOf(screen("s", box(bare)))).danglingComponentReferences().single()
+        assertEquals("", ref.missingComponentId)
+        assertEquals(NodeId("n"), ref.instanceId)
+    }
 }

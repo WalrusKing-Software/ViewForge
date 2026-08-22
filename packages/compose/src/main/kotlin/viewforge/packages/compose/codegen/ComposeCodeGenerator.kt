@@ -12,6 +12,7 @@ import viewforge.model.Project
 import viewforge.model.Screen
 import viewforge.model.StateField
 import viewforge.model.Theme
+import viewforge.model.danglingComponentReferences
 import viewforge.spi.CodeGenerator
 import viewforge.spi.GeneratedFile
 
@@ -35,6 +36,19 @@ class ComposeCodeGenerator : CodeGenerator {
      * an image renders on Android too. Only the `Image` painter differs; every other emission is identical.
      */
     fun generate(project: Project, images: ImageResources): List<GeneratedFile> {
+        // Referential-completeness gate (#212): refuse to emit a project that references a component it does not
+        // contain, reporting *every* offending instance with its location at once — a complete, actionable list
+        // beats the emitter's first-error throw deep inside one screen. A referentially-complete project (no
+        // dangling instance) passes untouched, so valid output is byte-identical.
+        project.danglingComponentReferences().takeIf { it.isNotEmpty() }?.let { dangling ->
+            throw CodegenException(
+                "Cannot export: ${dangling.size} unresolved user-component reference(s):\n" +
+                    dangling.joinToString("\n") {
+                        val id = it.missingComponentId.ifEmpty { "?" }
+                        "  - ${it.surface.label} references missing component '$id' (node ${it.instanceId.value})"
+                    },
+            )
+        }
         val sourceName = project.name.ifBlank { "Project" }
         val screens = project.screens.map { screen ->
             GeneratedFile(
