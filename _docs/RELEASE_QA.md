@@ -703,7 +703,147 @@ fails, **no-go**.
 
 ---
 
-## 13. Release-readiness summary
+## 13. Phase 2 — Android target (Compose Multiplatform export)
+
+**Scope.** Everything above validates the Compose **Desktop** target. This section is the manual
+**emulator/device** test script for the **Android** target added in Phase 2 (issue #216): the *same*
+`.vforge` project that exports a Desktop app also exports a runnable Android app from shared
+`commonMain` UI, and the canvas previews it in an Android device frame. Run this before cutting the
+first Android-capable release (**v0.3.0-alpha-1**, schema v7). Tracking: #346.
+
+**What the automated side already proves (don't hand-test these — re-run instead).**
+
+| Gate | What it proves | Re-run |
+|---|---|---|
+| `AndroidCompilationTest` | The emitted `androidMain`/`commonMain` (incl. the `App()` nav host) **compiles** SDK-less for Navigation/ComponentNavigation/Interactive/Responsive/PopulatedDropdown/ComponentState. | `./gradlew :packages:compose:test` |
+| `MultiplatformExporterTest` | KMP source-set routing, nav-host emission (#347), `Res.drawable` image wiring (#223), exported-README SDK docs (#349). | `./gradlew :packages:compose:test` |
+| **Real `:assembleDebug`** | The whole golden-fixture matrix + a combined nav+interactive+image+responsive project builds a real APK out-of-process with the local SDK, **zero manual fixes**. | See AN-0; this is the user's toolchain, not CI. |
+
+So §14's **[Manual]** items focus on what only a real device shows: **runtime behaviour** (navigation
+actually navigates, state updates recompose, images render, responsive reflows) and **visual parity**
+(the canvas Android frame vs a real device — M12 tolerance). Compilation is not in question here.
+
+### AN-0 — Prerequisites & how to build/install  [Manual]
+- **You need:** the Android SDK (platform + build-tools; e.g. `%LOCALAPPDATA%\Android\Sdk` on
+  Windows), JDK 21, and a running **emulator** (Android Studio → Device Manager) or a USB device with
+  USB debugging on. Confirm `adb devices` lists one.
+- **Export:** open a project in the editor, then toolbar/File → **Export Multiplatform Project** (also
+  in the command palette). Choose an output directory.
+- **Point Gradle at the SDK** (the exported README says this too): open the folder in Android Studio
+  (writes `local.properties` for you), **or** create `local.properties` with
+  `sdk.dir=C:/Users/you/AppData/Local/Android/Sdk` (forward slashes on Windows), **or** set
+  `ANDROID_HOME`.
+- **Build / install** from the exported directory:
+  ```bash
+  ./gradlew assembleDebug   # build the APK → build/outputs/apk/debug/
+  ./gradlew installDebug    # build + install to the connected emulator/device
+  ```
+- **Pass:** `installDebug` succeeds and the app icon appears on the emulator; launching it opens the
+  first screen.
+- **If it fails:**
+  - `SDK location not found` → `local.properties`/`ANDROID_HOME` not set (see above; forward slashes).
+  - `aapt2 … PNG` / image decode error → an asset isn't a real image; ViewForge re-encodes on import
+    so a project made through the editor is fine, but a hand-crafted fixture with fake bytes will fail.
+  - `Unresolved reference` for a drawable → the `Res.drawable` accessor import regression (#322); the
+    exporter test asserts the import, so first re-run `MultiplatformExporterTest`.
+
+### AN-1 — Basic render parity  [Manual]
+- **Steps:** export + install a simple project (a Column with Text/Button/Image), launch it.
+- **Pass:** the same widgets render on the device as on the canvas — text, buttons, spacing look
+  equivalent (allow for platform font metrics).
+- **If it fails:** a blank screen → `MainActivity` didn't wire `setContent { <Screen>() }`; a single
+  wrong widget → a codegen issue that the golden/compile gate would also show (re-run RC-5).
+
+### AN-2 — Screen-to-screen navigation  [Manual]
+- **Steps:** a project with ≥2 screens where a control on screen A navigates to screen B (onClick →
+  Navigate). Install, launch, tap the control.
+- **Pass:** the app switches to screen B (the generated `App()` `when`-host swaps screens); navigating
+  back to A works if wired.
+- **If it fails:** the tap does nothing → the target screen may not exist. **Known:** a `Navigate`
+  targeting a **deleted** screen silently no-ops (falls to `else -> <first screen>`) — that is issue
+  **#351**, not a device bug. Confirm both screens exist in the project.
+
+### AN-3 — Interactive state & events  [Manual]
+- **Steps:** the counter-style project (a Button whose onClick adjusts a numeric state field bound to
+  a Text). Install, launch, tap repeatedly; exercise Reset/Toggle if present.
+- **Pass:** the bound Text updates on every tap (recomposition works); Reset restores the initial
+  value.
+- **If it fails:** the number never changes → the handler lambda / `remember { mutableStateOf }`
+  didn't wire. A numeric field that won't display in a Text was bug **#298** (fixed) — re-run its
+  regression if it recurs.
+
+### AN-4 — Image rendering via multiplatform resources  [Manual]
+- **Steps:** a project with an imported `Image` (e.g. the Gallery/ImageAdjust shape). Install, launch.
+- **Pass:** the image actually renders on the device (this is the `Res.drawable` / composeResources
+  path, #223 — the one thing only a real build/run proves; it is **not** in-process compilable).
+  Content-scale/alpha adjustments (ImageAdjust) look applied.
+- **If it fails:** a broken-image placeholder → the asset didn't route into
+  `commonMain/composeResources/drawable/`, or its `Res.drawable` accessor import is missing (#322).
+
+### AN-5 — Responsive per-breakpoint layout  [Manual]
+- **Steps:** a project with responsive overrides (schema v7 — a node whose props differ at
+  medium/expanded, e.g. the Adaptive fixture). Install on a **phone** emulator, then a **tablet**
+  emulator (or rotate / resize) to cross the 600dp / 840dp breakpoints.
+- **Pass:** the overridden props (font size, alignment, etc.) change as the window crosses a
+  breakpoint — the generated `BoxWithConstraints` branches by `maxWidth` (ADR-037). Below 600dp shows
+  the base (compact) values.
+- **If it fails:** no change across sizes → the override didn't emit a branch (re-run
+  `ResponsiveCodegenTest`); wrong threshold → the Android target's breakpoints are medium=600/
+  expanded=840.
+
+### AN-6 — Populated dropdown / list-valued binding  [Manual]
+- **Steps:** a project with a populated dropdown (list-valued state binding). Install, launch, open
+  the dropdown.
+- **Pass:** the options come from the bound list and are selectable.
+- **If it fails:** an empty dropdown → the list binding didn't resolve at codegen.
+
+### AN-7 — Component-local state & nested lists  [Manual]
+- **Steps:** a project using a reusable component with its own state (ComponentState) and/or nested
+  repeated lists (NestedList/RepeatLazyColumn). Install, launch, scroll and interact.
+- **Pass:** each component instance keeps its own state independently; nested lists render every row;
+  a LazyColumn scrolls smoothly.
+- **If it fails:** all instances share one state → component-local state (schema v5) didn't isolate;
+  missing rows → the repeat/template expansion dropped items.
+
+### AN-8 — Theme on device  [Manual]
+- **Steps:** a project with a customized theme (colors/typography). Install, launch; if the app
+  follows system dark mode, toggle the emulator's dark theme.
+- **Pass:** the device app uses the project theme; `AppTheme` wraps the content (generated `Theme.kt`);
+  light/dark both readable.
+- **If it fails:** default Material colors instead of the project's → the theme wrapper wasn't applied
+  in `MainActivity`.
+
+### AN-9 — Canvas ↔ device frame tolerance (M12)  [Manual]
+- **Steps:** in the editor, pick an Android device profile (toolbar device dropdown → an Android
+  Phone/Tablet frame). Compare the canvas preview (density, system-bar insets, active breakpoint
+  indicator) against the same screen running on the matching emulator.
+- **Pass:** the canvas frame matches the device within tolerance — proportions, safe-area/system-bar
+  insets, and the active breakpoint agree. (Exact pixel parity is not expected; density affects the dp
+  frame size + labels only, not host rendering — by design, ADR-026 Amendment #220.)
+- **If it fails:** wildly different proportions → the wrong device profile is selected; insets missing
+  on canvas → the inset chrome toggle/profile.
+
+### AN-10 — Accessibility advisories (edit-time, not runtime)  [Manual]
+- **Steps:** in the editor, select an `Image`/`Icon` with no `contentDescription`, or a tappable
+  control smaller than 48dp. Look at the inspector's **Accessibility** section.
+- **Pass:** a non-blocking advisory is shown (missing contentDescription / sub-48dp touch target,
+  #315). It does **not** block export.
+- **If it fails:** no advisory on an obvious case → re-run `ComposeAdvisoriesTest`. (This is edit-time
+  guidance; it doesn't change the built app.)
+
+### AN — Common failures quick reference
+| Symptom | Likely cause | Where |
+|---|---|---|
+| `SDK location not found` | `local.properties`/`ANDROID_HOME` unset or backslashes on Windows | AN-0 |
+| `Unresolved reference '<drawable>'` | `Res.drawable` accessor import missing | #322 / `MultiplatformExporterTest` |
+| Broken-image placeholder | asset not routed to `composeResources/drawable` | AN-4 / #223 |
+| Tap on nav control does nothing | target screen deleted → dangling `Navigate` | **#351** (silent no-op, known) |
+| Bound Text never updates | handler / `mutableStateOf` not wired | AN-3 / #298 |
+| No reflow across screen sizes | responsive override didn't emit a branch | AN-5 / ADR-037 |
+
+---
+
+## 14. Release-readiness summary
 
 ### Gaps found during the audit (file as issues before release)
 
