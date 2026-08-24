@@ -10,7 +10,7 @@ jdk = "21"                      # PROJECT_PLAN §3.1 / TECHNICAL_NOTES §12: 17+
                                 # packaging; standardized on 21 (installed toolchain).
 
 # Kotlin / Compose
-kotlin = "2.1.20"
+kotlin = "2.4.10"
 compose = "1.7.3"               # Compose Multiplatform (desktop/JVM in Phase 1; Android target in Phase 2)
 
 # Android (Phase 2 — pinned per ADR-036/ADR-038; kickoff #217 declarations only, nothing applies
