@@ -17,7 +17,7 @@ compose = "1.7.3"               # Compose Multiplatform (desktop/JVM in Phase 1;
 # these yet. Values are CANDIDATES: the ecosystem moves fast and can't be verified offline — confirm
 # each resolves before the #218/#219 merge. Compose-Android reuses `compose` (1.7.3) via the compose
 # plugin's Android target, so there is no separate androidx Compose BOM here.
-agp = "8.7.3"                   # Android Gradle Plugin (generated Android scaffold; Kotlin 2.1.x-compatible)
+agp = "9.3.2"                   # Android Gradle Plugin (generated Android scaffold; Kotlin 2.1.x-compatible)
 androidMinSdk = "24"            # ADR-036 minSdk
 androidCompileSdk = "35"        # ADR-036 compileSdk
 androidTargetSdk = "35"         # ADR-036 targetSdk
