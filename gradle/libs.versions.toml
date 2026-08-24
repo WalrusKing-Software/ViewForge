@@ -21,7 +21,7 @@ agp = "8.7.3"                   # Android Gradle Plugin (generated Android scaff
 androidMinSdk = "24"            # ADR-036 minSdk
 androidCompileSdk = "35"        # ADR-036 compileSdk
 androidTargetSdk = "35"         # ADR-036 targetSdk
-activityCompose = "1.9.3"       # androidx.activity:activity-compose — Android entry-point (setContent)
+activityCompose = "1.13.0"       # androidx.activity:activity-compose — Android entry-point (setContent)
 # In-process Android compile gate (ADR-038, #219): an android.jar stub on the kctfork test classpath,
 # NO Android SDK. Exact android-all build is confirmed/replaced by the #219 spike.
 robolectricAndroidAll = "14-robolectric-10818077"
