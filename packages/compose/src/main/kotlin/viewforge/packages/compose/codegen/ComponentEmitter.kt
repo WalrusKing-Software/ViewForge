@@ -237,12 +237,17 @@ internal class ComponentEmitter(
 
     /**
      * A `vforge.dropdown` populated (read-only) from a list-of-record state field (ADR-034 slice 2, #253): a
-     * `Box` holding a read-only anchor `OutlinedTextField` (showing the first row's label, mirroring the canvas
-     * preview) over a `DropdownMenu` whose items are `options.forEach { item -> DropdownMenuItem(...) }`. The
+     * `Box` holding an anchor `OutlinedTextField` (showing the current selection, initially the first row's
+     * label) over a `DropdownMenu` whose items are `options.forEach { item -> DropdownMenuItem(...) }`. The
      * options binding emits as member access ([CodegenValues.bindingPath]) reading the seeded state stub; the
-     * label field selects which record field is shown. Handlers are inert stubs (`expanded = false`, empty
-     * lambdas) — the same house style as the generated `Checkbox`/`Slider`: structure emitted, behavior left to
-     * the developer (read-only this release, no selection persisted; PF-4). Options/label absent → fail loud.
+     * label field selects which record field is shown. Options/label absent → fail loud.
+     *
+     * The menu is **interactive** (ADR-034 amendment, #359): two local `remember { mutableStateOf(...) }`
+     * cells hold the open state and the selected label, a transparent overlay `Box` captures the tap to open
+     * (a `readOnly` `OutlinedTextField` does not reliably receive clicks), and choosing an item updates the
+     * shown label and closes. Selection stays **local** — the bound options list is never mutated, so the
+     * data binding remains read-only (PF-4). The `remember` cells are keyed by the node id so several
+     * dropdowns in one composable do not collide.
      */
     private fun dropdown(node: Node, mod: CodeBlock?): CodeBlock {
         guardNoResponsive(node)
@@ -251,9 +256,12 @@ internal class ComponentEmitter(
         val sourceRef = CodegenValues.bindingPath(source)
         val label = Dropdown.labelFieldOf(node)
             ?: throw CodegenException("vforge.dropdown node '${node.id.value}' has no label field")
+        val suffix = node.id.value.map { if (it.isLetterOrDigit() || it == '_') it else '_' }.joinToString("")
+        val expandedVar = "dropdownExpanded_$suffix"
+        val selectedVar = "dropdownSelected_$suffix"
         val content = CodeBlock.builder()
             .add("%M(\n", ComposeNames.OutlinedTextField).indent()
-            .add("value = %L.firstOrNull()?.%N.orEmpty(),\n", sourceRef, label)
+            .add("value = %N.value,\n", selectedVar)
             .add("onValueChange = {},\n")
             .add("readOnly = true,\n")
             .add(
@@ -262,17 +270,43 @@ internal class ComponentEmitter(
                 ComposeNames.IconsFilled,
                 ComposeNames.iconMember("ArrowDropDown"),
             )
+            .add("modifier = %T.%M(),\n", ComposeNames.Modifier, ComposeNames.fillMaxWidth)
             .unindent().add(")\n")
-            .add("%M(expanded = false, onDismissRequest = {}) {\n", ComposeNames.DropdownMenu).indent()
+            // A readOnly OutlinedTextField does not reliably receive taps, so a transparent overlay opens the menu.
+            .add(
+                "%M(modifier = %T.matchParentSize().%M { %N.value = true })\n",
+                ComposeNames.Box,
+                ComposeNames.Modifier,
+                ComposeNames.clickable,
+                expandedVar,
+            )
+            .add("%M(\n", ComposeNames.DropdownMenu).indent()
+            .add("expanded = %N.value,\n", expandedVar)
+            .add("onDismissRequest = { %N.value = false },\n", expandedVar)
+            .unindent().add(") {\n").indent()
             .add("%L.forEach { %N ->\n", sourceRef, Repeater.ITEM_SCOPE).indent()
             .add("%M(\n", ComposeNames.DropdownMenuItem).indent()
             .add("text = { %M(%N.%N) },\n", ComposeNames.Text, Repeater.ITEM_SCOPE, label)
-            .add("onClick = {},\n")
+            .add("onClick = {\n").indent()
+            .add("%N.value = %N.%N\n", selectedVar, Repeater.ITEM_SCOPE, label)
+            .add("%N.value = false\n", expandedVar)
+            .unindent().add("},\n")
             .unindent().add(")\n")
             .unindent().add("}\n")
             .unindent().add("}\n")
             .build()
-        return call(ComposeNames.Box, modifierArg(mod), content = content)
+        return CodeBlock.builder()
+            .add("val %N = %M { %M(false) }\n", expandedVar, ComposeNames.remember, ComposeNames.mutableStateOf)
+            .add(
+                "val %N = %M { %M(%L.firstOrNull()?.%N.orEmpty()) }\n",
+                selectedVar,
+                ComposeNames.remember,
+                ComposeNames.mutableStateOf,
+                sourceRef,
+                label,
+            )
+            .add(call(ComposeNames.Box, modifierArg(mod), content = content))
+            .build()
     }
 
     /** Formats a call to a locally-generated composable by name: `Foo()`, `Foo(a)`, or multi-line. */
