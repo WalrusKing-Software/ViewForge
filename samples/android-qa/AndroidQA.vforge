@@ -449,6 +449,16 @@
                     }
                   },
                   {
+                    "id": "counter_count_value",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "binding",
+                        "path": "count"
+                      }
+                    }
+                  },
+                  {
                     "id": "n_inc",
                     "type": "compose.material3.Button",
                     "slots": {
