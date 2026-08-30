@@ -1804,6 +1804,22 @@ Accepted costs: the exact AGP/SDK patch versions are provisional until a real An
 them (flagged, not asserted), and the generated Android entry point (`MainActivity`) is new codegen
 surface that needs its own goldens (rule 5) under the ADR-038 gate.
 
+**Revision (#356) — the KMP export generates into the app package, not the default package.** #218
+originally emitted every file (screens, `App`, `Theme`, `Main`, `MainActivity`) in the **default
+package**, on the reading that a manifest `android:name` without a leading dot is an absolute class name.
+That is false under AGP's `namespace` DSL: AGP always qualifies a relative activity name against the
+namespace, so a default-package `MainActivity` was packaged as `dev.viewforge.<slug>.MainActivity` while
+the compiled class had no package — `ClassNotFoundException` at launch (the build and `:assembleDebug`
+passed; only *running* the app surfaced it). There is no way to name a default-package class in a
+namespaced manifest. Fix: the **multiplatform** export now generates every file into the app's
+`applicationId` package (threaded through the codegen `FileSpec`/`MemberName`/`ClassName` builders,
+KotlinPoet-structural), so `MainActivity` sits in that package — able to reference the same-package
+`App`/`<Screen>`/`AppTheme` without importing a default-package symbol (the original reason for the
+default package) — and the manifest binds it as `.MainActivity`, whose merged FQN matches the class. The
+**desktop-only** export is unchanged (default package, no namespace; every golden byte-identical). The
+verification lesson: `:assembleDebug` is necessary but not sufficient — a runtime launch on a device is
+the only proof of the manifest↔class binding (the in-process gate and the build both missed this).
+
 ---
 
 ## ADR-037 — Responsive codegen: base value in M13, `BoxWithConstraints` threshold branching in M14
@@ -1964,7 +1980,8 @@ not run (PF-4). Decided with the user via AskUserQuestion (2026-08-21): the ligh
   navigate is an honest no-op), so the per-screen codegen is golden- and compile-gated on its own.
 
 - **The exporter emits a `App()` host.** When any screen in the project navigates, the exporter adds one
-  `App.kt` (in the same default package / `commonMain` as the screens): `var current by remember {
+  `App.kt` (in the same package / `commonMain` as the screens — default for the desktop export, the app
+  `applicationId` for the KMP export per ADR-036's #356 revision): `var current by remember {
   mutableStateOf(<firstScreenId>) }` and a `when (current) { "id" -> Screen(onNavigate = { current = it }) … }`
   that renders the matching screen and wires the switch. The platform entry points (`Main.kt` / `MainActivity`)
   render `App()` instead of the first screen. A **target-only** screen (navigated *to* but with no `Navigate`

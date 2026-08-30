@@ -24,6 +24,13 @@ class MultiplatformExporterTest {
     private fun textOf(files: List<ExportFile>, path: String): String =
         (files.single { it.path == path } as TextFile).content
 
+    /** The significant lines (non-blank, non-`package`) of [source], so the KMP (packaged) and desktop
+     * (default-package) outputs can be compared for everything *except* the package declaration the KMP
+     * export adds — robust to the blank line KotlinPoet reflows around a package block (#356). */
+    private fun withoutPackage(source: String): List<String> = source.lineSequence().map { it.trimEnd() }
+        .filter { it.isNotBlank() && !it.trimStart().startsWith("package ") }
+        .toList()
+
     @Test
     fun `sourceSetFor routes shared UI to commonMain and each entry point to its own set`() {
         // Shared UI is commonMain under either target.
@@ -68,11 +75,14 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `commonMain screen is the same formatted output the desktop export emits`() {
+    fun `commonMain screen is the desktop output plus the app-package declaration (#356)`() {
         val project = demoProject()
         val shared = textOf(MultiplatformExporter.multiplatformProject(project), "src/commonMain/kotlin/HomeScreen.kt")
         val desktop = (DesktopExporter.looseFiles(project).single() as TextFile).content
-        assertEquals(desktop.trimEnd('\n'), shared.trimEnd('\n'))
+        // The KMP screen lives in the app package (so the Android entry point can reference it without importing
+        // a default-package symbol, #356); every other line is byte-identical to the desktop export.
+        assertContains(shared, "package dev.viewforge.demo")
+        assertEquals(withoutPackage(desktop), withoutPackage(shared))
     }
 
     @Test
@@ -115,11 +125,22 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `manifest binds the launcher activity by fully-qualified default-package name`() {
-        val manifest =
-            textOf(MultiplatformExporter.multiplatformProject(demoProject()), "src/androidMain/AndroidManifest.xml")
-        // No leading dot ⇒ Android reads it as an absolute class name (the default-package MainActivity).
-        assertContains(manifest, "android:name=\"MainActivity\"")
+    fun `the launcher activity, its package, and the namespace all agree so it instantiates at runtime (#356)`() {
+        val files = MultiplatformExporter.multiplatformProject(demoProject())
+        val manifest = textOf(files, "src/androidMain/AndroidManifest.xml")
+        val activity = textOf(files, "src/androidMain/kotlin/MainActivity.kt")
+        val build = textOf(files, "build.gradle.kts")
+        // The activity class is generated in the applicationId package (NOT the default package) ...
+        assertContains(activity, "package dev.viewforge.demo")
+        // ... the module namespace equals that package ...
+        assertContains(build, "namespace = \"dev.viewforge.demo\"")
+        // ... and the manifest names it *relative to that namespace* (leading dot). AGP resolves this to the
+        // merged FQN dev.viewforge.demo.MainActivity, which matches the compiled class. A bare name / default-
+        // package activity would ClassNotFound at launch because AGP namespaces the manifest name (#356).
+        assertContains(manifest, "android:name=\".MainActivity\"")
+        // The shared UI sits in the same package, so MainActivity references it without importing a
+        // default-package symbol (impossible in Kotlin) — the original reason the code was default-package.
+        assertContains(textOf(files, "src/commonMain/kotlin/HomeScreen.kt"), "package dev.viewforge.demo")
         assertContains(manifest, "android:exported=\"true\"")
         assertContains(manifest, "android.intent.action.MAIN")
         assertContains(manifest, "android.intent.category.LAUNCHER")
@@ -170,11 +191,13 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `desktop Main entry point is unchanged from the desktop export after the shared refactor`() {
+    fun `desktop Main entry point matches the desktop export apart from the app-package declaration (#356)`() {
         val project = demoProject()
         val kmpMain = textOf(MultiplatformExporter.multiplatformProject(project), "src/jvmMain/kotlin/Main.kt")
         val desktopMain = textOf(DesktopExporter.gradleProject(project), "src/main/kotlin/Main.kt")
-        assertEquals(desktopMain, kmpMain)
+        // The KMP jvmMain Main shares the app package with the screens/activity (#356); otherwise unchanged.
+        assertContains(kmpMain, "package dev.viewforge.demo")
+        assertEquals(withoutPackage(desktopMain), withoutPackage(kmpMain))
     }
 
     @Test

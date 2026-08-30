@@ -35,7 +35,7 @@ class ComposeCodeGenerator : CodeGenerator {
      * `painterResource(String)` default, or the Compose Multiplatform `Res.drawable.x` the KMP export needs so
      * an image renders on Android too. Only the `Image` painter differs; every other emission is identical.
      */
-    fun generate(project: Project, images: ImageResources): List<GeneratedFile> {
+    fun generate(project: Project, images: ImageResources, packageName: String = ""): List<GeneratedFile> {
         // Referential-completeness gate (#212): refuse to emit a project that references a component it does not
         // contain, reporting *every* offending instance with its location at once — a complete, actionable list
         // beats the emitter's first-error throw deep inside one screen. A referentially-complete project (no
@@ -62,6 +62,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.components,
                     screen.state,
                     images = images,
+                    packageName = packageName,
                 ),
             )
         }
@@ -79,6 +80,7 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.assets,
                     project.components,
                     images = images,
+                    packageName = packageName,
                 ),
             )
         }
@@ -92,8 +94,8 @@ class ComposeCodeGenerator : CodeGenerator {
      * alongside `Main.kt` and the scaffold (ADR-019). Loose-file export (G4) omits it: a pasted screen
      * uses the host project's own theme.
      */
-    fun generateTheme(project: Project): String? =
-        ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion)
+    fun generateTheme(project: Project, packageName: String = ""): String? =
+        ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion, packageName)
 
     /** Generates the source text for a single [screen]; also the unit the golden tests assert on. */
     fun generateScreen(
@@ -105,6 +107,7 @@ class ComposeCodeGenerator : CodeGenerator {
         components: List<ComponentDef> = emptyList(),
         state: List<StateField> = emptyList(),
         images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(screen.name),
         screen.root,
@@ -115,6 +118,7 @@ class ComposeCodeGenerator : CodeGenerator {
         components,
         state = state,
         images = images,
+        packageName = packageName,
     )
 
     /**
@@ -160,6 +164,7 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
         images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(component.name),
         component.root,
@@ -171,6 +176,7 @@ class ComposeCodeGenerator : CodeGenerator {
         component.parameters,
         component.state,
         images = images,
+        packageName = packageName,
     )
 
     /**
@@ -220,6 +226,7 @@ class ComposeCodeGenerator : CodeGenerator {
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
         images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String {
         val emitter = ComponentEmitter(theme, assets, components, recordSpans, state, imageResources = images)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
@@ -285,7 +292,7 @@ class ComposeCodeGenerator : CodeGenerator {
             }
             .build()
 
-        return FileSpec.builder("", fnName)
+        return FileSpec.builder(packageName, fnName)
             // KotlinPoet converts `·` (its non-breaking-space marker, TECHNICAL_NOTES §9) to a plain
             // space anywhere in output, so the source line uses a parenthesised separator instead.
             .addFileComment(
@@ -302,7 +309,7 @@ class ComposeCodeGenerator : CodeGenerator {
             .addFunction(function)
             // A generated `data class` per list-of-record state type, after the composable (order is
             // irrelevant to the compiler); none for a screen without list state, so output is unchanged.
-            .apply { StateEmitter.recordTypes(state).forEach { addType(it) } }
+            .apply { StateEmitter.recordTypes(state, packageName).forEach { addType(it) } }
             .build()
             .toString()
     }

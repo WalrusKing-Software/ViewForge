@@ -38,21 +38,26 @@ object MultiplatformExporter {
     fun multiplatformProject(project: Project, assetBytes: (Asset) -> ByteArray? = { null }): List<ExportFile> {
         val name = project.name.ifBlank { "Project" }
         val slug = GradleScaffold.slug(name)
+        // Every generated file lives in the app's applicationId package (#356): commonMain screens/App/Theme,
+        // jvmMain Main, and androidMain MainActivity. This is what lets the manifest name the launcher activity
+        // as `.MainActivity` under its `namespace` (== applicationId) and have PackageManager actually find the
+        // compiled class — a default-package activity fails to instantiate under AGP's namespacing at runtime.
+        val appPackage = MultiplatformScaffold.applicationId(slug)
         val gen = ComposeCodeGenerator()
-        val themeSource = gen.generateTheme(project)
+        val themeSource = gen.generateTheme(project, appPackage)
         val themed = themeSource != null
         // The generated `Res` accessor package, configured on the scaffold so codegen's import is deterministic.
-        val images = ImageResources.Multiplatform("${MultiplatformScaffold.applicationId(slug)}.generated.resources")
+        val images = ImageResources.Multiplatform("$appPackage.generated.resources")
         return buildList {
             // Shared UI → commonMain. Screens/components are commonMain by definition (not entry points),
             // so they are placed directly rather than routed, avoiding a mis-route of a screen named "Main".
-            gen.generate(project, images).forEach { file ->
+            gen.generate(project, images, appPackage).forEach { file ->
                 add(TextFile(kotlinPath(COMMON_MAIN, file.path), KotlinFormatter.format(file.content)))
             }
             // The screen-switching host (ADR-039, #214) → commonMain, so both entry points render App(); only
             // when some screen navigates, else the KMP bundle is unchanged.
             if (NavHost.projectNavigates(project)) {
-                add(TextFile(kotlinPath(COMMON_MAIN, NavHost.APP_KT), NavHost.appHost(project)))
+                add(TextFile(kotlinPath(COMMON_MAIN, NavHost.APP_KT), NavHost.appHost(project, appPackage)))
             }
             // Referenced image assets → the resources source set, where the plugin generates their Res.drawable
             // accessors (#223). Skipped when the bytes can't be resolved, like the desktop exporter.
@@ -65,13 +70,14 @@ object MultiplatformExporter {
                 add(TextFile(kotlinPath(DesktopTarget.sourceSetFor(theme), theme.path), it))
             }
             // Desktop entry (jvmMain) and Android entry + manifest (androidMain), routed through the targets.
-            val main = GeneratedFile(ComposeEntryPoints.MAIN_KT, ComposeEntryPoints.desktopMain(project, themed))
+            val main =
+                GeneratedFile(ComposeEntryPoints.MAIN_KT, ComposeEntryPoints.desktopMain(project, themed, appPackage))
             add(TextFile(kotlinPath(DesktopTarget.sourceSetFor(main), main.path), main.content))
 
             val activity =
                 GeneratedFile(
                     ComposeEntryPoints.MAIN_ACTIVITY_KT,
-                    ComposeEntryPoints.androidMainActivity(project, themed),
+                    ComposeEntryPoints.androidMainActivity(project, themed, appPackage),
                 )
             add(TextFile(kotlinPath(AndroidTarget.sourceSetFor(activity), activity.path), activity.content))
 
