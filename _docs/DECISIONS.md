@@ -1536,6 +1536,22 @@ Rejected here, as in the original Rejected note: a `ListOfScalar` state type so 
 list of strings — cleaner data but a schema bump and a wider model for a convenience the label-field selector
 already covers over the existing list-of-record shape.
 
+**Amendment (#359) — the generated dropdown opens and selects (local state, still read-only binding).** The
+inert-stub decision above shipped a generated dropdown whose `expanded = false` was hard-coded and whose anchor
+had no working click, so on a real Android device the menu **never opened** — it read as broken, not merely
+read-only (a fail-loud gap: a widget that looks interactive but does nothing). Device QA filed this as a bug
+(#359). Codegen now emits a **functional** dropdown: two local `remember { mutableStateOf(…) }` cells (open
+state + selected label, keyed by node id so several dropdowns don't collide), a transparent overlay `Box`
+(`Modifier.matchParentSize().clickable { … }`) that opens the menu (a `readOnly` `OutlinedTextField` does not
+reliably receive taps, which is *why* nothing happened before), and item `onClick`s that update the shown label
+and close. This does **not** reopen event handling in general: the change is purely local UI state and the bound
+options list is **never mutated**, so the data binding stays read-only (PF-4 intact). It uses only stable APIs
+(no experimental `ExposedDropdownMenuBox`/`menuAnchor`), so no `@OptIn` is added and the golden/compile gates
+cover it. The canvas renderer stays inert by design (the editor canvas must not run UI behaviour, PF-4); making
+the run-mode *preview* dropdown interactive is a separate, optional follow-up. The generated `Checkbox`/`Slider`
+remain inert stubs — they *look* correct while doing nothing, whereas a frozen dropdown does not, so only the
+dropdown is upgraded here.
+
 **Amendment (#255) — nested lists: a recursive record/sample model, schema v4.** The original decision drew
 "flat records (no nested lists)" as an honest boundary. Slice 2 removes it: a record field may **itself be a
 list-of-record**, so state can model a list of sections each holding a list of rows. Concretely, `RecordField`

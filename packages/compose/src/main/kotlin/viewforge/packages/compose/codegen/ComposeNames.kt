@@ -117,4 +117,5 @@ internal object ComposeNames {
     val width = MemberName("androidx.compose.foundation.layout", "width")
     val height = MemberName("androidx.compose.foundation.layout", "height")
     val background = MemberName("androidx.compose.foundation", "background")
+    val clickable = MemberName("androidx.compose.foundation", "clickable")
 }
