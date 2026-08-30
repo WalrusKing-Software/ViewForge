@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -79,6 +80,10 @@ import java.nio.file.Path
  * editor chrome theme, kept deliberately separate from the *project's* theme the canvas renders (S3);
  * the menu bar is native OS chrome and sits outside that theme.
  */
+// How many frames to retry the root focus request after the window reports focus, so a cold-launch
+// attach race doesn't leave the root without key focus (#361; see the focus effect in EditorShell).
+private const val FOCUS_ACQUIRE_RETRIES = 30
+
 @Composable
 fun FrameWindowScope.EditorShell(
     state: EditorState,
@@ -174,7 +179,19 @@ fun FrameWindowScope.EditorShell(
         LaunchedEffect(windowInfo, focus) {
             snapshotFlow { windowInfo.isWindowFocused }
                 .filter { it }
-                .collect { focus.requestFocus() }
+                .collect {
+                    // On a cold launch the window can already be focused when this first collects, so the flow
+                    // emits once and never again — and if the focus modifier node has not attached yet,
+                    // requestFocus() throws "FocusRequester is not initialized" (#168) and is lost, leaving the
+                    // root without key focus until the user clicks a focusable child (e.g. the canvas). Then
+                    // global shortcuts like Ctrl+9/Ctrl+0 (zoom) appear dead at launch (#361). Retry across a
+                    // few frames until the node is attached; on the alt-tab reclaim path the node is already
+                    // attached, so the first attempt succeeds and the loop exits immediately.
+                    repeat(FOCUS_ACQUIRE_RETRIES) {
+                        if (runCatching { focus.requestFocus() }.isSuccess) return@collect
+                        withFrameNanos { }
+                    }
+                }
         }
 
         if (showThemeEditor) ThemeEditor(state) { showThemeEditor = false }
