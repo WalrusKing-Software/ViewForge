@@ -47,10 +47,10 @@ internal object StateEmitter {
      * nested list fields (#255), collected transitively and deduplicated by type name (first shape wins; the
      * fixture must pick field names that singularise uniquely). Empty for a screen with no lists.
      */
-    fun recordTypes(state: List<StateField>): List<TypeSpec> {
+    fun recordTypes(state: List<StateField>, packageName: String = ""): List<TypeSpec> {
         val collected = LinkedHashMap<String, List<RecordField>>()
         state.forEach { collectRecordTypes(it.name, it.type, collected) }
-        return collected.map { (name, fields) -> dataClass(name, fields) }
+        return collected.map { (name, fields) -> dataClass(name, fields, packageName) }
     }
 
     /** Depth-first collect: a list-of-record type contributes its own `data class`, then recurses into its fields. */
@@ -181,24 +181,31 @@ internal object StateEmitter {
         return base.replaceFirstChar { it.uppercaseChar() }
     }
 
-    private fun dataClass(name: String, fields: List<RecordField>): TypeSpec = TypeSpec.classBuilder(name)
-        .addModifiers(KModifier.DATA)
-        .primaryConstructor(
-            FunSpec.constructorBuilder()
-                .apply { fields.forEach { addParameter(it.name, fieldType(it)) } }
-                .build(),
-        )
-        .apply {
-            fields.forEach { f ->
-                addProperty(PropertySpec.builder(f.name, fieldType(f)).initializer("%N", f.name).build())
+    private fun dataClass(name: String, fields: List<RecordField>, packageName: String): TypeSpec =
+        TypeSpec.classBuilder(name)
+            .addModifiers(KModifier.DATA)
+            .primaryConstructor(
+                FunSpec.constructorBuilder()
+                    .apply { fields.forEach { addParameter(it.name, fieldType(it, packageName)) } }
+                    .build(),
+            )
+            .apply {
+                fields.forEach { f ->
+                    addProperty(
+                        PropertySpec.builder(f.name, fieldType(f, packageName)).initializer("%N", f.name).build(),
+                    )
+                }
             }
-        }
-        .build()
+            .build()
 
-    /** The Kotlin type of a record field: a scalar, or `List<Element>` for a nested list-of-record field (#255). */
-    private fun fieldType(field: RecordField): TypeName = when (val t = field.type) {
+    /**
+     * The Kotlin type of a record field: a scalar, or `List<Element>` for a nested list-of-record field (#255).
+     * The nested element type resolves in [packageName] — the same package the record `data class`es are emitted
+     * into — so a KMP/Android export (a real package) references `Team`, not an invalid default-package import (#356).
+     */
+    private fun fieldType(field: RecordField, packageName: String): TypeName = when (val t = field.type) {
         is StateType.Scalar -> scalarType(t.scalar)
-        is StateType.ListOfRecord -> LIST.parameterizedBy(ClassName("", recordTypeName(field.name)))
+        is StateType.ListOfRecord -> LIST.parameterizedBy(ClassName(packageName, recordTypeName(field.name)))
     }
 
     /** The `val`'s initializer: a scalar literal, or `listOf(Type(field = …), …)` for a list-of-record field. */

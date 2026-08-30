@@ -150,10 +150,12 @@ internal object MultiplatformScaffold {
         """.trimIndent() + "\n"
 
     /**
-     * `src/androidMain/AndroidManifest.xml`. The launcher activity is bound by the **fully-qualified** name
-     * `MainActivity` (no leading dot ⇒ Android reads it as an absolute class name, resolving the default-package
-     * `MainActivity` that [ComposeEntryPoints.androidMainActivity] emits), while the R class/build use the
-     * `namespace` from [buildGradle]. [name] is the app label, XML-escaped so no metacharacter can alter structure.
+     * `src/androidMain/AndroidManifest.xml`. The launcher activity is bound by the **relative** name
+     * `.MainActivity` (leading dot ⇒ AGP resolves it against the module `namespace` from [buildGradle], which
+     * equals the `applicationId`), matching the `MainActivity` that [ComposeEntryPoints.androidMainActivity]
+     * emits into that same package (#356). A bare name / default-package activity fails to instantiate at
+     * runtime because AGP namespaces the manifest name but the class has no package. [name] is the app label,
+     * XML-escaped so no metacharacter can alter structure.
      */
     fun androidManifest(name: String): String =
         """
@@ -163,7 +165,7 @@ internal object MultiplatformScaffold {
                 android:label="${xmlEscape(name.ifBlank { "ViewForge" })}"
                 android:theme="@android:style/Theme.Material.Light.NoActionBar">
                 <activity
-                    android:name="MainActivity"
+                    android:name=".MainActivity"
                     android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
