@@ -125,6 +125,23 @@ class MultiplatformExporterTest {
     }
 
     @Test
+    fun `MainActivity handles edge-to-edge insets with opaque bars and inset-padded content (#358)`() {
+        val activity =
+            textOf(MultiplatformExporter.multiplatformProject(demoProject()), "src/androidMain/kotlin/MainActivity.kt")
+        // enableEdgeToEdge() clears the API-35 compatibility scrim over the system bars.
+        assertContains(activity, "import androidx.activity.enableEdgeToEdge")
+        assertContains(activity, "enableEdgeToEdge()")
+        // A full-window Surface paints the bar regions solid (opaque, theme-coloured bars).
+        assertContains(activity, "Surface(modifier = Modifier.fillMaxSize())")
+        // Content is inset out from under the bars so its touch targets are not swallowed by the system bar (#4).
+        assertContains(activity, "Box(modifier = Modifier.safeDrawingPadding())")
+        assertContains(activity, "import androidx.compose.foundation.layout.safeDrawingPadding")
+        // enableEdgeToEdge runs before setContent, and the screen renders inside the inset-padded Box.
+        val setContentAt = activity.indexOf("setContent {")
+        assertContains(activity.substring(0, setContentAt), "enableEdgeToEdge()")
+    }
+
+    @Test
     fun `the launcher activity, its package, and the namespace all agree so it instantiates at runtime (#356)`() {
         val files = MultiplatformExporter.multiplatformProject(demoProject())
         val manifest = textOf(files, "src/androidMain/AndroidManifest.xml")

@@ -38,6 +38,16 @@ internal object ComposeEntryPoints {
     private val setContent = MemberName("androidx.activity.compose", "setContent")
     private val materialTheme = MemberName("androidx.compose.material3", "MaterialTheme")
 
+    // Android edge-to-edge inset handling (#358). On targetSdk 35 edge-to-edge is enforced, so an activity
+    // that does nothing gets a translucent system compatibility scrim over the bars and lays interactive
+    // content out *under* them. These stand up opaque, theme-coloured bars with inset-padded content.
+    private val enableEdgeToEdge = MemberName("androidx.activity", "enableEdgeToEdge")
+    private val surface = MemberName("androidx.compose.material3", "Surface")
+    private val box = MemberName("androidx.compose.foundation.layout", "Box")
+    private val fillMaxSize = MemberName("androidx.compose.foundation.layout", "fillMaxSize")
+    private val safeDrawingPadding = MemberName("androidx.compose.foundation.layout", "safeDrawingPadding")
+    private val modifier = ClassName("androidx.compose.ui", "Modifier")
+
     /** The generated project theme wrapper (`Theme.kt`), in the same [packageName] as the screens. */
     private fun appTheme(packageName: String) = MemberName(packageName, "AppTheme")
 
@@ -84,6 +94,12 @@ internal object ComposeEntryPoints {
      * [materialTheme]). Emitted in [packageName] (the app's `applicationId`) so it both sees the
      * `commonMain` `AppTheme`/`<Screen>` (same package) and can be named by the manifest as
      * `.MainActivity` under that `namespace` — the pairing that makes it instantiate at runtime (#356).
+     *
+     * It also handles edge-to-edge insets (#358): `enableEdgeToEdge()` clears the API-35 compatibility
+     * scrim, a full-window [surface] paints the system-bar regions solid (opaque, theme-coloured bars),
+     * and the content is wrapped in [safeDrawingPadding] so it — and its touch targets — never sit under
+     * the bars. Without this the exported app shows grey scrims over the bars and taps on content laid out
+     * beneath them are swallowed by the system bar.
      */
     fun androidMainActivity(project: Project, themed: Boolean, packageName: String = ""): String {
         val entry = entryComposable(project, packageName)
@@ -92,17 +108,20 @@ internal object ComposeEntryPoints {
             .addModifiers(KModifier.OVERRIDE)
             .addParameter("savedInstanceState", bundle.copy(nullable = true))
             .addStatement("super.onCreate(savedInstanceState)")
+            .addStatement("%M()", enableEdgeToEdge)
             .beginControlFlow("%M", setContent)
+            .beginControlFlow("%M", theme)
+            .beginControlFlow("%M(modifier = %T.%M())", surface, modifier, fillMaxSize)
             .apply {
                 if (entry != null) {
-                    beginControlFlow("%M", theme)
+                    beginControlFlow("%M(modifier = %T.%M())", box, modifier, safeDrawingPadding)
                     addStatement("%M()", entry)
                     endControlFlow()
-                } else {
-                    addStatement("%M { }", theme)
                 }
             }
-            .endControlFlow()
+            .endControlFlow() // Surface
+            .endControlFlow() // theme
+            .endControlFlow() // setContent
             .build()
 
         val activity = TypeSpec.classBuilder("MainActivity")
