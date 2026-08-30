@@ -719,9 +719,16 @@ first Android-capable release (**v0.3.0-alpha-1**, schema v7). Tracking: #346.
 | `MultiplatformExporterTest` | KMP source-set routing, nav-host emission (#347), `Res.drawable` image wiring (#223), exported-README SDK docs (#349). | `./gradlew :packages:compose:test` |
 | **Real `:assembleDebug`** | The whole golden-fixture matrix + a combined nav+interactive+image+responsive project builds a real APK out-of-process with the local SDK, **zero manual fixes**. | See AN-0; this is the user's toolchain, not CI. |
 
-So §14's **[Manual]** items focus on what only a real device shows: **runtime behaviour** (navigation
+So §13's **[Manual]** items focus on what only a real device shows: **runtime behaviour** (navigation
 actually navigates, state updates recompose, images render, responsive reflows) and **visual parity**
 (the canvas Android frame vs a real device — M12 tolerance). Compilation is not in question here.
+
+**Ready-to-open test projects (`samples/android-qa/`).** You don't have to build a project per case
+by hand. `samples/android-qa/` ships pre-made `.vforge` files (see its `README.md`), each already
+verified to pass the editor's Open path *and* a real Android `:assembleDebug`. Fastest path: open
+**`AndroidQA.vforge`** — one navigable project whose Menu links to every feature demo (with a back
+bar) — export and install it **once**, and tap through the whole matrix. Each case below also names a
+focused single-feature file for when you need to isolate a failure.
 
 ### AN-0 — Prerequisites & how to build/install  [Manual]
 - **You need:** the Android SDK (platform + build-tools; e.g. `%LOCALAPPDATA%\Android\Sdk` on
@@ -748,6 +755,7 @@ actually navigates, state updates recompose, images render, responsive reflows) 
     exporter test asserts the import, so first re-run `MultiplatformExporterTest`.
 
 ### AN-1 — Basic render parity  [Manual]
+- **Sample:** `samples/android-qa/AN1-Widgets.vforge` (or `AndroidQA.vforge` → Widgets).
 - **Steps:** export + install a simple project (a Column with Text/Button/Image), launch it.
 - **Pass:** the same widgets render on the device as on the canvas — text, buttons, spacing look
   equivalent (allow for platform font metrics).
@@ -755,6 +763,8 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   wrong widget → a codegen issue that the golden/compile gate would also show (re-run RC-5).
 
 ### AN-2 — Screen-to-screen navigation  [Manual]
+- **Sample:** `samples/android-qa/AN2-Navigation.vforge` (Home ↔ Details, two-way). The `AndroidQA.vforge`
+  Menu ↔ demo ↔ back flow also exercises this.
 - **Steps:** a project with ≥2 screens where a control on screen A navigates to screen B (onClick →
   Navigate). Install, launch, tap the control.
 - **Pass:** the app switches to screen B (the generated `App()` `when`-host swaps screens); navigating
@@ -764,6 +774,7 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   **#351**, not a device bug. Confirm both screens exist in the project.
 
 ### AN-3 — Interactive state & events  [Manual]
+- **Sample:** `samples/android-qa/AN3-Counter.vforge` (or `AndroidQA.vforge` → Counter).
 - **Steps:** the counter-style project (a Button whose onClick adjusts a numeric state field bound to
   a Text). Install, launch, tap repeatedly; exercise Reset/Toggle if present.
 - **Pass:** the bound Text updates on every tap (recomposition works); Reset restores the initial
@@ -773,6 +784,8 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   regression if it recurs.
 
 ### AN-4 — Image rendering via multiplatform resources  [Manual]
+- **Sample:** `samples/android-qa/AN4-Image.vforge` (or `AndroidQA.vforge` → Images). Keep the sibling
+  `samples/android-qa/assets/` folder — the two PNGs (teal, orange) must sit beside the `.vforge`.
 - **Steps:** a project with an imported `Image` (e.g. the Gallery/ImageAdjust shape). Install, launch.
 - **Pass:** the image actually renders on the device (this is the `Res.drawable` / composeResources
   path, #223 — the one thing only a real build/run proves; it is **not** in-process compilable).
@@ -781,6 +794,7 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   `commonMain/composeResources/drawable/`, or its `Res.drawable` accessor import is missing (#322).
 
 ### AN-5 — Responsive per-breakpoint layout  [Manual]
+- **Sample:** `samples/android-qa/AN5-Responsive.vforge` (or `AndroidQA.vforge` → Responsive).
 - **Steps:** a project with responsive overrides (schema v7 — a node whose props differ at
   medium/expanded, e.g. the Adaptive fixture). Install on a **phone** emulator, then a **tablet**
   emulator (or rotate / resize) to cross the 600dp / 840dp breakpoints.
@@ -792,12 +806,15 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   expanded=840.
 
 ### AN-6 — Populated dropdown / list-valued binding  [Manual]
+- **Sample:** `samples/android-qa/AN6-Dropdown.vforge` (or `AndroidQA.vforge` → Dropdown).
 - **Steps:** a project with a populated dropdown (list-valued state binding). Install, launch, open
   the dropdown.
 - **Pass:** the options come from the bound list and are selectable.
 - **If it fails:** an empty dropdown → the list binding didn't resolve at codegen.
 
 ### AN-7 — Component-local state & nested lists  [Manual]
+- **Sample:** `samples/android-qa/AN7-ComponentState.vforge` + `AN7b-NestedList.vforge` (or
+  `AndroidQA.vforge` → Component state / Nested lists).
 - **Steps:** a project using a reusable component with its own state (ComponentState) and/or nested
   repeated lists (NestedList/RepeatLazyColumn). Install, launch, scroll and interact.
 - **Pass:** each component instance keeps its own state independently; nested lists render every row;
@@ -806,6 +823,8 @@ actually navigates, state updates recompose, images render, responsive reflows) 
   missing rows → the repeat/template expansion dropped items.
 
 ### AN-8 — Theme on device  [Manual]
+- **Sample:** `samples/android-qa/AN8-Theme.vforge` (`AndroidQA.vforge` also carries a custom theme
+  across every screen).
 - **Steps:** a project with a customized theme (colors/typography). Install, launch; if the app
   follows system dark mode, toggle the emulator's dark theme.
 - **Pass:** the device app uses the project theme; `AppTheme` wraps the content (generated `Theme.kt`);

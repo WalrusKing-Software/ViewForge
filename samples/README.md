@@ -16,3 +16,7 @@ Not a Gradle module. Real fixtures are added alongside the IR and codegen work (
   `title` via a `StateBinding`, and a `vforge.repeat` node whose per-item template binds `item.name`.
   Kept byte-identical to `Fixtures.stateProject()` (a test keeps the two in lockstep) and used for the
   v3 codec round-trip test.
+- `android-qa/` — ready-to-open projects for the Phase-2 Android manual QA pass (`_docs/RELEASE_QA.md`
+  §13): a combined navigable `AndroidQA.vforge` plus one focused file per feature, with a sidecar
+  `assets/` folder. Each is verified to pass the editor's Open path and a real Android `:assembleDebug`.
+  See `android-qa/README.md`.
