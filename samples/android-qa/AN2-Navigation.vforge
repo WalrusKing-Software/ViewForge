@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 7,
+  "id": "01AN2",
+  "name": "AN2Navigation",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "screens": [
+    {
+      "id": "scr_home",
+      "name": "Home",
+      "root": {
+        "id": "home_col",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "home_m",
+            "type": "compose.fillMaxSize"
+          },
+          {
+            "id": "home_p",
+            "type": "compose.padding",
+            "args": {
+              "all": {
+                "kind": "literal",
+                "value": 24
+              }
+            }
+          }
+        ],
+        "children": [
+          {
+            "id": "home_t",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "literal",
+                "value": "Home screen"
+              }
+            }
+          },
+          {
+            "id": "home_go",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "home_go_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Go to Details"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_details"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_details",
+      "name": "Details",
+      "root": {
+        "id": "det_col",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "det_m",
+            "type": "compose.fillMaxSize"
+          },
+          {
+            "id": "det_p",
+            "type": "compose.padding",
+            "args": {
+              "all": {
+                "kind": "literal",
+                "value": 24
+              }
+            }
+          }
+        ],
+        "children": [
+          {
+            "id": "det_t",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "literal",
+                "value": "Details screen"
+              }
+            }
+          },
+          {
+            "id": "det_back",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "det_back_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "Back to Home"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_home"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
