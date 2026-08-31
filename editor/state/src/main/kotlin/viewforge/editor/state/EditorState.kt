@@ -33,6 +33,7 @@ import viewforge.command.promoteScreenToComponent
 import viewforge.command.promoteToParameter
 import viewforge.model.Action
 import viewforge.model.Advisory
+import viewforge.model.AdvisorySeverity
 import viewforge.model.Asset
 import viewforge.model.ChildAddress
 import viewforge.model.ColorPair
@@ -1385,8 +1386,35 @@ class EditorState(
     /** The event slots [node]'s component type exposes (ADR-035) — the handler points the action editor offers. */
     fun eventSlots(node: Node): List<EventSlotDefinition> = catalog.eventSlotsOf(node.type)
 
-    /** The non-blocking accessibility/UX advisories [node] earns (#315), for the inspector to surface. */
-    fun advisories(node: Node): List<Advisory> = catalog.advisories(node)
+    /**
+     * The non-blocking advisories [node] earns (#315, #351), for the inspector to surface. Combines
+     * framework-specific accessibility hints from the catalog (e.g. touch-target size, contentDescription)
+     * with project-level structural warnings that need screen-list context and therefore can't live on the
+     * framework-neutral catalog seam.
+     */
+    fun advisories(node: Node): List<Advisory> = buildList {
+        addAll(catalog.advisories(node))
+        // Dangling Navigate targets (#351): a handler whose screen was deleted silently no-ops at run time.
+        // Warn here so the user notices and can remove or update the action before export.
+        val validIds = document.screens.map { it.id }.toSet()
+        val dangling = node.handlers.values.flatten()
+            .filterIsInstance<Action.Navigate>()
+            .map { it.screenId }
+            .filter { it !in validIds }
+            .distinct()
+        if (dangling.isNotEmpty()) {
+            add(
+                Advisory(
+                    if (dangling.size == 1) {
+                        "Navigate targets a deleted screen — remove or update the action."
+                    } else {
+                        "Navigate targets ${dangling.size} deleted screens — remove or update the actions."
+                    },
+                    AdvisorySeverity.WARNING,
+                ),
+            )
+        }
+    }
 
     /**
      * Set node [nodeId]'s event-handler [slot] to the ordered [actions] (ADR-035) — the one undoable command
