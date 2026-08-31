@@ -1,6 +1,7 @@
 package viewforge.editor.canvas
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
@@ -12,6 +13,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -29,7 +32,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -539,10 +541,13 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
     // ctrl/cmd- or shift-click (toggle into a multi-selection, C10).
     val windowInfo = LocalWindowInfo.current
     val density = LocalDensity.current
-    // Clearing focus on a canvas interaction blurs a focused inspector text field (e.g. a Screen State box), so
-    // its blinking cursor doesn't linger after you click out onto the canvas — pointerInput, unlike a `clickable`
-    // (the tree rows), doesn't move focus on its own (#300).
-    val focusManager = LocalFocusManager.current
+    // A canvas interaction moves focus TO the canvas (not to nothing) so it blurs a focused inspector text field
+    // — e.g. a Screen State box, whose blinking cursor must not linger after you click out onto the canvas
+    // (pointerInput, unlike a `clickable`, doesn't move focus on its own, #300) — while keeping a focused node
+    // inside the shell root's key-event subtree, so global shortcuts keep working. Using
+    // `LocalFocusManager.clearFocus()` here instead cleared focus to nothing and killed every shortcut once the
+    // canvas was clicked (#361): the root Column that owns `onKeyEvent` lost focus and nothing reclaimed it.
+    val canvasFocus = remember { FocusRequester() }
     // Measures the short type-name tags drawn on the debug container-border overlay (#117); cached
     // internally by the measurer, so re-drawing every frame while the mode is on stays cheap.
     val textMeasurer = rememberTextMeasurer()
@@ -580,6 +585,8 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
 
     Canvas(
         modifier
+            .focusRequester(canvasFocus)
+            .focusable()
             .onGloballyPositioned { overlayCoords = it }
             .pointerInput(root) {
                 val scope = this
@@ -587,7 +594,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                 detectTapGestures { local ->
                     // While panning (space held) a press is a pan, not a selection — ignore it here.
                     if (state.isSpaceHeld) return@detectTapGestures
-                    focusManager.clearFocus() // clicking the canvas ends editing of any focused inspector field (#300)
+                    canvasFocus.requestFocus() // blur any inspector field, keep root shortcuts (#300/#361)
                     val hit = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
                     val mods = windowInfo.keyboardModifiers
                     // Ctrl/Cmd- or Shift-click toggles the hit in/out of a multi-selection (C10). The canvas
@@ -638,7 +645,7 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                 val scope = this
                 detectDragGestures(
                     onDragStart = { local ->
-                        focusManager.clearFocus() // a canvas drag also blurs a focused inspector field (#300)
+                        canvasFocus.requestFocus() // drag also blurs any inspector field, keeps shortcuts (#300/#361)
                         val point = scope.pointerToContent(local, state)
                         val hit = hitTest(bounds.snapshot(), root, point)
                         if (hit == null || hit == root.id) {
