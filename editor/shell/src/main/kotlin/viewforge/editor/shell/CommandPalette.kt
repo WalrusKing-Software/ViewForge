@@ -141,6 +141,9 @@ internal fun buildPaletteCommands(
     commands += PaletteCommand("file.exportGradle", "Export → Gradle project", "File") {
         export.start(viewforge.editor.state.ExportMode.GRADLE_PROJECT)
     }
+    commands += PaletteCommand("file.exportMultiplatform", "Export → Multiplatform project", "File") {
+        export.start(viewforge.editor.state.ExportMode.MULTIPLATFORM_PROJECT)
+    }
     commands += PaletteCommand("file.regenerate", "Regenerate Gradle project…", "File", run = export::regenerate)
     commands += PaletteCommand("file.preferences", "Preferences…", "File", run = onOpenPreferences)
 

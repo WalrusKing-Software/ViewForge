@@ -49,6 +49,10 @@ internal object ComposeNames {
     val Column = MemberName("androidx.compose.foundation.layout", "Column")
     val Row = MemberName("androidx.compose.foundation.layout", "Row")
     val Box = MemberName("androidx.compose.foundation.layout", "Box")
+
+    // Responsive codegen (#222, ADR-037): wraps a node whose props carry per-breakpoint overrides so the
+    // hoisted `val`s can branch on the `maxWidth` its scope exposes.
+    val BoxWithConstraints = MemberName("androidx.compose.foundation.layout", "BoxWithConstraints")
     val Spacer = MemberName("androidx.compose.foundation.layout", "Spacer")
     val LazyColumn = MemberName("androidx.compose.foundation.lazy", "LazyColumn")
     val LazyRow = MemberName("androidx.compose.foundation.lazy", "LazyRow")
@@ -76,6 +80,18 @@ internal object ComposeNames {
     val DropdownMenuItem = MemberName("androidx.compose.material3", "DropdownMenuItem")
     val Image = MemberName("androidx.compose.foundation", "Image")
     val painterResource = MemberName("androidx.compose.ui.res", "painterResource")
+
+    // Multiplatform resources (#223, ADR-021): `org.jetbrains.compose.resources.painterResource(Res.drawable.x)`.
+    // The `Res` accessor is generated into a per-project package (configured on the scaffold), so its ClassName
+    // is built dynamically from that package rather than pinned here.
+    val painterResourceMultiplatform = MemberName("org.jetbrains.compose.resources", "painterResource")
+
+    fun resClass(resPackage: String): ClassName = ClassName(resPackage, "Res")
+
+    // The generated `Res.drawable.<name>` accessor is a top-level extension property in the resources package, so
+    // referencing it requires importing it (not just `Res`) — emit it as a MemberName so KotlinPoet adds the
+    // import, else the KMP export fails to compile with `Unresolved reference '<name>'` (#322).
+    fun drawableAccessor(resPackage: String, name: String): MemberName = MemberName(resPackage, name)
     val Icon = MemberName("androidx.compose.material3", "Icon")
     val TopAppBar = MemberName("androidx.compose.material3", "TopAppBar")
     val BottomAppBar = MemberName("androidx.compose.material3", "BottomAppBar")
@@ -101,4 +117,5 @@ internal object ComposeNames {
     val width = MemberName("androidx.compose.foundation.layout", "width")
     val height = MemberName("androidx.compose.foundation.layout", "height")
     val background = MemberName("androidx.compose.foundation", "background")
+    val clickable = MemberName("androidx.compose.foundation", "clickable")
 }

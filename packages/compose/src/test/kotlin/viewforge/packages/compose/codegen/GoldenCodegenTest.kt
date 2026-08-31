@@ -126,6 +126,17 @@ class GoldenCodegenTest {
     // structural lambda — `Adjust`→`count += 1`, `Toggle`→`expanded = !expanded`, `SetState`→`count = 0`.
     @Test fun interactive() = assertGolden("Interactive")
 
+    // Screen-to-screen navigation (ADR-039, #214): a Button `onClick` whose handler is a `Navigate` action
+    // lowers to `onNavigate("scr_details")`, and the navigating screen gains an injected
+    // `onNavigate: (String) -> Unit = {}` parameter (before `modifier`). A non-navigating screen is unchanged.
+    @Test fun navigation() = assertGolden("Navigation")
+
+    // Responsive per-breakpoint overrides (ADR-037, #222): a Text with `fontSize`/`textAlign` overridden at
+    // the `medium`/`expanded` breakpoints lowers to a `BoxWithConstraints { }` that hoists each overridden prop
+    // into a `val name = if (maxWidth >= 840.dp) … else if (maxWidth >= 600.dp) … else <base>` selected by width,
+    // largest-first. The override-free sibling stays a plain `Text` — no wrapper leaks onto a non-responsive node.
+    @Test fun responsive() = assertGolden("Responsive")
+
     // A user component + an instance that references it (D7): the screen emits a `PrimaryButton(...)`
     // call and the component emits its own composable file. One .vforge, two generated files — the
     // reference model (ADR-024), so this is a multi-file golden rather than a `.single()` case.
@@ -135,6 +146,17 @@ class GoldenCodegenTest {
         val files = ComposeCodeGenerator().generate(project)
         assertGeneratedFile(files, "HomeScreen.kt", "ReusableComponent")
         assertGeneratedFile(files, "PrimaryButton.kt", "ReusableComponent.PrimaryButton")
+    }
+
+    // Component-level navigation (#324): the NavCard component's own tree navigates, so NavCard.kt gains its own
+    // `onNavigate: (String) -> Unit = {}` param and lowers Navigate onto it; the Hub screen navigates transitively
+    // and forwards `onNavigate = onNavigate` to the instance call. One .vforge, two files asserted apart.
+    @Test
+    fun componentNavigation() {
+        val project = ProjectCodec.decode(resource("/golden/ComponentNavigation.vforge"))
+        val files = ComposeCodeGenerator().generate(project)
+        assertGeneratedFile(files, "Hub.kt", "ComponentNavigation")
+        assertGeneratedFile(files, "NavCard.kt", "ComponentNavigation.NavCard")
     }
 
     // Component-local state (ADR-034 Amendment, #269): a component carries BOTH a parameter and its own

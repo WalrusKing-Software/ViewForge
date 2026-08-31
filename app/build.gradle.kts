@@ -31,6 +31,17 @@ dependencies {
     // classpath (they reach the app only transitively, as `implementation` of packages/compose).
     testImplementation(libs.compose.material3)
     testImplementation(libs.compose.foundation)
+
+    // Run-mode navigation composition test (#325): drives the real ComposeRenderer interactive host
+    // through a synthesised pointer click and asserts the live screen switch — the one integration the
+    // pure renderer unit tests can't reach. It lives in :app (not :packages:compose) because it loads
+    // Skiko to render: the codegen-verify gate runs :packages:compose:test WITHOUT the headless
+    // graphics libs (that module is a pure codegen/compile gate), whereas :app already renders in tests
+    // (FidelityTest) and runs only under build.yml, which installs libgl1/libfontconfig1. uiTestJUnit4
+    // adds runComposeUiTest (a pointer click, which ImageComposeScene can't do); currentOs skiko is
+    // already on the classpath via the implementation dependency above. Version-managed by the pinned
+    // compose plugin, so no dynamic version (CLAUDE.md rule 9).
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 // Expose the repo-root samples/ directory so the sample-coherence test can assert the in-code

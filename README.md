@@ -10,13 +10,12 @@ simulation — and export clean, idiomatic Kotlin source you own and can hand-ed
 
 ## Status
 
-**v0.2.0-alpha-1 — second alpha (Phase 1, Compose Desktop).** The editor builds, edits, themes, and
-exports a non-trivial Compose Desktop screen, now with read-only **data binding** and interactive
-**state & events**, a cross-project component library, and re-opening of ViewForge-generated Kotlin. It
-ships **unsigned** installers for Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and macOS (`.dmg`) — a
-downloaded build may show a SmartScreen/Gatekeeper prompt. Early software: expect rough edges, and the
-`.vforge` schema (v6) may still evolve behind migrations. Phase 2 (Android) is planned — see
-[`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
+**v0.3.0-alpha-1 — third alpha (Phase 2: Android).** The same `.vforge` project now exports a runnable
+**Android** app alongside the Compose Desktop target, with screen-to-screen navigation, responsive
+per-breakpoint overrides, and Android-aware accessibility advisories. It ships **unsigned** installers for
+Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and macOS (`.dmg`) — a downloaded build may show a
+SmartScreen/Gatekeeper prompt. Early software: expect rough edges, and the `.vforge` schema (v7) may still
+evolve behind migrations.
 
 ## Why this exists
 
@@ -33,8 +32,8 @@ open without over-designing for it.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| 1 | Compose Desktop (JVM) | **Feature-complete (latest: v0.2.0-alpha-1)** |
-| 2 | + Android | Planned (next) |
+| 1 | Compose Desktop (JVM) | **Feature-complete** |
+| 2 | + Android | **Released (v0.3.0-alpha-1)** — KMP export (desktop + Android), device preview frames, responsive overrides, screen navigation |
 | 3 | + iOS | Blocked on macOS hardware |
 | 4 | + Web (Kotlin/Wasm) | Planned, experimental |
 | 5 | Framework package SDK (non-Compose frameworks) | Future |

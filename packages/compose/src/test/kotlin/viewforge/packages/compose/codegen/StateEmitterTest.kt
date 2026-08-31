@@ -143,8 +143,8 @@ class StateEmitterTest {
     }
 
     @Test
-    fun `Navigate emits a compilable TODO stub, since no nav host is generated yet (#214)`() {
-        assertEquals("// TODO(#214): navigate to screen \"home\"", lower(Action.Navigate("home")))
+    fun `Navigate lowers to a call on the injected onNavigate callback with the target screen id (#214)`() {
+        assertEquals("onNavigate(\"home\")", lower(Action.Navigate("home")))
     }
 
     @Test

@@ -1,9 +1,11 @@
 package viewforge.app
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
@@ -21,21 +23,28 @@ import viewforge.editor.state.PaletteEntry
 import viewforge.editor.state.PreviewSource
 import viewforge.editor.state.ProjectExportService
 import viewforge.editor.state.RegenerationReport
+import viewforge.model.Advisory
 import viewforge.model.ComponentDef
 import viewforge.model.Dropdown
 import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
+import viewforge.model.NodeId
 import viewforge.model.Project
 import viewforge.model.PropDefinition
 import viewforge.model.Repeater
 import viewforge.model.Screen
+import viewforge.model.StateField
+import viewforge.packages.compose.catalog.ComposeAdvisories
 import viewforge.packages.compose.catalog.ComposeComponents
 import viewforge.packages.compose.catalog.ComposeModifiers
 import viewforge.packages.compose.codegen.ComposeCodeGenerator
 import viewforge.packages.compose.codegen.KotlinIdentifiers
 import viewforge.packages.compose.render.ComposeRenderer
+import viewforge.packages.compose.targets.COMPOSE_BREAKPOINTS
+import viewforge.packages.compose.targets.COMPOSE_PREVIEW_PROFILES
 import viewforge.packages.compose.targets.DesktopExporter
+import viewforge.packages.compose.targets.MultiplatformExporter
 import viewforge.prefs.ConfigDir
 import viewforge.prefs.PreferencesStore
 import viewforge.project.CrashReporter
@@ -89,7 +98,14 @@ private fun runEditor() {
     // at last close, or a blank canvas. The sample also supplies the framework a blank document inherits,
     // so it is always the base; the branch below reshapes it. Crash recovery (#54) still overlays this in
     // the shell — its Restore prompt wins over whatever is seeded here.
-    val state = EditorState(sampleProject(), ComposeCatalog)
+    // The Compose package's targets contribute the canvas device-preview frames (desktop windows + Android
+    // devices, #220); the editor names no framework, so the app injects them (ADR-026 Phase-2 amendment).
+    val state = EditorState(
+        sampleProject(),
+        ComposeCatalog,
+        previewProfiles = COMPOSE_PREVIEW_PROFILES,
+        breakpoints = COMPOSE_BREAKPOINTS,
+    )
     when (val seed = resolveStartupSeed(prefs)) {
         StartupSeed.FirstRunSample -> Unit // keep the sample the state was constructed with
         StartupSeed.Blank -> state.newDocument()
@@ -123,20 +139,54 @@ private fun runEditor() {
     // `dark` follows the toolbar's light/dark preview toggle (FEATURES H2). `imageLoader` resolves an
     // Image node's asset to a bitmap for the canvas (kept in `:app` so the render layer stays pure).
     val renderer =
-        CanvasRenderer { root, interactive, screenState, instrument ->
-            ComposeRenderer.RenderScreen(
-                root = root,
-                theme = state.document.theme,
-                dark = state.canvasDark,
-                instrument = instrument,
-                imageLoader = images::load,
-                components = state.document.components,
-                state = screenState,
-                interactive = interactive,
-                // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
-                // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
-                editorAffordances = true,
-            )
+        object : CanvasRenderer {
+            @Composable
+            override fun Render(
+                root: Node,
+                interactive: Boolean,
+                screenState: List<StateField>,
+                instrument: (NodeId) -> Modifier,
+            ) {
+                ComposeRenderer.RenderScreen(
+                    root = root,
+                    theme = state.document.theme,
+                    dark = state.canvasDark,
+                    instrument = instrument,
+                    imageLoader = images::load,
+                    components = state.document.components,
+                    state = screenState,
+                    interactive = interactive,
+                    // Editor canvas only: empty containers get a min size + dashed hint so they are visible and
+                    // can receive a palette drop (#191). Never set by codegen, export, or the fidelity tests.
+                    editorAffordances = true,
+                    // Responsive preview (#314): resolve per-breakpoint overrides for the breakpoint the active
+                    // device frame's width falls into (EditorState derives it), so the canvas shows what codegen
+                    // would emit at that width.
+                    activeBreakpoint = state.previewBreakpoint,
+                )
+            }
+
+            // Run-mode screen switching (#325): the same interactive render, but hosted so a `Navigate` in the
+            // live tree swaps the drawn screen. Theme/dark/images/components/breakpoint come from the same
+            // editor state as [Render]; the host owns which screen is current and re-seeds its state on switch.
+            @Composable
+            override fun RenderProject(
+                screens: List<Screen>,
+                startScreenId: String,
+                instrument: (NodeId) -> Modifier,
+            ) {
+                ComposeRenderer.RenderInteractiveProject(
+                    screens = screens,
+                    startScreenId = startScreenId,
+                    theme = state.document.theme,
+                    dark = state.canvasDark,
+                    instrument = instrument,
+                    imageLoader = images::load,
+                    components = state.document.components,
+                    editorAffordances = true,
+                    activeBreakpoint = state.previewBreakpoint,
+                )
+            }
         }
 
     application {
@@ -251,6 +301,11 @@ private class DesktopExportService(private val projectDir: () -> Path?) : Projec
         // from the same source the canvas loads from — the project dir first, then the classpath.
         ExportMode.GRADLE_PROJECT ->
             DesktopExporter.gradleProject(project) { asset -> assetBytes(projectDir(), asset.path) }
+        // The KMP multi-target project (desktop + Android, ADR-036). Image assets are wired via the
+        // multiplatform resources API (#223): the resolver ships each asset into commonMain/composeResources,
+        // from the same source the canvas and desktop export read.
+        ExportMode.MULTIPLATFORM_PROJECT ->
+            MultiplatformExporter.multiplatformProject(project) { asset -> assetBytes(projectDir(), asset.path) }
     }
 }
 
@@ -300,6 +355,10 @@ private object ComposeCatalog : ComponentCatalog {
         ComposeModifiers.offeredFor(parentType)
 
     override fun modifierDef(type: String): ModifierDefinition? = ComposeModifiers.definitionFor(type)
+
+    // Accessibility advisories (#315) come from the package, like the prop schema — the inspector surfaces
+    // them without naming the framework. A core `vforge.*` node (repeat/dropdown) earns none.
+    override fun advisories(node: Node): List<Advisory> = ComposeAdvisories.forNode(node)
 
     // A screen name must be a legal Kotlin identifier to become a composable/file name (GC-3);
     // delegate to the package's validator so the hard-keyword list stays single-sourced.

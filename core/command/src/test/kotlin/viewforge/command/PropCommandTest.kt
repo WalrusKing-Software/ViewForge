@@ -57,6 +57,36 @@ class PropCommandTest {
     }
 
     @Test
+    fun `SetResponsiveOverride sets a per-breakpoint override and round-trips`() {
+        val cmd = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "fontSize", lit(20))
+        val after = cmd.apply(doc)
+        assertEquals(lit(20), after.rootOf().findById(NodeId("a"))!!.responsive["expanded"]?.get("fontSize"))
+        assertRoundTrips(cmd)
+    }
+
+    @Test
+    fun `SetResponsiveOverride with null clears the override, pruning the empty map, and round-trips`() {
+        val withOverride =
+            SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "fontSize", lit(20)).apply(doc)
+        val clear = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "fontSize", null)
+        val after = clear.apply(withOverride)
+        assertTrue(after.rootOf().findById(NodeId("a"))!!.responsive.isEmpty())
+        assertEquals(withOverride, clear.invert(withOverride).apply(after))
+    }
+
+    @Test
+    fun `SetResponsiveOverride coalesceKey is per node, breakpoint, and prop, and distinct from base SetProp`() {
+        val a = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "fontSize", lit(20))
+        val b = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "fontSize", lit(24))
+        val otherBp = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "medium", "fontSize", lit(16))
+        val otherProp = SetResponsiveOverride(Fixtures.SCREEN, NodeId("a"), "expanded", "color", lit("x"))
+        assertEquals(a.coalesceKey, b.coalesceKey)
+        assertTrue(a.coalesceKey != otherBp.coalesceKey)
+        assertTrue(a.coalesceKey != otherProp.coalesceKey)
+        assertTrue(a.coalesceKey != SetProp(Fixtures.SCREEN, NodeId("a"), "fontSize", lit(20)).coalesceKey)
+    }
+
+    @Test
     fun `SetModifiers replaces the ordered chain and round-trips`() {
         val m = ModifierEntry(id = "m1", type = "compose.fillMaxSize")
         val cmd = SetModifiers(Fixtures.SCREEN, NodeId("a"), listOf(m))

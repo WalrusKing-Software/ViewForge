@@ -115,7 +115,7 @@ into issues directly.
 | I5 | Live update | P0 | Canvas reflects edits within one frame; no apply button. |
 | I6 | Raw expression escape hatch | P1 | Advanced-only; node flagged "unverified"; canvas shows a placeholder. |
 | I7 | Reset to default | P1 | Per-prop revert. |
-| I8 | Validation feedback | P1 | Invalid values are shown inline before codegen ever runs. |
+| I8 | Validation feedback | P1 | Invalid values are shown inline before codegen ever runs. Plus non-blocking **accessibility advisories** in the inspector (#315): missing `contentDescription` on an image/icon, and a tappable control pinned below the 48dp touch target — guidance, never a codegen/load gate. |
 | I9 | Responsive overrides | P2 | Per-breakpoint prop values (needed for Phase 2). |
 
 > **Per-component prop coverage (issue #17):** fleshing out each component's editable props toward its
@@ -162,6 +162,7 @@ into issues directly.
 | G8 | Copy composable to clipboard | P1 | For pasting into an existing project. |
 | G9 | Per-target source-set routing | P1 | Phase 2+: files land in `commonMain` vs `androidMain` correctly. |
 | G10 | Regeneration into an owned directory | P1 | Wholesale regeneration is safe and doesn't clobber user files. (#107: **shipped** — File → Regenerate Gradle project writes an `.viewforge/manifest.json` of owned paths and, on re-export, replaces ViewForge's own files, deletes its orphans, and **refuses** to overwrite unowned files (reported, not clobbered). Ownership = manifest, with the G6 header as a fallback signal for text files; manifest load is total (corrupt → nothing owned). Pure `planRegeneration` + `ProjectExporter.regenerate`/`regenerationPlan`, root-confined `GuardedWriter.delete`. ADR-029. No `.vforge` schema change.) |
+| G11 | Referential-completeness export gate | P1 | A project instancing a component it does not contain is **refused before writing**, with a located report of every dangling `vforge.userComponent` reference (screen/component + node id) — never a partial or non-compiling export. (#338/#212: pure `Project.danglingComponentReferences()` (`core/model`) backs both `ComposeCodeGenerator.generate` (throws the aggregated list) and the shell's pre-destination check via the `ProjectExportService.exportBlockers` seam default; the renderer already draws a loud placeholder for the same case. No `.vforge` schema change.) |
 
 ## 8. Editor shell
 
@@ -199,10 +200,14 @@ Recorded so they're decisions, not oversights:
   let a record field itself be a list. Interactivity (ADR-035, schema v6): state is **writable** and a node's
   event slots (`onClick`) hold an ordered, **closed `Action` list** — `SetState`/`Toggle`/`Adjust`/`AppendRow`/
   `RemoveRow`/`Navigate` — that mutates declared state; C13 run-mode operates it live, and codegen emits real
-  `remember { mutableStateOf(...) }` + structural handler lambdas. Still excluded: **free-form / expression
-  evaluation** of handlers — a handler is a named, typed operation, never user-authored Kotlin (PF-4 / SECURITY
-  IA-*); complex logic is served by editing the generated code.
-- Navigation graph editing
+  `remember { mutableStateOf(...) }` + structural handler lambdas. **Screen-to-screen navigation** (`Navigate`,
+  ADR-039, #214) generates a callback + a `when`-host so an exported multi-screen app switches pages (no
+  navigation dependency, no schema change). Still excluded: **free-form / expression evaluation** of handlers —
+  a handler is a named, typed operation, never user-authored Kotlin (PF-4 / SECURITY IA-*); complex logic is
+  served by editing the generated code.
+- Navigation **graph** editing (a visual routes/back-stack graph editor). *Exception:* basic screen-to-screen
+  navigation via the `Navigate` action **is** shipped (ADR-039, #214) — the graph editor and a generated back
+  stack remain out of scope.
 - Backend, API, or database integration
 - Real-time collaboration
 - AI-assisted generation

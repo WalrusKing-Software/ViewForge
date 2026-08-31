@@ -2,7 +2,7 @@
 
 ViewForge carries **two independent version numbers**, and this page explains how they relate:
 
-- The **application version** (e.g. `v0.2.0-alpha-1`) — the released build of the editor, tagged in
+- The **application version** (e.g. `v0.3.0-alpha-1`) — the released build of the editor, tagged in
   Git and following [Semantic Versioning](https://semver.org/).
 - The **`.vforge` schema version** (`schemaVersion`, an integer) — the on-disk format of a project
   file, versioned and migrated independently of the app. Every `.vforge` file records its own
@@ -21,6 +21,7 @@ summary.
 |---|---|---|---|---|
 | `v0.1.0-alpha-1` | 2026-08-17 | **v2** | **v2** | First public alpha (Phase 1, Compose Desktop). |
 | `v0.2.0-alpha-1` | 2026-08-20 | **v6** | **v6** | Read-only data binding + interactive state & events (ADR-034, ADR-035). |
+| `v0.3.0-alpha-1` | 2026-08-31 | **v7** | **v7** | Phase 2: Android target + screen navigation (ADR-036, ADR-039). |
 
 "Reads up to" is the highest `schemaVersion` a build understands. A build opens **any file at or
 below** that version (older files are migrated forward on load — see below) and **refuses** a file
@@ -42,7 +43,7 @@ migration rewrites the document's shape.
 | **v4** | `v0.2.0-alpha-1` | Nested lists — a `RecordField` carries a full `StateType`; a sample cell is a `SampleValue`. **Changes the serialized shape** of existing state. | ADR-034 (amend. #255) | `M3to4` (**transform**) |
 | **v5** | `v0.2.0-alpha-1` | Component-local state — `ComponentDef` gains its own `state`, resolved against itself. | ADR-034 (amend. #266) | `M4to5` (stamp) |
 | **v6** | `v0.2.0-alpha-1` | Interactive state & events — state becomes **writable**; `Node.handlers` maps an event slot to an ordered, closed `List<Action>`. No evaluator is introduced (PF-4). | ADR-035 | `M5to6` (stamp) |
-| **v7** *(reserved)* | Phase 2 | Node `responsive` per-breakpoint overrides. | ADR-030 | `M6to7` |
+| **v7** | `v0.3.0-alpha-1` | Node `responsive` per-breakpoint overrides — an additive map keyed by breakpoint id. | ADR-030 / ADR-037 | `M6to7` (stamp) |
 
 ---
 

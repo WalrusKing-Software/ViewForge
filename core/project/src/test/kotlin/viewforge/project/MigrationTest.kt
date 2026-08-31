@@ -158,6 +158,43 @@ class MigrationTest {
     }
 
     @Test
+    fun `M6to7 stamps the version and leaves the rest of the document untouched`() {
+        // Responsive overrides (ADR-030) are purely additive — a v6 document has no node `responsive`, so
+        // the 6->7 step only stamps the version, exactly like M1to2/M2to3/M4to5/M5to6.
+        val v6 = JsonObject(mapOf("schemaVersion" to JsonPrimitive(6), "id" to JsonPrimitive("x")))
+        val v7 = viewforge.project.migrations.M6to7.migrate(v6)
+        assertEquals(7, SchemaMigrations.readVersion(v7))
+        assertEquals(JsonPrimitive("x"), v7["id"])
+    }
+
+    @Test
+    fun `a schema-6 document with no overrides migrates through the store and loads at the current version`() {
+        // A v6 file carries no node `responsive`, so the 6->7 step is a pure version stamp (M6to7): the
+        // document is already a valid v7 and its node must load unchanged, reporting its on-disk version.
+        val tmp = Files.createTempDirectory("vforge-6to7").resolve("legacy.vforge")
+        Files.writeString(
+            tmp,
+            """
+            {
+              "schemaVersion": 6,
+              "id": "01LEGACYRSP",
+              "name": "Legacy",
+              "framework": { "packageId": "compose-multiplatform", "packageVersion": "1.0.0" },
+              "screens": [
+                { "id": "s", "name": "S", "root": { "id": "n_1", "type": "compose.foundation.layout.Box" } }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val result = ProjectStore.load(tmp)
+        assertTrue(result is LoadResult.Success, "expected Success but got $result")
+        assertEquals(SchemaMigrations.CURRENT, result.project.schemaVersion)
+        assertEquals(6, result.migratedFromVersion)
+        // The node loads with defaulted empty responsive overrides (responsive is opt-in).
+        assertTrue(result.project.screens.single().root.responsive.isEmpty())
+    }
+
+    @Test
     fun `a schema-5 document with no handlers migrates through the store and loads at the current version`() {
         // A v5 file carries no node handlers, so the 5->6 step is a pure version stamp (M5to6): the document
         // is already a valid v6 and its node must load unchanged, reporting its on-disk version for backup.

@@ -31,7 +31,7 @@ class CompilationTest {
             "Containers", "Toggles", "Buttons", "Indicators", "Icons", "TextFields", "AppBars", "Scaffold",
             "TextStyling", "ButtonStates", "ImageAdjust", "TextSpacing", "TextEmphasis", "ButtonStyling",
             "ButtonShape", "Gallery", "StateBinding", "RepeatLazyColumn", "PopulatedDropdown", "NestedList",
-            "Interactive", "IntText",
+            "Interactive", "IntText", "Responsive", "Navigation",
         )
 
     @Test
@@ -93,6 +93,49 @@ class CompilationTest {
         val files = ComposeCodeGenerator().generate(ProjectCodec.decode(text))
         val sources = files.map { SourceFile.kotlin(it.path, it.content) }
         assertCompiles(sources, "generated project with nested components did not compile standalone")
+    }
+
+    @Test
+    fun `generated navigation host compiles with the screens it switches`() {
+        // Screen-to-screen navigation (ADR-039, #214): a multi-screen navigating project's generated screens
+        // plus the App() host must compile together — the host's `when` calls each screen (passing onNavigate to
+        // the navigating ones), and each navigating screen's `Navigate` lowered to `onNavigate("id")` resolves
+        // against its injected callback parameter. The golden + fixture list cover a single screen; this proves
+        // the exporter-assembled multi-file bundle links.
+        val project = ProjectCodec.decode(
+            requireNotNull(javaClass.getResourceAsStream("/golden/Navigation.vforge")).bufferedReader().readText(),
+        ).let { base ->
+            // Add a second, target-only screen so the host has a real `when` with a non-navigating arm.
+            base.copy(
+                screens = base.screens + viewforge.model.Screen(
+                    id = "scr_details",
+                    name = "Details",
+                    root = viewforge.model.Node(
+                        viewforge.model.NodeId("d_col"),
+                        "compose.foundation.layout.Column",
+                    ),
+                ),
+            )
+        }
+        val screens = ComposeCodeGenerator().generate(project).map { SourceFile.kotlin(it.path, it.content) }
+        val host = SourceFile.kotlin(NavHost.APP_KT, NavHost.appHost(project))
+        assertCompiles(screens + host, "generated navigation host did not compile with its screens")
+    }
+
+    @Test
+    fun `generated component navigation forwards onNavigate and compiles with its screen and host (#324)`() {
+        // Component-level navigation (#324): the NavCard component's tree navigates, so it gains its own
+        // `onNavigate` param and lowers Navigate onto it; the Hub screen navigates transitively and forwards
+        // `onNavigate = onNavigate` to the instance call; the App() host wires the screen. The component, both
+        // screens and the host must all compile together — proving the forwarded callback resolves end-to-end.
+        val project = ProjectCodec.decode(
+            requireNotNull(
+                javaClass.getResourceAsStream("/golden/ComponentNavigation.vforge"),
+            ).bufferedReader().readText(),
+        )
+        val files = ComposeCodeGenerator().generate(project).map { SourceFile.kotlin(it.path, it.content) }
+        val host = SourceFile.kotlin(NavHost.APP_KT, NavHost.appHost(project))
+        assertCompiles(files + host, "generated component-navigation bundle did not compile")
     }
 
     @Test

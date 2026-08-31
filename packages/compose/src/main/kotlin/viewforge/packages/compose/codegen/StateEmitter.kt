@@ -47,10 +47,10 @@ internal object StateEmitter {
      * nested list fields (#255), collected transitively and deduplicated by type name (first shape wins; the
      * fixture must pick field names that singularise uniquely). Empty for a screen with no lists.
      */
-    fun recordTypes(state: List<StateField>): List<TypeSpec> {
+    fun recordTypes(state: List<StateField>, packageName: String = ""): List<TypeSpec> {
         val collected = LinkedHashMap<String, List<RecordField>>()
         state.forEach { collectRecordTypes(it.name, it.type, collected) }
-        return collected.map { (name, fields) -> dataClass(name, fields) }
+        return collected.map { (name, fields) -> dataClass(name, fields, packageName) }
     }
 
     /** Depth-first collect: a list-of-record type contributes its own `data class`, then recurses into its fields. */
@@ -109,7 +109,7 @@ internal object StateEmitter {
      * A handler slot's body (ADR-035, #277): its [actions] lowered to structural statements, one per line, for a
      * `{ … }` lambda. Every action is a **named, typed, closed** operation built with the KotlinPoet API — no
      * string concatenation (GC-1/GC-2), no evaluation (PF-4): `SetState`→ `f = v`, `Toggle`→ `f = !f`, `Adjust`→
-     * `f += by`, `AppendRow`/`RemoveRow`→ list rebuilds, `Navigate`→ a `// TODO` (#214, no nav host yet). Values
+     * `f += by`, `AppendRow`/`RemoveRow`→ list rebuilds, `Navigate`→ `onNavigate("id")` (ADR-039, #214). Values
      * are literals (typed via the target's declared [ScalarType]) or read [PropValue.StateBinding] member access.
      */
     fun handlerBody(actions: List<Action>, state: List<StateField>): CodeBlock {
@@ -153,9 +153,10 @@ internal object StateEmitter {
                 actionValue(action.index, ScalarType.INT),
             )
 
-        // No navigation host is generated yet (#214) — a compilable, honest no-op stub, mirroring ADR-034's
-        // seeded-data `// TODO`. Replaced with a real navigation call when screen nav lands.
-        is Action.Navigate -> CodeBlock.of("// TODO(#214): navigate to screen %S", action.screenId)
+        // Screen-to-screen navigation (ADR-039, #214): a call on the injected `onNavigate` callback with the
+        // target screen id — a string looked up by the generated `App()` host, never evaluated (PF-4). The
+        // screen carries `onNavigate` only when it navigates; standalone it defaults to `{}` (an honest no-op).
+        is Action.Navigate -> CodeBlock.of("%N(%S)", NavHost.ON_NAVIGATE, action.screenId)
     }
 
     /**
@@ -180,24 +181,31 @@ internal object StateEmitter {
         return base.replaceFirstChar { it.uppercaseChar() }
     }
 
-    private fun dataClass(name: String, fields: List<RecordField>): TypeSpec = TypeSpec.classBuilder(name)
-        .addModifiers(KModifier.DATA)
-        .primaryConstructor(
-            FunSpec.constructorBuilder()
-                .apply { fields.forEach { addParameter(it.name, fieldType(it)) } }
-                .build(),
-        )
-        .apply {
-            fields.forEach { f ->
-                addProperty(PropertySpec.builder(f.name, fieldType(f)).initializer("%N", f.name).build())
+    private fun dataClass(name: String, fields: List<RecordField>, packageName: String): TypeSpec =
+        TypeSpec.classBuilder(name)
+            .addModifiers(KModifier.DATA)
+            .primaryConstructor(
+                FunSpec.constructorBuilder()
+                    .apply { fields.forEach { addParameter(it.name, fieldType(it, packageName)) } }
+                    .build(),
+            )
+            .apply {
+                fields.forEach { f ->
+                    addProperty(
+                        PropertySpec.builder(f.name, fieldType(f, packageName)).initializer("%N", f.name).build(),
+                    )
+                }
             }
-        }
-        .build()
+            .build()
 
-    /** The Kotlin type of a record field: a scalar, or `List<Element>` for a nested list-of-record field (#255). */
-    private fun fieldType(field: RecordField): TypeName = when (val t = field.type) {
+    /**
+     * The Kotlin type of a record field: a scalar, or `List<Element>` for a nested list-of-record field (#255).
+     * The nested element type resolves in [packageName] — the same package the record `data class`es are emitted
+     * into — so a KMP/Android export (a real package) references `Team`, not an invalid default-package import (#356).
+     */
+    private fun fieldType(field: RecordField, packageName: String): TypeName = when (val t = field.type) {
         is StateType.Scalar -> scalarType(t.scalar)
-        is StateType.ListOfRecord -> LIST.parameterizedBy(ClassName("", recordTypeName(field.name)))
+        is StateType.ListOfRecord -> LIST.parameterizedBy(ClassName(packageName, recordTypeName(field.name)))
     }
 
     /** The `val`'s initializer: a scalar literal, or `listOf(Type(field = …), …)` for a list-of-record field. */

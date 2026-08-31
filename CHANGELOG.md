@@ -5,11 +5,79 @@ All notable changes to ViewForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> The `.vforge` project file carries its own `schemaVersion` (currently **6**), versioned and migrated
+> The `.vforge` project file carries its own `schemaVersion` (currently **7**), versioned and migrated
 > independently of the application version. Feature IDs in parentheses (e.g. `C5`, `D4`, `G10`) refer to
 > [`_docs/FEATURES.md`](_docs/FEATURES.md).
 
-## [Unreleased]
+## [0.3.0-alpha-1] - 2026-08-31
+
+Third alpha — **Phase 2: Android.** The same `.vforge` project that exports a Compose Desktop app now
+also exports a runnable **Android** app from shared Compose UI, plus screen-to-screen navigation. The
+`.vforge` schema advances **6 → 7**; every older project migrates automatically on load. Still early
+software — expect rough edges.
+
+### Added
+
+**Phase 2 — Android target**
+
+- **Compose Multiplatform export** (ADR-036, #218) — a new **Export Multiplatform Project** action scaffolds a
+  single Kotlin Multiplatform Gradle project targeting **desktop (`jvm`)** and **Android** from shared
+  `commonMain` UI: screens and components go to `commonMain`, the desktop entry point to `jvmMain`, and an
+  Android `MainActivity` + `AndroidManifest.xml` to `androidMain`, routed through a per-target `sourceSetFor`
+  seam. The desktop-only Gradle export is unchanged and still available.
+- **Android device preview frames** (ADR-026 amendment, #220) — the canvas can preview a screen in Android
+  phone and tablet frames with real device density and system-bar/safe-area insets drawn as chrome; preview
+  profiles are now owned by the framework target.
+- **Responsive per-breakpoint overrides** (ADR-030/ADR-037, #221/#222/#314) — a node can carry per-breakpoint
+  prop overrides (Material window size classes: compact `<600dp` / medium / expanded `≥840dp`). The canvas
+  previews the breakpoint derived from the frame width, with a toolbar indicator and per-breakpoint inspector
+  editing; codegen emits `BoxWithConstraints` width-branching. Advances the `.vforge` schema to **v7**
+  (`M6to7`, additive — a non-responsive project is byte-identical).
+- **Android accessibility advisories** (#315) — a non-blocking inspector **Accessibility** section flags a
+  missing `contentDescription` on an image/icon and a tappable control smaller than the 48dp touch target.
+- **Images on Android** (ADR-021, #223/#322) — the multiplatform export routes image assets to
+  `composeResources/` and emits `Res.drawable` accessors, so an image renders on Android as well as desktop.
+- **Android compile gate** (ADR-038, #219/#342) — CI compiles the generated `androidMain`/`commonMain` output
+  in-process against Compose-Android with no Android SDK, covering navigation, interactive state, responsive
+  overrides, dropdowns, and component-local state — so the Android output is verified to resolve, not merely
+  string-checked.
+
+**Screen-to-screen navigation**
+
+- **Screen-to-screen navigation** (ADR-039, #214) — a `Navigate` action on an event handler now generates real
+  navigation: a navigating screen takes an injected `onNavigate` callback, and the exporter emits a small
+  generated `App()` host that switches screens, so an exported multi-screen app connects its pages. No
+  navigation dependency, no `.vforge` schema change.
+- **Navigation through reusable components** (ADR-039, #324) — a `Navigate` placed inside a user component now
+  works: the component's generated composable takes the same injected `onNavigate` callback and each instance
+  forwards it, so a shared "nav card" or menu component can drive screen changes.
+- **Live screen switching in the canvas preview** (ADR-039, #325) — in interactive run-mode, clicking a control
+  whose handler navigates now switches the previewed screen right on the canvas, so you can walk a multi-screen
+  flow without exporting. Preview navigation is ephemeral: leaving run mode returns to the screen you were editing.
+
+**Export integrity**
+
+- **Referential-completeness export gate** (G11, #338/#340) — exporting a project that instances a component it
+  does not contain is refused up-front with a located report of every dangling reference (which screen or
+  component, and the node), instead of a partial or non-compiling export.
+
+### Changed
+
+- The `.vforge` schema advances **6 → 7** — nodes gain optional `responsive` per-breakpoint overrides. The
+  `M6to7` migration is a stamp (a v6 document is already valid at v7); older projects migrate automatically on
+  load.
+
+### Fixed
+
+- Canvas click now moves focus to the canvas rather than clearing it, so editor keyboard shortcuts
+  (undo/redo, zoom, panel toggles) remain live after the first canvas click (#361).
+- The exported Android `MainActivity` emits `enableEdgeToEdge()` + a full-window `Surface` +
+  `safeDrawingPadding`, so content is inset properly on Android 15 and button taps no longer land on the
+  system-bar scrim (#358).
+- The dropdown component's generated code now manages open/closed state with a transparent click overlay,
+  so tapping it reliably opens the menu on Android (#359).
+- A `Navigate` action whose target screen has been deleted now surfaces a non-blocking inspector warning
+  rather than producing a silent no-op at runtime (#351).
 
 ## [0.2.0-alpha-1] - 2026-08-20
 
@@ -207,5 +275,7 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
   phases — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
-[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...HEAD
+[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.3.0-alpha-1...HEAD
+[0.3.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.2.0-alpha-1...v0.3.0-alpha-1
+[0.2.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...v0.2.0-alpha-1
 [0.1.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0-alpha-1

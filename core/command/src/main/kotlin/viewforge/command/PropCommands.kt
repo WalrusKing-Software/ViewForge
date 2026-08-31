@@ -10,6 +10,7 @@ import viewforge.model.replaceNode
 import viewforge.model.updateRoot
 import viewforge.model.withModifiers
 import viewforge.model.withProp
+import viewforge.model.withResponsiveOverride
 
 /**
  * Property- and modifier-editing commands (M5). Like every mutation they go through [Command] so the
@@ -38,6 +39,32 @@ data class SetProp(
     override fun invert(doc: Project): Command {
         val old = doc.findRoot(rootId)?.findById(nodeId)?.props?.get(key)
         return SetProp(rootId, nodeId, key, old, label)
+    }
+}
+
+/**
+ * Set node [nodeId]'s responsive override for prop [key] at breakpoint [breakpointId] to [value], or remove
+ * it when [value] is null (revert that breakpoint to the base value, #314/ADR-037). The per-breakpoint twin
+ * of [SetProp]: coalesces per (node, breakpoint, prop) so editing an override with a stepper is one undo step.
+ */
+data class SetResponsiveOverride(
+    val rootId: String,
+    val nodeId: NodeId,
+    val breakpointId: String,
+    val key: String,
+    val value: PropValue?,
+    override val label: String = "Edit $key ($breakpointId)",
+) : Command {
+    override val coalesceKey: Any = listOf(nodeId, "responsive", breakpointId, key)
+
+    override fun apply(doc: Project): Project = doc.updateRoot(rootId) { root ->
+        val node = root.findById(nodeId) ?: return@updateRoot root
+        root.replaceNode(nodeId, node.withResponsiveOverride(breakpointId, key, value))
+    }
+
+    override fun invert(doc: Project): Command {
+        val old = doc.findRoot(rootId)?.findById(nodeId)?.responsive?.get(breakpointId)?.get(key)
+        return SetResponsiveOverride(rootId, nodeId, breakpointId, key, old, label)
     }
 }
 

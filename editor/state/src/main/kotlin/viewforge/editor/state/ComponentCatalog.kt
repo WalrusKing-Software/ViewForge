@@ -1,5 +1,6 @@
 package viewforge.editor.state
 
+import viewforge.model.Advisory
 import viewforge.model.EventSlotDefinition
 import viewforge.model.ModifierDefinition
 import viewforge.model.Node
@@ -88,6 +89,15 @@ interface ComponentCatalog {
 
     /** The schema for one modifier [type] (for editing its args), or null if not in the catalog. */
     fun modifierDef(type: String): ModifierDefinition?
+
+    /**
+     * The non-blocking accessibility/UX advisories [node] earns (#315) — e.g. a tappable control below the
+     * 48dp touch target, or an image with no `contentDescription`. Surfaced in the inspector as guidance, never
+     * a gate (distinct from the throwing load-time validator). Which advisories a node earns is
+     * framework-specific (Material/Compose rules), so it lives on the seam like the prop schema. Defaults to
+     * none so non-framework test doubles need no override; the concrete package produces the real set.
+     */
+    fun advisories(node: Node): List<Advisory> = emptyList()
 
     /**
      * Whether [name] is a legal name for a screen in this framework — i.e. it normalizes to a valid

@@ -75,6 +75,7 @@ internal fun FrameWindowScope.AppMenuBar(
             // The one File action that has a backing service today (M7 export, ADR-013 seam).
             Item("Export → .kt files", onClick = { onExport(ExportMode.LOOSE_FILES) })
             Item("Export → Gradle project", onClick = { onExport(ExportMode.GRADLE_PROJECT) })
+            Item("Export → Multiplatform project", onClick = { onExport(ExportMode.MULTIPLATFORM_PROJECT) })
             // Safe wholesale regeneration into an owned directory (G10): replaces ViewForge's own prior
             // output and removes its orphans, but refuses to overwrite files it does not own.
             Item("Regenerate Gradle project…", onClick = onRegenerate)

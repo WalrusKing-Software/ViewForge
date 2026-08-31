@@ -36,6 +36,13 @@ data class ModifierEntry(
  *   The action list is closed and never a code expression, so no evaluator is introduced (PF-4). Empty
  *   by default and omitted from the serialized form, so a non-interactive node is byte-identical to
  *   before schema v6; populating it is what claims the bump (an older build would silently drop it).
+ * @property responsive per-breakpoint property overrides (ADR-030, #221): outer key a **breakpoint id**
+ *   (an opaque string to `core` — the set and its thresholds are owned by the framework package's target),
+ *   inner map **prop name → override [PropValue]**. [props] is the base/default (the smallest, `compact`
+ *   breakpoint); a breakpoint entry supplies *replacements* for named props, resolved over the base before
+ *   dispatch ([effectiveProps]). Empty by default and omitted from the serialized form, so a
+ *   non-responsive node is byte-identical to before schema v7; populating it is what claims the bump (an
+ *   older build would silently drop it and render/emit only base props — a fidelity loss).
  */
 @Serializable
 data class Node(
@@ -49,4 +56,5 @@ data class Node(
     val locked: Boolean = false,
     val hidden: Boolean = false,
     val handlers: Map<String, List<Action>> = emptyMap(),
+    val responsive: Map<String, Map<String, PropValue>> = emptyMap(),
 )

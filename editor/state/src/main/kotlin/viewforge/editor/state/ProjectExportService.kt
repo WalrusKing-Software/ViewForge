@@ -1,6 +1,7 @@
 package viewforge.editor.state
 
 import viewforge.model.Project
+import viewforge.model.danglingComponentReferences
 import java.nio.file.Path
 
 /** Which shape of output an export produces (G4 vs G5). */
@@ -10,6 +11,12 @@ enum class ExportMode {
 
     /** A complete runnable Gradle Compose Desktop project scaffold (G5). */
     GRADLE_PROJECT,
+
+    /**
+     * A complete runnable **Compose Multiplatform** project targeting desktop (`jvm`) and Android from
+     * shared `commonMain` UI (G9, M11, ADR-036). Added alongside [GRADLE_PROJECT], not replacing it.
+     */
+    MULTIPLATFORM_PROJECT,
 }
 
 /**
@@ -31,6 +38,19 @@ data class RegenerationReport(val written: List<String>, val deleted: List<Strin
  * [Path], and relative-path strings.
  */
 interface ProjectExportService {
+    /**
+     * Human-readable reasons [project] cannot be exported as-is (#212/#338) — currently every *dangling*
+     * `vforge.userComponent` reference (an instance whose referenced component the project lacks), each with
+     * its location. An empty list means export may proceed. The shell surfaces these **before** picking a
+     * destination, so a broken reference is fixed up-front rather than failing codegen mid-write with the same
+     * report ([viewforge.model.danglingComponentReferences] backs both this and `ComposeCodeGenerator`'s gate).
+     * Pure and framework-free, hence a default on the seam — every binding shares one authoritative answer.
+     */
+    fun exportBlockers(project: Project): List<String> = project.danglingComponentReferences().map {
+        val id = it.missingComponentId.ifEmpty { "?" }
+        "${it.surface.label} references missing component '$id' (node ${it.instanceId.value})"
+    }
+
     /**
      * The relative paths under [dir] that exporting [project] in [mode] would overwrite, so the shell
      * can ask for confirmation before replacing anything (FW-5). Never writes.

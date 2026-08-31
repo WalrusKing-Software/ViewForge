@@ -1,0 +1,1734 @@
+{
+  "schemaVersion": 7,
+  "id": "01ANDROIDQA",
+  "name": "AndroidQA",
+  "framework": {
+    "packageId": "compose-multiplatform",
+    "packageVersion": "1.0.0"
+  },
+  "theme": {
+    "colors": {
+      "primary": {
+        "light": "#6750A4",
+        "dark": "#D0BCFF"
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "scr_menu",
+      "name": "Menu",
+      "root": {
+        "id": "menu_root",
+        "type": "compose.foundation.lazy.LazyColumn",
+        "modifiers": [
+          {
+            "id": "menu_rootm",
+            "type": "compose.fillMaxSize"
+          },
+          {
+            "id": "menu_rootp",
+            "type": "compose.padding",
+            "args": {
+              "all": {
+                "kind": "literal",
+                "value": 16
+              }
+            }
+          }
+        ],
+        "children": [
+          {
+            "id": "menu_head",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "literal",
+                "value": "ViewForge — Android QA"
+              }
+            }
+          },
+          {
+            "id": "menu_btn_0",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_0_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "1 · Widgets (render)"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_bt"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_1",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_1_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "2 · Counter (state & events)"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_counter"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_2",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_2_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "3 · Images (Res.drawable)"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_gallery"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_3",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_3_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "4 · Responsive (600/840dp)"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_resp"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_4",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_4_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "5 · Dropdown (list binding)"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_venue"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_5",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_5_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "6 · Component state"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_dir"
+                }
+              ]
+            }
+          },
+          {
+            "id": "menu_btn_6",
+            "type": "compose.material3.Button",
+            "slots": {
+              "content": [
+                {
+                  "id": "menu_btn_6_t",
+                  "type": "compose.material3.Text",
+                  "props": {
+                    "text": {
+                      "kind": "literal",
+                      "value": "7 · Nested lists"
+                    }
+                  }
+                }
+              ]
+            },
+            "handlers": {
+              "onClick": [
+                {
+                  "kind": "navigate",
+                  "screenId": "scr_org"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_bt",
+      "name": "Widgets",
+      "root": {
+        "id": "scr_bt_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_bt_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_bt_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_bt_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_bt_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_bt_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_bt_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_bt_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_bt_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "col_01",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "ob_01",
+                    "type": "compose.material3.OutlinedButton",
+                    "props": {
+                      "onClick": {
+                        "kind": "expression",
+                        "code": "{ /* TODO */ }"
+                      }
+                    },
+                    "slots": {
+                      "content": [
+                        {
+                          "id": "t_01",
+                          "type": "compose.material3.Text",
+                          "props": {
+                            "text": {
+                              "kind": "literal",
+                              "value": "Outlined"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "tb_01",
+                    "type": "compose.material3.TextButton",
+                    "props": {
+                      "onClick": {
+                        "kind": "expression",
+                        "code": "{ /* TODO */ }"
+                      }
+                    },
+                    "slots": {
+                      "content": [
+                        {
+                          "id": "t_02",
+                          "type": "compose.material3.Text",
+                          "props": {
+                            "text": {
+                              "kind": "literal",
+                              "value": "Text"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_counter",
+      "name": "Counter",
+      "root": {
+        "id": "scr_counter_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_counter_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_counter_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_counter_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_counter_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_counter_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_counter_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_counter_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_counter_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_col",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "n_heading",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "binding",
+                        "path": "heading"
+                      }
+                    }
+                  },
+                  {
+                    "id": "counter_count_value",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "binding",
+                        "path": "count"
+                      }
+                    }
+                  },
+                  {
+                    "id": "n_inc",
+                    "type": "compose.material3.Button",
+                    "slots": {
+                      "content": [
+                        {
+                          "id": "n_inc_t",
+                          "type": "compose.material3.Text",
+                          "props": {
+                            "text": {
+                              "kind": "literal",
+                              "value": "Increment"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "handlers": {
+                      "onClick": [
+                        {
+                          "kind": "adjust",
+                          "target": "count",
+                          "by": {
+                            "kind": "literal",
+                            "value": 1
+                          }
+                        },
+                        {
+                          "kind": "toggle",
+                          "target": "expanded"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "n_reset",
+                    "type": "compose.material3.TextButton",
+                    "slots": {
+                      "content": [
+                        {
+                          "id": "n_reset_t",
+                          "type": "compose.material3.Text",
+                          "props": {
+                            "text": {
+                              "kind": "literal",
+                              "value": "Reset"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "handlers": {
+                      "onClick": [
+                        {
+                          "kind": "setState",
+                          "target": "count",
+                          "value": {
+                            "kind": "literal",
+                            "value": 0
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "heading",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Score"
+          }
+        },
+        {
+          "name": "count",
+          "type": {
+            "kind": "scalar",
+            "scalar": "INT"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": 0
+          }
+        },
+        {
+          "name": "expanded",
+          "type": {
+            "kind": "scalar",
+            "scalar": "BOOL"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "scr_gallery",
+      "name": "Images",
+      "root": {
+        "id": "scr_gallery_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_gallery_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_gallery_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_gallery_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_gallery_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_gallery_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_gallery_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_gallery_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_gallery_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_root",
+                "type": "compose.foundation.layout.Column",
+                "modifiers": [
+                  {
+                    "id": "m_fill",
+                    "type": "compose.fillMaxSize"
+                  },
+                  {
+                    "id": "m_pad",
+                    "type": "compose.padding",
+                    "args": {
+                      "all": {
+                        "kind": "literal",
+                        "value": 24
+                      }
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "n_title",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "literal",
+                        "value": "Photo Gallery"
+                      },
+                      "style": {
+                        "kind": "theme",
+                        "token": "typography.titleLarge"
+                      },
+                      "color": {
+                        "kind": "theme",
+                        "token": "colors.primary"
+                      }
+                    }
+                  },
+                  {
+                    "id": "n_actions",
+                    "type": "compose.foundation.layout.Row",
+                    "props": {
+                      "horizontalArrangement": {
+                        "kind": "literal",
+                        "value": "SpaceBetween"
+                      }
+                    },
+                    "modifiers": [
+                      {
+                        "id": "m_actions",
+                        "type": "compose.fillMaxWidth"
+                      },
+                      {
+                        "id": "m_actions_pad",
+                        "type": "compose.padding",
+                        "args": {
+                          "top": {
+                            "kind": "literal",
+                            "value": 16
+                          }
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "n_add",
+                        "type": "compose.material3.Button",
+                        "props": {
+                          "onClick": {
+                            "kind": "expression",
+                            "code": "{ /* TODO */ }"
+                          }
+                        },
+                        "slots": {
+                          "content": [
+                            {
+                              "id": "n_add_label",
+                              "type": "compose.material3.Text",
+                              "props": {
+                                "text": {
+                                  "kind": "literal",
+                                  "value": "Add"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "n_sort",
+                        "type": "compose.material3.Button",
+                        "props": {
+                          "onClick": {
+                            "kind": "expression",
+                            "code": "{ /* TODO */ }"
+                          }
+                        },
+                        "slots": {
+                          "content": [
+                            {
+                              "id": "n_sort_label",
+                              "type": "compose.material3.Text",
+                              "props": {
+                                "text": {
+                                  "kind": "literal",
+                                  "value": "Sort"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "n_list",
+                    "type": "compose.foundation.lazy.LazyColumn",
+                    "modifiers": [
+                      {
+                        "id": "m_list",
+                        "type": "compose.fillMaxWidth"
+                      },
+                      {
+                        "id": "m_list_pad",
+                        "type": "compose.padding",
+                        "args": {
+                          "top": {
+                            "kind": "literal",
+                            "value": 16
+                          }
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "n_row_a",
+                        "type": "compose.foundation.layout.Row",
+                        "props": {
+                          "verticalAlignment": {
+                            "kind": "literal",
+                            "value": "CenterVertically"
+                          }
+                        },
+                        "modifiers": [
+                          {
+                            "id": "n_row_a_pad",
+                            "type": "compose.padding",
+                            "args": {
+                              "all": {
+                                "kind": "literal",
+                                "value": 8
+                              }
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "n_row_a_img",
+                            "type": "compose.foundation.Image",
+                            "props": {
+                              "source": {
+                                "kind": "resource",
+                                "assetId": "asset_hero"
+                              },
+                              "contentDescription": {
+                                "kind": "literal",
+                                "value": "Sunset"
+                              },
+                              "contentScale": {
+                                "kind": "literal",
+                                "value": "Crop"
+                              }
+                            },
+                            "modifiers": [
+                              {
+                                "id": "n_row_a_size",
+                                "type": "compose.size",
+                                "args": {
+                                  "all": {
+                                    "kind": "literal",
+                                    "value": 64
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "id": "n_row_a_text",
+                            "type": "compose.foundation.layout.Column",
+                            "modifiers": [
+                              {
+                                "id": "n_row_a_text_pad",
+                                "type": "compose.padding",
+                                "args": {
+                                  "start": {
+                                    "kind": "literal",
+                                    "value": 12
+                                  }
+                                }
+                              }
+                            ],
+                            "children": [
+                              {
+                                "id": "n_row_a_title",
+                                "type": "compose.material3.Text",
+                                "props": {
+                                  "text": {
+                                    "kind": "literal",
+                                    "value": "Sunset"
+                                  },
+                                  "style": {
+                                    "kind": "theme",
+                                    "token": "typography.titleMedium"
+                                  }
+                                }
+                              },
+                              {
+                                "id": "n_row_a_sub",
+                                "type": "compose.material3.Text",
+                                "props": {
+                                  "text": {
+                                    "kind": "literal",
+                                    "value": "Beach at dusk"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "n_row_b",
+                        "type": "compose.foundation.layout.Row",
+                        "props": {
+                          "verticalAlignment": {
+                            "kind": "literal",
+                            "value": "CenterVertically"
+                          }
+                        },
+                        "modifiers": [
+                          {
+                            "id": "n_row_b_pad",
+                            "type": "compose.padding",
+                            "args": {
+                              "all": {
+                                "kind": "literal",
+                                "value": 8
+                              }
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "n_row_b_img",
+                            "type": "compose.foundation.Image",
+                            "props": {
+                              "source": {
+                                "kind": "resource",
+                                "assetId": "asset_icon"
+                              },
+                              "contentDescription": {
+                                "kind": "literal",
+                                "value": "Mountains"
+                              },
+                              "contentScale": {
+                                "kind": "literal",
+                                "value": "Crop"
+                              }
+                            },
+                            "modifiers": [
+                              {
+                                "id": "n_row_b_size",
+                                "type": "compose.size",
+                                "args": {
+                                  "all": {
+                                    "kind": "literal",
+                                    "value": 64
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "id": "n_row_b_text",
+                            "type": "compose.foundation.layout.Column",
+                            "modifiers": [
+                              {
+                                "id": "n_row_b_text_pad",
+                                "type": "compose.padding",
+                                "args": {
+                                  "start": {
+                                    "kind": "literal",
+                                    "value": 12
+                                  }
+                                }
+                              }
+                            ],
+                            "children": [
+                              {
+                                "id": "n_row_b_title",
+                                "type": "compose.material3.Text",
+                                "props": {
+                                  "text": {
+                                    "kind": "literal",
+                                    "value": "Mountains"
+                                  },
+                                  "style": {
+                                    "kind": "theme",
+                                    "token": "typography.titleMedium"
+                                  }
+                                }
+                              },
+                              {
+                                "id": "n_row_b_sub",
+                                "type": "compose.material3.Text",
+                                "props": {
+                                  "text": {
+                                    "kind": "literal",
+                                    "value": "Alpine trail"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "n_more",
+                        "type": "compose.foundation.layout.Box",
+                        "props": {
+                          "contentAlignment": {
+                            "kind": "literal",
+                            "value": "Center"
+                          }
+                        },
+                        "modifiers": [
+                          {
+                            "id": "m_more",
+                            "type": "compose.size",
+                            "args": {
+                              "all": {
+                                "kind": "literal",
+                                "value": 80
+                              }
+                            }
+                          },
+                          {
+                            "id": "m_more_pad",
+                            "type": "compose.padding",
+                            "args": {
+                              "top": {
+                                "kind": "literal",
+                                "value": 8
+                              }
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "n_more_text",
+                            "type": "compose.material3.Text",
+                            "props": {
+                              "text": {
+                                "kind": "literal",
+                                "value": "More coming soon"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "previewProfile": "desktop_1280x800"
+    },
+    {
+      "id": "scr_resp",
+      "name": "Adaptive",
+      "root": {
+        "id": "scr_resp_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_resp_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_resp_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_resp_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_resp_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_resp_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_resp_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_resp_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_resp_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "col_01",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "t_adaptive",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "literal",
+                        "value": "Adaptive"
+                      },
+                      "fontSize": {
+                        "kind": "literal",
+                        "value": 14
+                      },
+                      "textAlign": {
+                        "kind": "literal",
+                        "value": "Start"
+                      }
+                    },
+                    "responsive": {
+                      "medium": {
+                        "fontSize": {
+                          "kind": "literal",
+                          "value": 16
+                        }
+                      },
+                      "expanded": {
+                        "fontSize": {
+                          "kind": "literal",
+                          "value": 20
+                        },
+                        "textAlign": {
+                          "kind": "literal",
+                          "value": "Center"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "t_plain",
+                    "type": "compose.material3.Text",
+                    "props": {
+                      "text": {
+                        "kind": "literal",
+                        "value": "Fixed"
+                      },
+                      "fontSize": {
+                        "kind": "literal",
+                        "value": 14
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_venue",
+      "name": "VenuePicker",
+      "root": {
+        "id": "scr_venue_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_venue_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_venue_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_venue_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_venue_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_venue_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_venue_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_venue_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_venue_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_venue_col",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "n_venue_dropdown",
+                    "type": "vforge.dropdown",
+                    "props": {
+                      "options": {
+                        "kind": "binding",
+                        "path": "venues"
+                      },
+                      "optionLabel": {
+                        "kind": "literal",
+                        "value": "name"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "venues",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "city",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Grand Hall"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Paris"
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Sky Dome"
+                },
+                "city": {
+                  "kind": "scalar",
+                  "value": "Tokyo"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scr_dir",
+      "name": "Directory",
+      "root": {
+        "id": "scr_dir_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_dir_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_dir_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_dir_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_dir_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_dir_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_dir_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_dir_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_dir_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "n_dir_col",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "n_dir_inst",
+                    "type": "vforge.userComponent",
+                    "props": {
+                      "componentId": {
+                        "kind": "literal",
+                        "value": "cmp_profile"
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "value": "Team"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr_org",
+      "name": "OrgChart",
+      "root": {
+        "id": "scr_org_wrap",
+        "type": "compose.foundation.layout.Column",
+        "modifiers": [
+          {
+            "id": "scr_org_wrapm",
+            "type": "compose.fillMaxSize"
+          }
+        ],
+        "children": [
+          {
+            "id": "scr_org_bar",
+            "type": "compose.foundation.layout.Row",
+            "modifiers": [
+              {
+                "id": "scr_org_barm",
+                "type": "compose.fillMaxWidth"
+              }
+            ],
+            "children": [
+              {
+                "id": "scr_org_back",
+                "type": "compose.material3.TextButton",
+                "slots": {
+                  "content": [
+                    {
+                      "id": "scr_org_back_t",
+                      "type": "compose.material3.Text",
+                      "props": {
+                        "text": {
+                          "kind": "literal",
+                          "value": "‹ Menu"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "handlers": {
+                  "onClick": [
+                    {
+                      "kind": "navigate",
+                      "screenId": "scr_menu"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "scr_org_box",
+            "type": "compose.foundation.layout.Box",
+            "modifiers": [
+              {
+                "id": "scr_org_boxw",
+                "type": "compose.fillMaxWidth"
+              },
+              {
+                "id": "scr_org_boxwt",
+                "type": "compose.weight",
+                "args": {
+                  "weight": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              }
+            ],
+            "children": [
+              {
+                "id": "col",
+                "type": "compose.foundation.layout.Column",
+                "children": [
+                  {
+                    "id": "dept_rep",
+                    "type": "vforge.repeat",
+                    "props": {
+                      "source": {
+                        "kind": "binding",
+                        "path": "departments"
+                      }
+                    },
+                    "children": [
+                      {
+                        "id": "dept",
+                        "type": "compose.material3.Text",
+                        "props": {
+                          "text": {
+                            "kind": "binding",
+                            "path": "item.name"
+                          }
+                        }
+                      },
+                      {
+                        "id": "teams_rep",
+                        "type": "vforge.repeat",
+                        "props": {
+                          "source": {
+                            "kind": "binding",
+                            "path": "item.teams"
+                          }
+                        },
+                        "children": [
+                          {
+                            "id": "team",
+                            "type": "compose.material3.Text",
+                            "props": {
+                              "text": {
+                                "kind": "binding",
+                                "path": "item.label"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "previewProfile": "desktop_1280x800",
+      "state": [
+        {
+          "name": "departments",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "name",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              },
+              {
+                "name": "teams",
+                "type": {
+                  "kind": "listOfRecord",
+                  "fields": [
+                    {
+                      "name": "label",
+                      "type": {
+                        "kind": "scalar",
+                        "scalar": "STRING"
+                      }
+                    },
+                    {
+                      "name": "size",
+                      "type": {
+                        "kind": "scalar",
+                        "scalar": "INT"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Engineering"
+                },
+                "teams": {
+                  "kind": "rows",
+                  "rows": [
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Core"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 4
+                      }
+                    },
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Platform"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": {
+                  "kind": "scalar",
+                  "value": "Design"
+                },
+                "teams": {
+                  "kind": "rows",
+                  "rows": [
+                    {
+                      "label": {
+                        "kind": "scalar",
+                        "value": "Brand"
+                      },
+                      "size": {
+                        "kind": "scalar",
+                        "value": 2
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "id": "cmp_profile",
+      "name": "ProfileCard",
+      "parameters": [
+        {
+          "name": "title",
+          "type": "String"
+        }
+      ],
+      "root": {
+        "id": "n_pc_col",
+        "type": "compose.foundation.layout.Column",
+        "children": [
+          {
+            "id": "n_pc_title",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "param",
+                "param": "title"
+              }
+            }
+          },
+          {
+            "id": "n_pc_heading",
+            "type": "compose.material3.Text",
+            "props": {
+              "text": {
+                "kind": "binding",
+                "path": "heading"
+              }
+            }
+          },
+          {
+            "id": "n_pc_rep",
+            "type": "vforge.repeat",
+            "props": {
+              "source": {
+                "kind": "binding",
+                "path": "badges"
+              }
+            },
+            "children": [
+              {
+                "id": "n_pc_badge",
+                "type": "compose.material3.Text",
+                "props": {
+                  "text": {
+                    "kind": "binding",
+                    "path": "item.label"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "state": [
+        {
+          "name": "heading",
+          "type": {
+            "kind": "scalar",
+            "scalar": "STRING"
+          },
+          "sample": {
+            "kind": "scalar",
+            "value": "Members"
+          }
+        },
+        {
+          "name": "badges",
+          "type": {
+            "kind": "listOfRecord",
+            "fields": [
+              {
+                "name": "label",
+                "type": {
+                  "kind": "scalar",
+                  "scalar": "STRING"
+                }
+              }
+            ]
+          },
+          "sample": {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": {
+                  "kind": "scalar",
+                  "value": "Ada"
+                }
+              },
+              {
+                "label": {
+                  "kind": "scalar",
+                  "value": "Grace"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_hero",
+      "type": "image/png",
+      "path": "assets/hero.png",
+      "originalName": "hero.png"
+    },
+    {
+      "id": "asset_icon",
+      "type": "image/png",
+      "path": "assets/icon.png",
+      "originalName": "icon.png"
+    }
+  ]
+}

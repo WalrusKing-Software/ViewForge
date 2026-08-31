@@ -12,6 +12,7 @@ import viewforge.model.Project
 import viewforge.model.Screen
 import viewforge.model.StateField
 import viewforge.model.Theme
+import viewforge.model.danglingComponentReferences
 import viewforge.spi.CodeGenerator
 import viewforge.spi.GeneratedFile
 
@@ -26,7 +27,28 @@ import viewforge.spi.GeneratedFile
  * caller's modifier comes first (DATA_MODEL §12.1).
  */
 class ComposeCodeGenerator : CodeGenerator {
-    override fun generate(project: Project): List<GeneratedFile> {
+    /** The SPI entry: desktop image resources (ADR-021), the self-contained, compile-gated default. */
+    override fun generate(project: Project): List<GeneratedFile> = generate(project, ImageResources.Desktop)
+
+    /**
+     * Like [generate], but selects how `Image` assets are emitted ([images], #223): the desktop
+     * `painterResource(String)` default, or the Compose Multiplatform `Res.drawable.x` the KMP export needs so
+     * an image renders on Android too. Only the `Image` painter differs; every other emission is identical.
+     */
+    fun generate(project: Project, images: ImageResources, packageName: String = ""): List<GeneratedFile> {
+        // Referential-completeness gate (#212): refuse to emit a project that references a component it does not
+        // contain, reporting *every* offending instance with its location at once — a complete, actionable list
+        // beats the emitter's first-error throw deep inside one screen. A referentially-complete project (no
+        // dangling instance) passes untouched, so valid output is byte-identical.
+        project.danglingComponentReferences().takeIf { it.isNotEmpty() }?.let { dangling ->
+            throw CodegenException(
+                "Cannot export: ${dangling.size} unresolved user-component reference(s):\n" +
+                    dangling.joinToString("\n") {
+                        val id = it.missingComponentId.ifEmpty { "?" }
+                        "  - ${it.surface.label} references missing component '$id' (node ${it.instanceId.value})"
+                    },
+            )
+        }
         val sourceName = project.name.ifBlank { "Project" }
         val screens = project.screens.map { screen ->
             GeneratedFile(
@@ -39,6 +61,8 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.assets,
                     project.components,
                     screen.state,
+                    images = images,
+                    packageName = packageName,
                 ),
             )
         }
@@ -55,6 +79,8 @@ class ComposeCodeGenerator : CodeGenerator {
                     project.schemaVersion,
                     project.assets,
                     project.components,
+                    images = images,
+                    packageName = packageName,
                 ),
             )
         }
@@ -68,8 +94,8 @@ class ComposeCodeGenerator : CodeGenerator {
      * alongside `Main.kt` and the scaffold (ADR-019). Loose-file export (G4) omits it: a pasted screen
      * uses the host project's own theme.
      */
-    fun generateTheme(project: Project): String? =
-        ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion)
+    fun generateTheme(project: Project, packageName: String = ""): String? =
+        ThemeEmitter.generate(project.theme, project.name.ifBlank { "Project" }, project.schemaVersion, packageName)
 
     /** Generates the source text for a single [screen]; also the unit the golden tests assert on. */
     fun generateScreen(
@@ -80,6 +106,8 @@ class ComposeCodeGenerator : CodeGenerator {
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
         state: List<StateField> = emptyList(),
+        images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(screen.name),
         screen.root,
@@ -89,6 +117,8 @@ class ComposeCodeGenerator : CodeGenerator {
         assets,
         components,
         state = state,
+        images = images,
+        packageName = packageName,
     )
 
     /**
@@ -133,6 +163,8 @@ class ComposeCodeGenerator : CodeGenerator {
         schemaVersion: Int,
         assets: List<Asset> = emptyList(),
         components: List<ComponentDef> = emptyList(),
+        images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String = generateComposable(
         KotlinIdentifiers.requireFunctionName(component.name),
         component.root,
@@ -143,6 +175,8 @@ class ComposeCodeGenerator : CodeGenerator {
         components,
         component.parameters,
         component.state,
+        images = images,
+        packageName = packageName,
     )
 
     /**
@@ -191,10 +225,17 @@ class ComposeCodeGenerator : CodeGenerator {
         parameters: List<Parameter> = emptyList(),
         state: List<StateField> = emptyList(),
         recordSpans: Boolean = false,
+        images: ImageResources = ImageResources.Desktop,
+        packageName: String = "",
     ): String {
-        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state)
+        val emitter = ComponentEmitter(theme, assets, components, recordSpans, state, imageResources = images)
         // A hidden root excludes the whole tree from output (DATA_MODEL §5) — an empty body.
         val body = if (root.hidden) null else emitter.emit(root, isRoot = true)
+        // Screen-to-screen navigation (ADR-039, #214/#324): a composable whose tree carries a `Navigate` handler —
+        // directly, or transitively through a user-component instance ([NavHost.navigates] resolves via [components])
+        // — takes an injected `onNavigate: (String) -> Unit = {}` callback, onto which `Navigate` lowers as a call,
+        // and forwards it to every navigating instance it emits (`ComponentEmitter.userComponentCall`).
+        val navigates = body != null && NavHost.navigates(root, components)
         // State stub (ADR-034/ADR-035): seed one declaration per StateField, so a bound prop reads it as
         // member access. A field written by a handler (a writable target, #277) is a `var … by remember {
         // mutableStateOf(…) }`; a read-only field stays a `val`. Omitted for a hidden root (no body) and for
@@ -225,6 +266,18 @@ class ComposeCodeGenerator : CodeGenerator {
                     addParameter(spec.build())
                 }
             }
+            .apply {
+                // The navigation callback precedes `modifier` (ADR-039, #214); both are defaulted and calls use
+                // named arguments, so position is well-formed. Omitted entirely when the screen never navigates,
+                // keeping a non-navigating screen's signature byte-identical to before.
+                if (navigates) {
+                    addParameter(
+                        ParameterSpec.builder(NavHost.ON_NAVIGATE, NavHost.callbackType)
+                            .defaultValue("{}")
+                            .build(),
+                    )
+                }
+            }
             .addParameter(
                 ParameterSpec.builder("modifier", ComposeNames.Modifier)
                     .defaultValue("%T", ComposeNames.Modifier)
@@ -239,7 +292,7 @@ class ComposeCodeGenerator : CodeGenerator {
             }
             .build()
 
-        return FileSpec.builder("", fnName)
+        return FileSpec.builder(packageName, fnName)
             // KotlinPoet converts `·` (its non-breaking-space marker, TECHNICAL_NOTES §9) to a plain
             // space anywhere in output, so the source line uses a parenthesised separator instead.
             .addFileComment(
@@ -256,7 +309,7 @@ class ComposeCodeGenerator : CodeGenerator {
             .addFunction(function)
             // A generated `data class` per list-of-record state type, after the composable (order is
             // irrelevant to the compiler); none for a screen without list state, so output is unchanged.
-            .apply { StateEmitter.recordTypes(state).forEach { addType(it) } }
+            .apply { StateEmitter.recordTypes(state, packageName).forEach { addType(it) } }
             .build()
             .toString()
     }

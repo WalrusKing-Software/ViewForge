@@ -37,5 +37,13 @@ package viewforge.model
  * would silently drop `handlers` and render a dead UI — so it claims v6 with an `M5to6` **stamp** migration (a
  * v5 document carries no handlers and is already a valid v6 document, like M2to3/M4to5). This takes the slot
  * ADR-030 responsive had reserved, so responsive slides to v7/M6to7.
+ *
+ * v7 (ADR-030, #221) adds **responsive per-breakpoint overrides**: a [Node] gains [Node.responsive] — a
+ * breakpoint-id → (prop-name → override [PropValue]) map layered over the base [Node.props] at render/codegen
+ * ([effectiveProps]). Additive: a v6 document has no `responsive` and is already a valid v7 document, so the
+ * 6->7 migration only stamps the version (M6to7, like M1to2/M2to3/M4to5/M5to6). The bump exists because
+ * populating overrides is forward-incompatible — a v6-only build would silently drop `responsive` and
+ * render/emit only base props (a fidelity loss) — so a v7 file must be refused cleanly by older builds
+ * (ProjectStore NEWER_SCHEMA gate).
  */
-const val SCHEMA_VERSION: Int = 6
+const val SCHEMA_VERSION: Int = 7

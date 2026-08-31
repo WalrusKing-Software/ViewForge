@@ -1,6 +1,7 @@
 # ViewForge — Project Plan
 
-**Status:** Phase 1 (Compose Desktop) **shipping as v0.1.0-alpha-1**; Phase 2 (Android) planned next.
+**Status:** Phase 1 (Compose Desktop) **shipped as v0.2.0-alpha-1**; Phase 2 (Android) **in progress**
+(kickoff ADRs recorded — ADR-036/037/038, #217).
 **Last updated:** August 2026
 
 ---
@@ -125,10 +126,12 @@ ADR-035, v0.2.0), independent of the target work.
    round-trips losslessly through the schema-7 format (with a passing `M6to7` migration fixture).
 5. Golden codegen tests cover the Android target output and the responsive-override emission.
 
-**Prerequisite design decisions (record before coding):** ADR-030 (responsive data model — decided);
-still to decide at Phase-2 kickoff — the responsive *codegen* strategy (window-size-class branching vs
-`commonMain` base only), and the exact Android scaffold (min/target SDK, AGP/Compose-Android versions,
-pinned in the catalog per DS-1).
+**Prerequisite design decisions (recorded at Phase-2 kickoff, #217):** ADR-030 (responsive data model);
+**ADR-036** (Android scaffold — one KMP multi-target export with `commonMain`/`androidMain`/`jvmMain`
+source-set routing, and min/target SDK + AGP + Compose-Android pinned in the catalog per DS-1);
+**ADR-037** (responsive *codegen* strategy — base value in M13, `BoxWithConstraints` threshold branching
+in M14, thresholds owned by the Android `TargetDefinition`); **ADR-038** (the Android compile gate runs
+in-process, without the Android SDK, on the existing Forgejo runner).
 
 ### Phase 3 — iOS target *(blocked: requires macOS hardware)*
 
@@ -335,9 +338,10 @@ tests that encode intent so context survives gaps between work sessions.
 | — | **v0.1.0-alpha-1 release** | Cut `release/v0.1.0-alpha-1`, run `RELEASE_QA.md`, tag, publish the (unsigned, for the alpha) installer + checksums, back-merge to `main`. |
 | M11 | Android target scaffold | Compose package gains an Android `TargetDefinition`; exporter routes `commonMain` vs `androidMain` (G9) and emits an Android Gradle + manifest scaffold; Android compile gate green in CI. |
 | M12 | Android device preview | `DeviceProfiles` gains Android profiles with density + safe-area/system-bar insets; the framed canvas scales by density and draws inset chrome. |
-| M13 | Responsive overrides | Schema **6 → 7** (`M6to7` + fixture; v3 taken by ADR-034, v4 by nested lists #255, v5 by component-local state #266, v6 by ADR-035 interactive state & events); node `responsive` field (ADR-030); canvas renders the active breakpoint; inspector edits per-breakpoint values. |
-| M14 | Android validation + codegen | Android-specific validation warnings (touch targets, missing `contentDescription`); responsive-override codegen with golden coverage. |
-| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. |
+| M13 | Responsive overrides | Schema **6 → 7** (`M6to7` + fixture; v3 taken by ADR-034, v4 by nested lists #255, v5 by component-local state #266, v6 by ADR-035 interactive state & events); node `responsive` field (ADR-030) — schema slice landed in #221. Render-time active-breakpoint resolution + a canvas breakpoint selector + inspector per-breakpoint editing (edit-what-you-see) landed in **#314**. |
+| M14 | Android validation + codegen | Responsive-override codegen (`BoxWithConstraints` threshold branching, ADR-037) with golden coverage — landed in **#222**. Android-specific validation warnings (touch targets, missing `contentDescription`) split to **#315**. |
+| — | Image → multiplatform resources | `Image` codegen migrates to the Compose Multiplatform `Res.drawable` API for the KMP export so images render on Android; assets ship into `commonMain/composeResources` (ADR-021) — landed in **#223** (the desktop-only export keeps `painterResource(String)`, so the compile gate is unchanged). |
+| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. (Remaining before declaring complete: a real KMP build with zero manual fixes, the user's toolchain.) |
 
 ---
 

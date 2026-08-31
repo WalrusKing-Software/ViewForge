@@ -242,6 +242,19 @@ interface TargetDefinition {
 }
 ```
 
+**Status (M11, #218):** `TargetDefinition` is real in `core/spi` with `id` + `sourceSetFor` — the
+Compose package supplies `DesktopTarget`/`AndroidTarget` (`packages/compose/targets`), and the
+`MultiplatformExporter` routes each generated file through `sourceSetFor` to place shared screens in
+`commonMain` and each platform's entry point (`Main.kt` → `jvmMain`, `MainActivity.kt` + manifest →
+`androidMain`), so **G9 source-set-aware export** has landed.
+
+**Status (M12, #220):** `previewProfiles` has landed. Each target now contributes its canvas device
+frames — `DesktopTarget` the window sizes, `AndroidTarget` real device frames with density and system-bar
+insets (`PreviewProfile`/`PreviewInsets`, framework-neutral `core/spi` data). The app aggregates every
+target's list and injects it into `EditorState`, so the editor still names no framework; the canvas draws
+the inset chrome (ADR-026 Phase-2 amendment). This is a real consumer, so the profiles are target-owned
+now and not ahead of one (ADR-007), mirroring ADR-037's target-owned breakpoint thresholds.
+
 **Important:** `ComponentDefinition` (schema — pure data) is separate from `ComponentRenderer`
 (rendering — Compose-typed). The schema half can live in a `core`-compatible module; only the
 renderer half needs the framework. This split is what makes the inspector, palette, validation, and
