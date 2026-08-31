@@ -9,11 +9,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > independently of the application version. Feature IDs in parentheses (e.g. `C5`, `D4`, `G10`) refer to
 > [`_docs/FEATURES.md`](_docs/FEATURES.md).
 
-## [Unreleased]
+## [0.3.0-alpha-1] - 2026-08-31
 
-Work-in-progress on **Phase 2: Android** — the same `.vforge` project that exports a Compose Desktop app
-now also exports a runnable **Android** app from shared Compose UI, plus screen-to-screen navigation. Not
-yet released; a version and date are assigned at the release cut.
+Third alpha — **Phase 2: Android.** The same `.vforge` project that exports a Compose Desktop app now
+also exports a runnable **Android** app from shared Compose UI, plus screen-to-screen navigation. The
+`.vforge` schema advances **6 → 7**; every older project migrates automatically on load. Still early
+software — expect rough edges.
 
 ### Added
 
@@ -65,6 +66,18 @@ yet released; a version and date are assigned at the release cut.
 - The `.vforge` schema advances **6 → 7** — nodes gain optional `responsive` per-breakpoint overrides. The
   `M6to7` migration is a stamp (a v6 document is already valid at v7); older projects migrate automatically on
   load.
+
+### Fixed
+
+- Canvas click now moves focus to the canvas rather than clearing it, so editor keyboard shortcuts
+  (undo/redo, zoom, panel toggles) remain live after the first canvas click (#361).
+- The exported Android `MainActivity` emits `enableEdgeToEdge()` + a full-window `Surface` +
+  `safeDrawingPadding`, so content is inset properly on Android 15 and button taps no longer land on the
+  system-bar scrim (#358).
+- The dropdown component's generated code now manages open/closed state with a transparent click overlay,
+  so tapping it reliably opens the menu on Android (#359).
+- A `Navigate` action whose target screen has been deleted now surfaces a non-blocking inspector warning
+  rather than producing a silent no-op at runtime (#351).
 
 ## [0.2.0-alpha-1] - 2026-08-20
 
@@ -262,5 +275,7 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
   phases — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
-[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...HEAD
+[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.3.0-alpha-1...HEAD
+[0.3.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.2.0-alpha-1...v0.3.0-alpha-1
+[0.2.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...v0.2.0-alpha-1
 [0.1.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0-alpha-1
