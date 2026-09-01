@@ -94,8 +94,30 @@ object AndroidTarget : TargetDefinition {
     )
 }
 
-/** Every preview profile the Compose package offers the editor (desktop windows + Android devices, #220). */
-val COMPOSE_PREVIEW_PROFILES: List<PreviewProfile> = DesktopTarget.previewProfiles + AndroidTarget.previewProfiles
+/** Web (Kotlin/Wasm) target: the browser ``main()`` entry lives in ``wasmJsMain``; everything else is shared. */
+object WasmTarget : TargetDefinition {
+    const val WASM_JS_MAIN = "wasmJsMain"
+
+    override val id: String = "web"
+
+    /** Common browser viewport sizes (density 1, no system chrome). */
+    override val previewProfiles: List<PreviewProfile> = listOf(
+        web("web_1280x800", "Browser 1280 × 800", 1280, 800),
+        web("web_1920x1080", "Browser 1920 × 1080", 1920, 1080),
+        web("web_375x812", "Mobile browser 375 × 812", 375, 812),
+        web("web_768x1024", "Tablet browser 768 × 1024", 768, 1024),
+    )
+
+    override fun sourceSetFor(file: GeneratedFile): String =
+        if (fileName(file.path) == ComposeEntryPoints.MAIN_KT) WASM_JS_MAIN else COMMON_MAIN
+
+    private fun web(id: String, label: String, w: Int, h: Int): PreviewProfile =
+        PreviewProfile(id, label, w.toFloat(), h.toFloat(), density = 1f, group = "Web Browser")
+}
+
+/** Every preview profile the Compose package offers the editor (desktop + Android + web, #373). */
+val COMPOSE_PREVIEW_PROFILES: List<PreviewProfile> =
+    DesktopTarget.previewProfiles + AndroidTarget.previewProfiles + WasmTarget.previewProfiles
 
 /** The responsive breakpoints the Compose package offers the editor (the Android window size classes, #314). */
 val COMPOSE_BREAKPOINTS: List<Breakpoint> = AndroidTarget.breakpoints
