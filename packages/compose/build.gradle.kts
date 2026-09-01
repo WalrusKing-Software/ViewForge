@@ -107,6 +107,20 @@ tasks.test {
     }
 }
 
+// --- Wasm fixture export (Phase 4 CI smoke gate, #375) -----------------------------------------
+// Exports a minimal KMP project with wasmJs + SmokeTest to build/wasm-fixture/ so the GitHub
+// Actions wasm-smoke workflow can compile it with wasmJsBrowserDistribution and run it with
+// wasmJsBrowserTest in headless Chrome. The fixture is generated (not checked in) so it always
+// reflects the current exporter output.
+tasks.register<JavaExec>("exportWasmFixture") {
+    description = "Exports a minimal wasmJs fixture project to build/wasm-fixture/ for CI smoke tests."
+    group = "verification"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("viewforge.packages.compose.targets.WasmFixtureExporter")
+    args(layout.buildDirectory.dir("wasm-fixture").get().asFile.absolutePath)
+    dependsOn(tasks.named("compileKotlin"))
+}
+
 // The golden `.kt` fixtures under test resources are codegen *output*, asserted byte-for-byte against
 // what the emitter produces — they are not hand-written source. Exempt them from spotless/ktlint so
 // the formatter can never rewrite a fixture out from under the golden tests (they must match
