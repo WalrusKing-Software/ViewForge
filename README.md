@@ -34,8 +34,8 @@ open without over-designing for it.
 |-------|--------|--------|
 | 1 | Compose Desktop (JVM) | **Feature-complete** |
 | 2 | + Android | **Released (v0.3.0-alpha-1)** — KMP export (desktop + Android), device preview frames, responsive overrides, screen navigation |
-| 3 | + iOS | Blocked on macOS hardware |
-| 4 | + Web (Kotlin/Wasm) | Planned, experimental |
+| 3 | + iOS | Skipped — no Apple hardware (see ADR-040 context) |
+| 4 | + Web (Kotlin/Wasm) | **In progress** — `CanvasBasedWindow` exporter + CI smoke gate (ADR-040) |
 | 5 | Framework package SDK (non-Compose frameworks) | Future |
 
 Full detail: [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md)
