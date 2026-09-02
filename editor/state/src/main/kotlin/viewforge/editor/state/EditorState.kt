@@ -580,6 +580,12 @@ class EditorState(
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
+        if (selectedIds.size > 1) {
+            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+                w.write("[SEL-NONNULL] select(${id.value}) collapsing from ${selectedIds.map { it.value }}\n")
+                Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
+            }
+        }
         selectedIds = listOf(id)
         selectionAnchor = id
     }
@@ -682,6 +688,12 @@ class EditorState(
     }
 
     private fun reconcileSelection(desired: NodeId?) {
+        if (desired != null && selectedIds.size > 1) {
+            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+                w.write("[RECON] reconcileSelection(${desired.value}) collapsing from ${selectedIds.map { it.value }}\n")
+                Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
+            }
+        }
         selectedIds = listOfNotNull(desired?.takeIf { activeEditRoot?.findById(it) != null })
         selectionAnchor = selectedIds.lastOrNull()
     }
@@ -1473,6 +1485,9 @@ class EditorState(
     fun setPropShared(key: String, value: PropValue?) {
         val rootId = activeEditRootId ?: return
         val targets = sameTypeSelection()
+        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+            w.write("[PSS] setPropShared($key) ids=${selectedIds.map{it.value}} targets=${targets.size}\n")
+        }
         when {
             targets.isEmpty() -> return
             targets.size == 1 -> execute(SetProp(rootId, targets[0].id, key, value), selectAfter = selectedId)

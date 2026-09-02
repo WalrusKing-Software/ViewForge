@@ -596,6 +596,9 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                     if (state.isSpaceHeld) return@detectTapGestures
                     canvasFocus.requestFocus() // blur any inspector field, keep root shortcuts (#300/#361)
                     val hit = hitTest(bounds.snapshot(), root, scope.pointerToContent(local, state))
+                    java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+                        w.write("[TAP] local=$local hit=${hit?.value} ids=${state.selectedIds.size}\n")
+                    }
                     val mods = windowInfo.keyboardModifiers
                     // Ctrl/Cmd- or Shift-click toggles the hit in/out of a multi-selection (C10). The canvas
                     // has no natural order, so Shift is additive like Ctrl here — a range is a tree gesture.
