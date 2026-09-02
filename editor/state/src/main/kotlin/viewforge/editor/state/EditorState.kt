@@ -575,16 +575,18 @@ class EditorState(
      */
     fun select(id: NodeId?) {
         if (id == null) {
+            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+                w.write("[SEL] select(null) from ${selectedIds.map { it.value }}\n")
+                Thread.currentThread().stackTrace.take(10).forEach { w.write("  at $it\n") }
+            }
             selectedIds = emptyList()
             selectionAnchor = null
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
-        if (selectedIds.size > 1) {
-            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-                w.write("[SEL-NONNULL] select(${id.value}) collapsing from ${selectedIds.map { it.value }}\n")
-                Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
-            }
+        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+            w.write("[SEL] select(${id.value}) from ${selectedIds.map { it.value }}\n")
+            Thread.currentThread().stackTrace.take(10).forEach { w.write("  at $it\n") }
         }
         selectedIds = listOf(id)
         selectionAnchor = id
@@ -614,13 +616,20 @@ class EditorState(
      * are skipped (T4). Falls back to a plain [select] when there is no pivot, or either end is off-list.
      */
     fun extendSelectionTo(target: NodeId, order: List<NodeId>) {
-        val pivot = selectionAnchor ?: return select(target)
-        val from = order.indexOf(pivot)
+        val pivot = selectionAnchor
+        val from = if (pivot != null) order.indexOf(pivot) else -1
         val to = order.indexOf(target)
+        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+            w.write("[EXT] extendSelectionTo(${target.value}) pivot=${pivot?.value} from=$from to=$to orderSize=${order.size}\n")
+        }
+        if (pivot == null) return select(target)
         if (from < 0 || to < 0) return select(target)
         val span = if (from <= to) order.subList(from, to + 1) else order.subList(to, from + 1).asReversed()
         val root = activeEditRoot
         val selectable = span.filter { root?.findById(it)?.locked != true }
+        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+            w.write("[EXT] result=${selectable.map { it.value }}\n")
+        }
         // Keep [target] last (primary); the pivot is unchanged so successive shift-clicks measure from it.
         selectedIds = selectable
     }
@@ -688,11 +697,9 @@ class EditorState(
     }
 
     private fun reconcileSelection(desired: NodeId?) {
-        if (desired != null && selectedIds.size > 1) {
-            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-                w.write("[RECON] reconcileSelection(${desired.value}) collapsing from ${selectedIds.map { it.value }}\n")
-                Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
-            }
+        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
+            w.write("[RECON] reconcileSelection(${desired?.value}) from ${selectedIds.map { it.value }}\n")
+            if (selectedIds.size > 1) Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
         }
         selectedIds = listOfNotNull(desired?.takeIf { activeEditRoot?.findById(it) != null })
         selectionAnchor = selectedIds.lastOrNull()
