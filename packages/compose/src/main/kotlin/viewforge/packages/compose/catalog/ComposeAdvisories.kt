@@ -7,10 +7,8 @@ import viewforge.model.Node
 import viewforge.model.PropValue
 
 /**
- * The Compose package's non-blocking accessibility advisories for a node (#315, I8). Framework-specific
- * guidance the editor surfaces in the inspector — never a codegen/load gate (that is the throwing
- * `ProjectValidator`). Two checks this release, both universal accessibility rules that also matter for the
- * Android target:
+ * The Compose package's non-blocking advisories for a node (#315, I8, #383). Framework-specific guidance the
+ * editor surfaces in the inspector — never a codegen/load gate (that is the throwing `ProjectValidator`).
  *
  * - **Missing `contentDescription`** on an `Image`/`Icon`: a screen reader can't describe an image with no
  *   description. Warned when the prop is absent or a blank literal; an explicit description, or a binding /
@@ -18,6 +16,9 @@ import viewforge.model.PropValue
  * - **Touch target below 48dp** on a tappable control (Button variants, Checkbox, Switch): Material's minimum
  *   interactive size. Warned when a `size`/`width`/`height` modifier pins a dimension under 48dp — the case
  *   that defeats Compose's built-in minimum-touch-target enforcement.
+ * - **Responsive override without a base value** (#383): a per-breakpoint override introduces a prop not set
+ *   at the Compact (base) breakpoint — codegen cannot emit the `else` branch and will refuse to export. Warned
+ *   at edit time so the author can set the base value before reaching export.
  *
  * Pure and self-contained per node (it reads only the node's own props and modifiers), so it is trivially
  * unit-tested and adds no per-component UI — the inspector renders whatever list this returns.
@@ -60,6 +61,19 @@ object ComposeAdvisories {
                 )
             }
         }
+        baseAbsentOverrides(node).let { bad ->
+            if (bad.isNotEmpty()) {
+                val propList = bad.values.flatten().distinct().sorted().joinToString()
+                val bpList = bad.keys.sorted().joinToString()
+                add(
+                    Advisory(
+                        "Responsive override(s) at [$bpList] introduce '$propList' with no base (Compact) value — " +
+                            "set a base value or the export will fail.",
+                        AdvisorySeverity.WARNING,
+                    ),
+                )
+            }
+        }
     }
 
     /** Absent, or a blank string literal. A binding/parameter/expression supplies a value at runtime, so it passes. */
@@ -79,4 +93,18 @@ object ComposeAdvisories {
         .mapNotNull { (it as? PropValue.Literal)?.value?.intOrNull }
         .filter { it < MIN_TOUCH_TARGET_DP }
         .minOrNull()
+
+    /**
+     * Returns a map of breakpoint-id → list of prop names that the override introduces without a base value in
+     * [Node.props] (#383). An empty map means the node is clean. The codegen rejects this at export time
+     * (ComponentEmitter.responsiveCall); this surfaces the same condition at edit time so the author can fix it
+     * before reaching export.
+     */
+    private fun baseAbsentOverrides(node: Node): Map<String, List<String>> {
+        if (node.responsive.isEmpty()) return emptyMap()
+        val baseKeys = node.props.keys
+        return node.responsive
+            .mapValues { (_, overrides) -> overrides.keys.filter { it !in baseKeys } }
+            .filterValues { it.isNotEmpty() }
+    }
 }
