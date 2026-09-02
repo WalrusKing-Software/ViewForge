@@ -260,14 +260,15 @@ private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinitio
                 color = labelColor,
                 modifier = Modifier.weight(1f),
             )
-            // Revert this breakpoint to the base value (removes the override).
-            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpoint(node.id, def.name, null) }
+            // Revert this breakpoint to the base value (removes the override). Fans out to all same-type
+            // selected nodes (C10, #382) — mirrors the base PropRow reset behaviour.
+            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpointShared(def.name, null) }
         }
         ValueControl(
             type = def.type,
             value = state.effectiveProp(node, def.name) ?: def.default,
             theme = theme,
-            onChange = { state.setPropAtActiveBreakpoint(node.id, def.name, it) },
+            onChange = { state.setPropAtActiveBreakpointShared(def.name, it) },
             enumValues = def.enumValues,
             range = def.range,
             themeable = def.themeable,

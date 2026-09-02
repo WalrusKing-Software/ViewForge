@@ -575,19 +575,11 @@ class EditorState(
      */
     fun select(id: NodeId?) {
         if (id == null) {
-            java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-                w.write("[SEL] select(null) from ${selectedIds.map { it.value }}\n")
-                Thread.currentThread().stackTrace.take(10).forEach { w.write("  at $it\n") }
-            }
             selectedIds = emptyList()
             selectionAnchor = null
             return
         }
         if (activeEditRoot?.findById(id)?.locked == true) return
-        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-            w.write("[SEL] select(${id.value}) from ${selectedIds.map { it.value }}\n")
-            Thread.currentThread().stackTrace.take(10).forEach { w.write("  at $it\n") }
-        }
         selectedIds = listOf(id)
         selectionAnchor = id
     }
@@ -616,20 +608,13 @@ class EditorState(
      * are skipped (T4). Falls back to a plain [select] when there is no pivot, or either end is off-list.
      */
     fun extendSelectionTo(target: NodeId, order: List<NodeId>) {
-        val pivot = selectionAnchor
-        val from = if (pivot != null) order.indexOf(pivot) else -1
+        val pivot = selectionAnchor ?: return select(target)
+        val from = order.indexOf(pivot)
         val to = order.indexOf(target)
-        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-            w.write("[EXT] extendSelectionTo(${target.value}) pivot=${pivot?.value} from=$from to=$to orderSize=${order.size}\n")
-        }
-        if (pivot == null) return select(target)
         if (from < 0 || to < 0) return select(target)
         val span = if (from <= to) order.subList(from, to + 1) else order.subList(to, from + 1).asReversed()
         val root = activeEditRoot
         val selectable = span.filter { root?.findById(it)?.locked != true }
-        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-            w.write("[EXT] result=${selectable.map { it.value }}\n")
-        }
         // Keep [target] last (primary); the pivot is unchanged so successive shift-clicks measure from it.
         selectedIds = selectable
     }
@@ -697,10 +682,6 @@ class EditorState(
     }
 
     private fun reconcileSelection(desired: NodeId?) {
-        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-            w.write("[RECON] reconcileSelection(${desired?.value}) from ${selectedIds.map { it.value }}\n")
-            if (selectedIds.size > 1) Thread.currentThread().stackTrace.take(14).forEach { w.write("  at $it\n") }
-        }
         selectedIds = listOfNotNull(desired?.takeIf { activeEditRoot?.findById(it) != null })
         selectionAnchor = selectedIds.lastOrNull()
     }
@@ -1391,6 +1372,39 @@ class EditorState(
     }
 
     /**
+     * Like [setResponsiveOverride] but fans out to every same-type selected node (C10 shared edit, #382) —
+     * the responsive twin of [setPropShared]. Preserves multi-selection via [executeSelectingAll].
+     */
+    private fun setResponsiveOverrideShared(breakpointId: String, key: String, value: PropValue?) {
+        val rootId = activeEditRootId ?: return
+        val targets = sameTypeSelection()
+        when {
+            targets.isEmpty() -> return
+            targets.size == 1 -> execute(
+                SetResponsiveOverride(rootId, targets[0].id, breakpointId, key, value),
+                selectAfter = selectedId,
+            )
+            else -> executeSelectingAll(
+                CompositeCommand(
+                    targets.map { SetResponsiveOverride(rootId, it.id, breakpointId, key, value) },
+                    label = "Set $key on ${targets.size} nodes",
+                    coalesceKey = Triple("sharedResponsive:$breakpointId", key, targets.map { it.id.value }.sorted()),
+                ),
+                selectedIds,
+            )
+        }
+    }
+
+    /**
+     * Shared-edit twin of [setPropAtActiveBreakpoint] (C10, #382): fans out to every same-type selected node
+     * at the previewed breakpoint, preserving multi-selection.
+     */
+    fun setPropAtActiveBreakpointShared(key: String, value: PropValue?) {
+        val bp = previewBreakpoint
+        if (bp == null) setPropShared(key, value) else setResponsiveOverrideShared(bp, key, value)
+    }
+
+    /**
      * The effective value of prop [key] on [node] at the previewed breakpoint (#314): the per-breakpoint
      * override if one is set, else the base prop — mirroring the render/codegen `effectiveProps`, so an
      * inspector control shows exactly what the canvas draws.
@@ -1492,9 +1506,6 @@ class EditorState(
     fun setPropShared(key: String, value: PropValue?) {
         val rootId = activeEditRootId ?: return
         val targets = sameTypeSelection()
-        java.io.FileWriter("C:/Development/ViewForge/vf_debug.txt", true).use { w ->
-            w.write("[PSS] setPropShared($key) ids=${selectedIds.map{it.value}} targets=${targets.size}\n")
-        }
         when {
             targets.isEmpty() -> return
             targets.size == 1 -> execute(SetProp(rootId, targets[0].id, key, value), selectAfter = selectedId)
