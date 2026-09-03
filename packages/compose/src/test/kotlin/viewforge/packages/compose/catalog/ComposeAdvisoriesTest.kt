@@ -1,6 +1,7 @@
 package viewforge.packages.compose.catalog
 
 import kotlinx.serialization.json.JsonPrimitive
+import viewforge.model.AdvisoryFix
 import viewforge.model.AdvisorySeverity
 import viewforge.model.ModifierEntry
 import viewforge.model.Node
@@ -133,6 +134,33 @@ class ComposeAdvisoriesTest {
         assertEquals(AdvisorySeverity.WARNING, a.single().severity)
         assertTrue("fontSize" in a.single().message)
         assertTrue("expanded" in a.single().message)
+    }
+
+    @Test
+    fun `a responsive override advisory carries a ClearResponsiveOverride fix for each offending prop (#385)`() {
+        val n = node(
+            "compose.material3.Text",
+            props = mapOf("text" to lit("hello")),
+            responsive = mapOf("expanded" to mapOf("fontSize" to lit(24))),
+        )
+        val fixes = ComposeAdvisories.forNode(n).single().fixes
+        assertEquals(listOf(AdvisoryFix.ClearResponsiveOverride("expanded", "fontSize")), fixes)
+    }
+
+    @Test
+    fun `multiple absent props across breakpoints each get their own ClearResponsiveOverride fix (#385)`() {
+        val n = node(
+            "compose.material3.Text",
+            props = mapOf("text" to lit("hello")),
+            responsive = mapOf(
+                "medium" to mapOf("fontSize" to lit(20)),
+                "expanded" to mapOf("lineHeight" to lit(32)),
+            ),
+        )
+        val fixes = ComposeAdvisories.forNode(n).single().fixes
+        assertEquals(2, fixes.size)
+        assertTrue(AdvisoryFix.ClearResponsiveOverride("medium", "fontSize") in fixes)
+        assertTrue(AdvisoryFix.ClearResponsiveOverride("expanded", "lineHeight") in fixes)
     }
 
     @Test

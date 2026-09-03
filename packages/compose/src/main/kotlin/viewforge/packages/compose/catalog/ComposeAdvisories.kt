@@ -2,6 +2,7 @@ package viewforge.packages.compose.catalog
 
 import kotlinx.serialization.json.intOrNull
 import viewforge.model.Advisory
+import viewforge.model.AdvisoryFix
 import viewforge.model.AdvisorySeverity
 import viewforge.model.Node
 import viewforge.model.PropValue
@@ -63,6 +64,7 @@ object ComposeAdvisories {
         }
         baseAbsentOverrides(node).let { bad ->
             if (bad.isNotEmpty()) {
+                val fixes = bad.flatMap { (bp, props) -> props.map { AdvisoryFix.ClearResponsiveOverride(bp, it) } }
                 val propList = bad.values.flatten().distinct().sorted().joinToString()
                 val bpList = bad.keys.sorted().joinToString()
                 add(
@@ -70,6 +72,7 @@ object ComposeAdvisories {
                         "Responsive override(s) at [$bpList] introduce '$propList' with no base (Compact) value — " +
                             "set a base value or the export will fail.",
                         AdvisorySeverity.WARNING,
+                        fixes,
                     ),
                 )
             }
