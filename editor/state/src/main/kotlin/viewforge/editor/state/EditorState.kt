@@ -1355,10 +1355,27 @@ class EditorState(
      * Set (or clear, when [value] is null) node [nodeId]'s override for prop [key] at [breakpointId] — the
      * per-breakpoint twin of [setProp] (#314/ADR-037). Undoable and live; clearing reverts that breakpoint to
      * the base value.
+     *
+     * When [value] is non-null and the node has no base value for [key], the base is auto-filled with the same
+     * value (#387) so the override is never stranded. Both changes are one undo step; the coalesce key matches
+     * bare [SetResponsiveOverride] so slider drags still collapse to a single history entry.
      */
     fun setResponsiveOverride(nodeId: NodeId, breakpointId: String, key: String, value: PropValue?) {
         val rootId = activeEditRootId ?: return
-        execute(SetResponsiveOverride(rootId, nodeId, breakpointId, key, value), selectAfter = selectedId)
+        val node = activeEditRoot?.findById(nodeId)
+        val cmd = if (value != null && node?.props?.containsKey(key) == false) {
+            CompositeCommand(
+                listOf(
+                    SetProp(rootId, nodeId, key, value),
+                    SetResponsiveOverride(rootId, nodeId, breakpointId, key, value),
+                ),
+                label = "Edit $key ($breakpointId)",
+                coalesceKey = listOf(nodeId, "responsive", breakpointId, key),
+            )
+        } else {
+            SetResponsiveOverride(rootId, nodeId, breakpointId, key, value)
+        }
+        execute(cmd, selectAfter = selectedId)
     }
 
     /**
@@ -1374,24 +1391,57 @@ class EditorState(
     /**
      * Like [setResponsiveOverride] but fans out to every same-type selected node (C10 shared edit, #382) —
      * the responsive twin of [setPropShared]. Preserves multi-selection via [executeSelectingAll].
+     *
+     * Applies the same base auto-fill as [setResponsiveOverride] (#387): nodes with no base value for [key]
+     * get a [SetProp] alongside their [SetResponsiveOverride] in the same composite.
      */
     private fun setResponsiveOverrideShared(breakpointId: String, key: String, value: PropValue?) {
         val rootId = activeEditRootId ?: return
         val targets = sameTypeSelection()
         when {
             targets.isEmpty() -> return
-            targets.size == 1 -> execute(
-                SetResponsiveOverride(rootId, targets[0].id, breakpointId, key, value),
-                selectAfter = selectedId,
-            )
-            else -> executeSelectingAll(
-                CompositeCommand(
-                    targets.map { SetResponsiveOverride(rootId, it.id, breakpointId, key, value) },
-                    label = "Set $key on ${targets.size} nodes",
-                    coalesceKey = Triple("sharedResponsive:$breakpointId", key, targets.map { it.id.value }.sorted()),
-                ),
-                selectedIds,
-            )
+            targets.size == 1 -> {
+                val node = targets[0]
+                val cmd = if (value != null && !node.props.containsKey(key)) {
+                    CompositeCommand(
+                        listOf(
+                            SetProp(rootId, node.id, key, value),
+                            SetResponsiveOverride(rootId, node.id, breakpointId, key, value),
+                        ),
+                        label = "Edit $key ($breakpointId)",
+                        coalesceKey = listOf(node.id, "responsive", breakpointId, key),
+                    )
+                } else {
+                    SetResponsiveOverride(rootId, node.id, breakpointId, key, value)
+                }
+                execute(cmd, selectAfter = selectedId)
+            }
+            else -> {
+                val commands = targets.flatMap { node ->
+                    if (value != null && !node.props.containsKey(key)) {
+                        listOf(
+                            SetProp(rootId, node.id, key, value),
+                            SetResponsiveOverride(rootId, node.id, breakpointId, key, value),
+                        )
+                    } else {
+                        listOf(SetResponsiveOverride(rootId, node.id, breakpointId, key, value))
+                    }
+                }
+                executeSelectingAll(
+                    CompositeCommand(
+                        commands,
+                        label = "Set $key on ${targets.size} nodes",
+                        coalesceKey = Triple(
+                            "sharedResponsive:$breakpointId",
+                            key,
+                            targets.map {
+                                it.id.value
+                            }.sorted(),
+                        ),
+                    ),
+                    selectedIds,
+                )
+            }
         }
     }
 
