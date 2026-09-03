@@ -11,9 +11,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The Compose accessibility advisories (#315, I8): missing `contentDescription` on an image/icon, and a
- * tappable control pinned below the 48dp touch target. Non-blocking guidance — these tests pin *which* nodes
- * earn *which* advisory; the inspector rendering is UI, confirmed by running the app.
+ * The Compose advisories (#315, I8, #383): missing `contentDescription` on an image/icon, a tappable control
+ * pinned below the 48dp touch target, and a responsive override that introduces a prop absent at the base
+ * breakpoint. Non-blocking guidance — these tests pin *which* nodes earn *which* advisory; the inspector
+ * rendering is UI, confirmed by running the app.
  */
 class ComposeAdvisoriesTest {
     private fun lit(s: String): PropValue = PropValue.Literal(JsonPrimitive(s))
@@ -24,7 +25,8 @@ class ComposeAdvisoriesTest {
         type: String,
         props: Map<String, PropValue> = emptyMap(),
         modifiers: List<ModifierEntry> = emptyList(),
-    ) = Node(NodeId.random(), type, props = props, modifiers = modifiers)
+        responsive: Map<String, Map<String, PropValue>> = emptyMap(),
+    ) = Node(NodeId.random(), type, props = props, modifiers = modifiers, responsive = responsive)
 
     private fun sizeMod(vararg args: Pair<String, PropValue>) =
         ModifierEntry(id = "m", type = "compose.size", args = args.toMap())
@@ -115,5 +117,51 @@ class ComposeAdvisoriesTest {
                 ),
             ).isEmpty(),
         )
+    }
+
+    // --- responsive base-absent overrides (#383) --------------------------------------------------
+
+    @Test
+    fun `a responsive override that introduces a prop absent at the base earns an advisory`() {
+        val n = node(
+            "compose.material3.Text",
+            props = mapOf("text" to lit("hello")),
+            responsive = mapOf("expanded" to mapOf("fontSize" to lit(24))),
+        )
+        val a = ComposeAdvisories.forNode(n)
+        assertEquals(1, a.size)
+        assertEquals(AdvisorySeverity.WARNING, a.single().severity)
+        assertTrue("fontSize" in a.single().message)
+        assertTrue("expanded" in a.single().message)
+    }
+
+    @Test
+    fun `a responsive override that only overrides an existing base prop earns no advisory`() {
+        val n = node(
+            "compose.material3.Text",
+            props = mapOf("text" to lit("hello"), "fontSize" to lit(16)),
+            responsive = mapOf("expanded" to mapOf("fontSize" to lit(24))),
+        )
+        assertTrue(ComposeAdvisories.forNode(n).isEmpty())
+    }
+
+    @Test
+    fun `a node with no responsive overrides earns no advisory`() {
+        assertTrue(ComposeAdvisories.forNode(node("compose.material3.Text", mapOf("text" to lit("hi")))).isEmpty())
+    }
+
+    @Test
+    fun `multiple breakpoints each introducing absent props are all named`() {
+        val n = node(
+            "compose.material3.Text",
+            props = mapOf("text" to lit("hello")),
+            responsive = mapOf(
+                "medium" to mapOf("fontSize" to lit(20)),
+                "expanded" to mapOf("fontSize" to lit(24), "lineHeight" to lit(32)),
+            ),
+        )
+        val msg = ComposeAdvisories.forNode(n).single().message
+        assertTrue("medium" in msg || "expanded" in msg)
+        assertTrue("fontSize" in msg)
     }
 }

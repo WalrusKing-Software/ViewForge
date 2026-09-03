@@ -1372,6 +1372,39 @@ class EditorState(
     }
 
     /**
+     * Like [setResponsiveOverride] but fans out to every same-type selected node (C10 shared edit, #382) —
+     * the responsive twin of [setPropShared]. Preserves multi-selection via [executeSelectingAll].
+     */
+    private fun setResponsiveOverrideShared(breakpointId: String, key: String, value: PropValue?) {
+        val rootId = activeEditRootId ?: return
+        val targets = sameTypeSelection()
+        when {
+            targets.isEmpty() -> return
+            targets.size == 1 -> execute(
+                SetResponsiveOverride(rootId, targets[0].id, breakpointId, key, value),
+                selectAfter = selectedId,
+            )
+            else -> executeSelectingAll(
+                CompositeCommand(
+                    targets.map { SetResponsiveOverride(rootId, it.id, breakpointId, key, value) },
+                    label = "Set $key on ${targets.size} nodes",
+                    coalesceKey = Triple("sharedResponsive:$breakpointId", key, targets.map { it.id.value }.sorted()),
+                ),
+                selectedIds,
+            )
+        }
+    }
+
+    /**
+     * Shared-edit twin of [setPropAtActiveBreakpoint] (C10, #382): fans out to every same-type selected node
+     * at the previewed breakpoint, preserving multi-selection.
+     */
+    fun setPropAtActiveBreakpointShared(key: String, value: PropValue?) {
+        val bp = previewBreakpoint
+        if (bp == null) setPropShared(key, value) else setResponsiveOverrideShared(bp, key, value)
+    }
+
+    /**
      * The effective value of prop [key] on [node] at the previewed breakpoint (#314): the per-breakpoint
      * override if one is set, else the base prop — mirroring the render/codegen `effectiveProps`, so an
      * inspector control shows exactly what the canvas draws.

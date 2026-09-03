@@ -128,12 +128,12 @@ private fun InspectorBody(state: EditorState, node: Node) {
             }
         }
 
-        // Accessibility advisories (#315): non-blocking hints (missing contentDescription, sub-48dp touch
-        // target) the framework package produces for this node. Shown here so a problem fails loud in the
-        // inspector, never at codegen — data-driven, like the prop rows, so a new check needs no UI code.
+        // Non-blocking advisories (#315, #351, #383): accessibility hints + structural warnings the framework
+        // package and editor state produce for this node. Shown here so problems fail loud in the inspector,
+        // never at codegen — data-driven, like the prop rows, so a new check needs no UI code.
         val advisories = state.advisories(node)
         if (advisories.isNotEmpty()) {
-            SectionLabel("Accessibility")
+            SectionLabel("Advisories")
             advisories.forEach { AdvisoryRow(it) }
         }
 
@@ -260,14 +260,15 @@ private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinitio
                 color = labelColor,
                 modifier = Modifier.weight(1f),
             )
-            // Revert this breakpoint to the base value (removes the override).
-            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpoint(node.id, def.name, null) }
+            // Revert this breakpoint to the base value (removes the override). Fans out to all same-type
+            // selected nodes (C10, #382) — mirrors the base PropRow reset behaviour.
+            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpointShared(def.name, null) }
         }
         ValueControl(
             type = def.type,
             value = state.effectiveProp(node, def.name) ?: def.default,
             theme = theme,
-            onChange = { state.setPropAtActiveBreakpoint(node.id, def.name, it) },
+            onChange = { state.setPropAtActiveBreakpointShared(def.name, it) },
             enumValues = def.enumValues,
             range = def.range,
             themeable = def.themeable,
