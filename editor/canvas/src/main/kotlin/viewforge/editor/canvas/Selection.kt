@@ -605,6 +605,10 @@ internal fun SelectionOverlay(state: EditorState, root: Node, bounds: NodeBounds
                         lastTap = null
                         return@detectTapGestures
                     }
+                    // A plain click on empty canvas (hit == null) clears a lone selection but leaves a
+                    // multi-selection intact — the user likely clicked the background while aiming for the
+                    // inspector, and collapsing multi-select on a miss makes prop fan-out impossible (C10).
+                    if (hit == null && state.selectedIds.size > 1) return@detectTapGestures
                     state.select(hit) // plain click selects instantly (replacing) on every tap
                     // A quick second tap on the same instance enters its component (#68); double-tapping
                     // anything else just re-selects it.

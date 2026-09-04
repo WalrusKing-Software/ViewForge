@@ -10,12 +10,11 @@ simulation — and export clean, idiomatic Kotlin source you own and can hand-ed
 
 ## Status
 
-**v0.3.0-alpha-1 — third alpha (Phase 2: Android).** The same `.vforge` project now exports a runnable
-**Android** app alongside the Compose Desktop target, with screen-to-screen navigation, responsive
-per-breakpoint overrides, and Android-aware accessibility advisories. It ships **unsigned** installers for
-Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and macOS (`.dmg`) — a downloaded build may show a
-SmartScreen/Gatekeeper prompt. Early software: expect rough edges, and the `.vforge` schema (v7) may still
-evolve behind migrations.
+**v0.4.0-alpha-1 — fourth alpha (Phase 4: Web/Wasm).** The same `.vforge` project now exports a runnable
+**Kotlin/Wasm** web app (via `CanvasBasedWindow`) alongside Compose Desktop and Android targets. No schema
+change (still v7). It ships **unsigned** installers for Windows (`.msi`/`.exe`), Linux (`.deb`/`.rpm`), and
+macOS (`.dmg`) — a downloaded build may show a SmartScreen/Gatekeeper prompt. Early software: expect rough
+edges, and the `.vforge` schema (v7) may still evolve behind migrations.
 
 ## Why this exists
 
@@ -35,7 +34,7 @@ open without over-designing for it.
 | 1 | Compose Desktop (JVM) | **Feature-complete** |
 | 2 | + Android | **Released (v0.3.0-alpha-1)** — KMP export (desktop + Android), device preview frames, responsive overrides, screen navigation |
 | 3 | + iOS | Skipped — no Apple hardware (see ADR-040 context) |
-| 4 | + Web (Kotlin/Wasm) | **In progress** — `CanvasBasedWindow` exporter + CI smoke gate (ADR-040) |
+| 4 | + Web (Kotlin/Wasm) | **Released (v0.4.0-alpha-1)** — `CanvasBasedWindow` exporter, wasmJs output, CI smoke gate (ADR-040) |
 | 5 | Framework package SDK (non-Compose frameworks) | Future |
 
 Full detail: [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md)

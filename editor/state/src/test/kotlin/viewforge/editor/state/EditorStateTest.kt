@@ -581,4 +581,51 @@ class EditorStateTest {
             s.activeScreen!!.root.findById(NodeId("a"))!!.props["color"],
         )
     }
+
+    // --- responsive override auto-fill (#387) --------------------------------------------------------
+
+    private fun node(id: String) = s.activeScreen!!.root.findById(NodeId(id))!!
+    private lateinit var s: EditorState
+
+    @Test
+    fun `setResponsiveOverride auto-fills the base when the prop has no base value (#387)`() {
+        s = state()
+        val v = PropValue.Literal(JsonPrimitive("Hello"))
+        s.setResponsiveOverride(NodeId("a"), "expanded", "text", v)
+        assertEquals(v, node("a").props["text"])
+        assertEquals(v, node("a").responsive["expanded"]!!["text"])
+    }
+
+    @Test
+    fun `setResponsiveOverride auto-fill is undone in one step (#387)`() {
+        s = state()
+        val v = PropValue.Literal(JsonPrimitive("Hello"))
+        s.setResponsiveOverride(NodeId("a"), "expanded", "text", v)
+        s.undo()
+        assertNull(node("a").props["text"])
+        assertTrue(node("a").responsive.isEmpty())
+    }
+
+    @Test
+    fun `setResponsiveOverride does not auto-fill when base already exists (#387)`() {
+        s = state()
+        val base = PropValue.Literal(JsonPrimitive("Base"))
+        val override = PropValue.Literal(JsonPrimitive("Override"))
+        s.setProp(NodeId("a"), "text", base)
+        s.setResponsiveOverride(NodeId("a"), "expanded", "text", override)
+        assertEquals(base, node("a").props["text"])
+        assertEquals(override, node("a").responsive["expanded"]!!["text"])
+    }
+
+    @Test
+    fun `setResponsiveOverride clear (null value) does not touch the base prop (#387)`() {
+        s = state()
+        val base = PropValue.Literal(JsonPrimitive("Base"))
+        val override = PropValue.Literal(JsonPrimitive("Override"))
+        s.setProp(NodeId("a"), "text", base)
+        s.setResponsiveOverride(NodeId("a"), "expanded", "text", override)
+        s.setResponsiveOverride(NodeId("a"), "expanded", "text", null)
+        assertEquals(base, node("a").props["text"])
+        assertTrue(node("a").responsive.isEmpty())
+    }
 }

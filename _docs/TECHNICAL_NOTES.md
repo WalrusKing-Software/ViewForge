@@ -245,3 +245,52 @@ harmlessly in whitespace and fail a test for no reason.
 3. **Screenshot diff** of compiled output vs. canvas (catches semantic divergence).
 
 All three are needed. Each catches a class the others miss.
+
+---
+
+## 15. Wasm/browser target build constraints
+
+The `wasmJs` target cannot be verified by the in-process kctfork compile gate — kctfork is JVM-only and
+`CanvasBasedWindow` is not on the desktop classpath. The CI gate is therefore split across two tiers (ADR-040):
+
+1. **Structural tests** in `:packages:compose:test` (`codegen-verify` on Forgejo) — check source-set routing,
+   KotlinPoet output, the `index.html` canvas element, and the Gradle `wasmJs {}` block. No browser required.
+2. **`wasm-smoke` workflow** — exports a live fixture via `WasmFixtureExporter`, runs
+   `wasmJsBrowserDistribution` (build + webpack, Forgejo homelab), and `wasmJsBrowserTest` via Karma +
+   headless Chrome (GitHub Actions `ubuntu-latest` — Chrome is guaranteed there, not on the homelab runner).
+
+The fixture is generated from the live exporter at CI time, never hand-maintained, so structural regressions
+in the exporter surface before the fixture reaches the browser step.
+
+**`CanvasBasedWindow` is `@ExperimentalComposeUiApi`.** Generated `wasmJsMain/Main.kt` files emit
+`@file:OptIn(ExperimentalComposeUiApi::class)` so the entry compiles without the caller opting in. This
+annotation requirement may change as the API stabilises — check when upgrading CMP.
+
+**No `wasmJsMain.dependencies {}` block needed.** The Compose Multiplatform plugin pulls the required
+libraries from `commonMain`'s `compose.*` dependencies — adding an explicit block would be noise.
+
+---
+
+## 16. Responsive override invariant: the stranded-override state
+
+A responsive override is **stranded** when a node has an override for a prop at a given breakpoint
+(e.g. `responsive["expanded"]["fontSize"]`) but no corresponding base value (`props["fontSize"]` absent).
+Stranded overrides cause two problems:
+
+- The canvas has no base to fall back to at narrower breakpoints — the prop silently disappears at `compact`.
+- Codegen emits a `BoxWithConstraints` block that assigns the overridden value but has no base assignment,
+  a runtime logic error in the generated code.
+
+**Prevention at edit time.** The inspector guards against creating stranded overrides: `SetResponsiveOverride`
+is wrapped in a `CompositeCommand` that also sets the base prop to the same value when the base is absent
+(#387). Both the override and the auto-filled base undo atomically together.
+
+**Detection when stranded overrides already exist.** `ComposeAdvisories.forNode()` checks `node.responsive`
+against `node.props` for each breakpoint entry and surfaces a `MissingResponsiveBase` advisory with one
+`AdvisoryFix.ClearResponsiveOverride(breakpointId, propName)` per stranded key (#383). The inspector
+renders each fix as a clickable "clear bp: propName" link (undoable, calls `setResponsiveOverride(..., null)`)
+(#385).
+
+**Why not a migration?** Existing `.vforge` files with stranded overrides (possible before #387) are handled
+through the advisory path rather than migration: the override data itself is not wrong — only the missing base
+is — and silently auto-filling it on load would be an irreversible mutation without user awareness.
