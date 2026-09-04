@@ -2060,6 +2060,83 @@ matches the IR — add a `Navigate` to give it one), and **run-mode-only** inter
 
 ---
 
+## ADR-040 — Web target (Kotlin/Wasm): `CanvasBasedWindow` entry, version-pinned, two-tier CI gate
+
+**Status:** Accepted (2026-08-31, #373/#374/#375). Builds on ADR-036 (the KMP multi-target exporter
+already routes source sets via `TargetDefinition`).
+
+**Context.** ADR-036 shipped the KMP multi-target exporter with `desktop` (`jvmMain`) and `android`
+(`androidMain`) targets. Phase 4 (#373) adds a `wasmJs` browser target so the same `.vforge` project
+exports a runnable web app from `commonMain` UI. The constraints: the `TargetDefinition` SPI
+(`sourceSetFor(file)`) is the intended routing seam; codegen is structural KotlinPoet only (rule 4); no
+new user-visible dependencies (rule 9); no schema change (the `targets` field already exists but is not
+yet consumer-visible); the Compose Multiplatform `wasmJs` API is explicitly experimental at the time of
+writing (2026-08, CMP 1.7.3 / Kotlin 2.1.20).
+
+**Decision.**
+
+- **`WasmTarget` implements `TargetDefinition`.**  Routes `Main.kt` → `wasmJsMain` (same filename as
+  the desktop entry, different source set, no ambiguity because each target's `sourceSetFor()` is called
+  on its own `GeneratedFile` instance). Contributes four browser-viewport preview profiles (1280×800,
+  1920×1080, 375×812, 768×1024; density 1, no insets, group `"Web Browser"`) to the editor's frame
+  selector alongside the desktop and Android profiles. `id = "web"`.
+
+- **`CanvasBasedWindow` as the browser entry.** The generated `wasmJsMain/Main.kt` is a `main()`
+  function that calls `CanvasBasedWindow(title)` — the Compose for Web API that renders into a
+  `<canvas id="ComposeTarget">` element. The theme wrapper and first-screen / `App()` composition mirror
+  the desktop and Android entries exactly. `CanvasBasedWindow` is `@ExperimentalComposeUiApi`; the
+  generated file emits `@file:OptIn(ExperimentalComposeUiApi::class)` (KotlinPoet
+  `AnnotationSpec.UseSiteTarget.FILE`) so the generated entry compiles without the caller opting in.
+
+- **Webpack bundle named `app.js`.** The `wasmJs {}` Gradle block sets
+  `commonWebpackConfig { outputFileName = "app.js" }` and `binaries.executable()`. The generated
+  `src/wasmJsMain/resources/index.html` browser shell loads `app.js` and hosts the
+  `<canvas id="ComposeTarget">` that `CanvasBasedWindow` mounts onto.
+
+- **No new scaffold dependencies.** The `commonMain` Compose deps (`compose.runtime`,
+  `compose.foundation`, `compose.material3`, `compose.ui`) already cover the `wasmJs` target via the
+  Compose Multiplatform plugin — no `wasmJsMain.dependencies {}` block is needed in the generated
+  `build.gradle.kts`.
+
+- **Two-tier CI gate (#375).** The wasmJs exporter cannot be verified by the existing in-process
+  compile gate (kctfork is JVM-only; `CanvasBasedWindow` is not on the desktop classpath). The gate is
+  therefore split: (1) **structural tests** in `:packages:compose:test` (Forgejo `codegen-verify`),
+  checking source-set routing, KotlinPoet output, the `index.html` canvas element, and the Gradle
+  `wasmJs {}` block; (2) **a dedicated `wasm-smoke` workflow** that exports a minimal KMP fixture via
+  `WasmFixtureExporter` and runs it through `wasmJsBrowserDistribution` (Wasm build + webpack, Forgejo
+  homelab) and `wasmJsBrowserTest` via Karma + headless Chrome (browser smoke test, GitHub Actions
+  `ubuntu-latest` — Chrome guaranteed there, not on the homelab runner).
+
+- **No schema change.** `targets` is already a project field (defaulting to `["desktop"]` for existing
+  documents); the wasmJs target is a codegen-only extension. No migration, no fixture bump, schema stays
+  at v7.
+
+**Rationale.** `CanvasBasedWindow` is the idiomatic Compose for Web entry point and the only stable
+(if experimental) API in CMP 1.7.x that doesn't require a different composable hierarchy. Keeping the
+entry in `wasmJsMain` (parallel to `jvmMain`/`androidMain`) and routing through `WasmTarget.sourceSetFor()`
+reuses the existing seam without any special-casing in `MultiplatformExporter`. The two-tier CI split
+keeps Forgejo fast (no Node/webpack/Chrome) while the GitHub runner provides a real browser proof. The
+`WasmFixtureExporter` generates the fixture from the live exporter — never a separate hand-maintained
+project — so structural test regressions are caught before the fixture reaches the browser step.
+
+**Rejected.** **Compose for Web (HTML/JS DSL)** — a separate API surface (`Div`, `Span`, material-web)
+with no `CanvasBasedWindow` compatibility; the canvas-based approach keeps `commonMain` composables
+unchanged. **A standalone Gradle project checked in as a golden fixture** — it would drift from the
+exporter; generating it at CI time from the live `MultiplatformExporter` is more robust. **Running
+`wasmJsBrowserTest` on Forgejo** — the homelab runner does not guarantee a Chrome installation;
+reserving it for GitHub Actions is the pragmatic split. **Adding a `wasmJsMain.dependencies {}` block in
+the user export** — the Compose Multiplatform plugin already pulls in what's needed; adding it would be
+noise in the generated scaffold.
+
+**Consequences.** The same `.vforge` project that exports Desktop + Android now also exports a runnable
+web app from shared `commonMain` UI. Web browser preview profiles appear in the editor's frame selector
+alongside desktop and Android frames. The wasmJs target is marked experimental in the generated
+`README.md` — API stability is not guaranteed between Compose Multiplatform versions, so projects using
+the web export should pin CMP and expect to revisit the `wasmJs {}` block on upgrades. The CI gate is
+two-tier: Forgejo proves structural correctness; GitHub proves browser execution.
+
+---
+
 ## Template
 
 ```markdown

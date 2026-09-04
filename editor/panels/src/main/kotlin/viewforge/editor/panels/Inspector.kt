@@ -40,6 +40,7 @@ import viewforge.editor.state.EditorState
 import viewforge.editor.state.acceptsScalar
 import viewforge.editor.state.isBindableProp
 import viewforge.model.Advisory
+import viewforge.model.AdvisoryFix
 import viewforge.model.AdvisorySeverity
 import viewforge.model.Dropdown
 import viewforge.model.ModifierEntry
@@ -128,13 +129,20 @@ private fun InspectorBody(state: EditorState, node: Node) {
             }
         }
 
-        // Accessibility advisories (#315): non-blocking hints (missing contentDescription, sub-48dp touch
-        // target) the framework package produces for this node. Shown here so a problem fails loud in the
-        // inspector, never at codegen — data-driven, like the prop rows, so a new check needs no UI code.
+        // Non-blocking advisories (#315, #351, #383): accessibility hints + structural warnings the framework
+        // package and editor state produce for this node. Shown here so problems fail loud in the inspector,
+        // never at codegen — data-driven, like the prop rows, so a new check needs no UI code.
         val advisories = state.advisories(node)
         if (advisories.isNotEmpty()) {
-            SectionLabel("Accessibility")
-            advisories.forEach { AdvisoryRow(it) }
+            SectionLabel("Advisories")
+            advisories.forEach { advisory ->
+                AdvisoryRow(advisory) { fix ->
+                    when (fix) {
+                        is AdvisoryFix.ClearResponsiveOverride ->
+                            state.setResponsiveOverride(node.id, fix.breakpointId, fix.propName, null)
+                    }
+                }
+            }
         }
 
         // Event handlers (ADR-035, #277): a data-driven action editor for every event slot the catalog declares
@@ -260,14 +268,15 @@ private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinitio
                 color = labelColor,
                 modifier = Modifier.weight(1f),
             )
-            // Revert this breakpoint to the base value (removes the override).
-            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpoint(node.id, def.name, null) }
+            // Revert this breakpoint to the base value (removes the override). Fans out to all same-type
+            // selected nodes (C10, #382) — mirrors the base PropRow reset behaviour.
+            if (overridden) ActionText("clear override") { state.setPropAtActiveBreakpointShared(def.name, null) }
         }
         ValueControl(
             type = def.type,
             value = state.effectiveProp(node, def.name) ?: def.default,
             theme = theme,
-            onChange = { state.setPropAtActiveBreakpoint(node.id, def.name, it) },
+            onChange = { state.setPropAtActiveBreakpointShared(def.name, it) },
             enumValues = def.enumValues,
             range = def.range,
             themeable = def.themeable,
@@ -276,21 +285,35 @@ private fun ResponsivePropRow(state: EditorState, node: Node, def: PropDefinitio
     }
 }
 
-/** One non-blocking accessibility advisory (#315): a severity-coloured glyph + message; never a gate. */
+/**
+ * One non-blocking advisory (#315): a severity-coloured glyph + message, followed by an inline repair
+ * link for each [AdvisoryFix] (#385) — so a user with no breakpoint selector can still clear a stranded
+ * responsive override directly from the inspector.
+ */
 @Composable
-private fun AdvisoryRow(advisory: Advisory) {
+private fun AdvisoryRow(advisory: Advisory, onFix: (AdvisoryFix) -> Unit) {
     val color = when (advisory.severity) {
         AdvisorySeverity.WARNING -> MaterialTheme.colorScheme.error
         AdvisorySeverity.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
-        Text(
-            if (advisory.severity == AdvisorySeverity.WARNING) "⚠" else "ⓘ",
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(end = 6.dp),
-        )
-        Text(advisory.message, style = MaterialTheme.typography.labelSmall, color = color)
+    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Text(
+                if (advisory.severity == AdvisorySeverity.WARNING) "⚠" else "ⓘ",
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text(advisory.message, style = MaterialTheme.typography.labelSmall, color = color)
+        }
+        advisory.fixes.forEach { fix ->
+            val label = when (fix) {
+                is AdvisoryFix.ClearResponsiveOverride -> "clear ${fix.breakpointId}: ${fix.propName}"
+            }
+            Row(Modifier.padding(start = 20.dp, top = 2.dp)) {
+                ActionText(label) { onFix(fix) }
+            }
+        }
     }
 }
 

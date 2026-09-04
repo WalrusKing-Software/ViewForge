@@ -1,7 +1,7 @@
 # ViewForge — Project Plan
 
-**Status:** Phase 1 (Compose Desktop) **shipped as v0.2.0-alpha-1**; Phase 2 (Android) **in progress**
-(kickoff ADRs recorded — ADR-036/037/038, #217).
+**Status:** Phase 1 (Compose Desktop) **shipped as v0.1.0-alpha-1**; Phase 2 (Android) **shipped as
+v0.3.0-alpha-1**; Phase 4 (Web/Wasm) **in progress** (ADR-040, #373).
 **Last updated:** August 2026
 
 ---
@@ -80,7 +80,7 @@ mapping, command palette, preferences dialog, crash recovery + reporter, safe re
 import into the project (#141), and native installers (M10; unsigned for the alpha — see the release
 milestone below). The acceptance run is gated by [`RELEASE_QA.md`](RELEASE_QA.md).
 
-### Phase 2 — Android target — **planned (next)**
+### Phase 2 — Android target — ✅ **shipped (v0.3.0-alpha-1)**
 
 **Goal:** the *same* `.vforge` project that exports a Desktop app also exports a runnable Android app,
 and the canvas can preview it in an Android device frame that matches the real device within tolerance.
@@ -133,20 +133,50 @@ source-set routing, and min/target SDK + AGP + Compose-Android pinned in the cat
 in M14, thresholds owned by the Android `TargetDefinition`); **ADR-038** (the Android compile gate runs
 in-process, without the Android SDK, on the existing Forgejo runner).
 
-### Phase 3 — iOS target *(blocked: requires macOS hardware)*
+### Phase 3 — iOS target *(permanently skipped — no Apple hardware)*
 
-Scope:
-- iOS target exporter and iOS device preview frames (safe areas, notch/dynamic island insets).
-- Verification pipeline requires a Mac with Xcode. Codegen can be written and unit-tested without
-  one; **visual verification cannot.**
+iOS Compose Multiplatform support requires a Mac with Xcode for visual verification. The author has no
+Apple hardware. **Do not implement or claim iOS support.** Phase 4 (Web) follows Phase 2 directly.
 
-**Do not claim iOS support until it has been verified on real hardware.** Untested codegen is a
-liability, not a feature.
+If a Mac becomes available in the future, revisit as Phase 3.5 or a v2 milestone. The Compose
+Multiplatform web and iOS targets share enough source-set structure that Phase 4's `TargetDefinition`
+SPI work would carry over with minimal rework.
 
-### Phase 4 — Web target (Kotlin/Wasm) *(experimental)*
+### Phase 4 — Web target (Kotlin/Wasm) — **in progress** (#373, ADR-040)
 
-Compose Multiplatform for web is the least mature of the four targets and its APIs and tooling are
-still moving. Treat this phase as explicitly experimental and version-pinned; expect to revisit it.
+**Goal:** The same `.vforge` project that exports Desktop + Android also exports a runnable browser app
+from the same `commonMain` UI, using Compose for Web (`CanvasBasedWindow`).
+
+**Scope:**
+- **`WasmTarget` `TargetDefinition` (M16).** Routes `Main.kt` → `wasmJsMain`; contributes browser
+  viewport preview profiles (density 1, no chrome) to the editor's frame selector. The
+  `wasmJs { browser { outputFileName = "app.js" } binaries.executable() }` Gradle block and a
+  browser shell `index.html` (with `<canvas id="ComposeTarget">`) are emitted alongside the existing
+  desktop and Android scaffold.
+- **`wasmJsMain/Main.kt` via `CanvasBasedWindow` (M16, ADR-040).** The generated browser entry mounts
+  the project's `commonMain` UI into the canvas element using the Compose for Web API. A file-level
+  `@OptIn(ExperimentalComposeUiApi::class)` is emitted so the generated file compiles without the user
+  opting in.
+- **Two-tier CI smoke gate (M17, #375).** Structural tests in `:packages:compose:test` verify source-set
+  routing, KotlinPoet output, and the Gradle block. A dedicated `wasm-smoke` workflow exports a minimal
+  KMP fixture via `WasmFixtureExporter`, runs `wasmJsBrowserDistribution` (Wasm build + webpack,
+  Forgejo), and runs `wasmJsBrowserTest` with Karma + headless Chrome (GitHub Actions).
+
+**No schema change.** The `targets` field already exists; the wasmJs exporter is codegen-only.
+
+**Out of scope for Phase 4:** visual canvas preview of the web target (browser-in-desktop embedding;
+deferred); web-specific component support (browsers have no `DesktopOnly` composables, but the existing
+Material3 / Foundation set is already `commonMain`); performance profiling of the Wasm build.
+
+**Exit criteria (all must pass):**
+1. `MultiplatformExporter` emits `wasmJsMain/Main.kt` (using `CanvasBasedWindow`) and
+   `wasmJsMain/resources/index.html` with the correct canvas element.
+2. Source-set routing tests green: `Main.kt` → `wasmJsMain`, shared UI → `commonMain`.
+3. `wasm-smoke` CI gate green on both Forgejo (build gate) and GitHub (browser smoke test).
+4. Browser preview profiles appear in the editor's frame selector.
+
+**Prerequisite design decisions:** ADR-040 (Web target — `CanvasBasedWindow` entry, version-pinned,
+two-tier CI gate).
 
 ### Phase 5 — Framework package SDK
 
@@ -341,7 +371,11 @@ tests that encode intent so context survives gaps between work sessions.
 | M13 | Responsive overrides | Schema **6 → 7** (`M6to7` + fixture; v3 taken by ADR-034, v4 by nested lists #255, v5 by component-local state #266, v6 by ADR-035 interactive state & events); node `responsive` field (ADR-030) — schema slice landed in #221. Render-time active-breakpoint resolution + a canvas breakpoint selector + inspector per-breakpoint editing (edit-what-you-see) landed in **#314**. |
 | M14 | Android validation + codegen | Responsive-override codegen (`BoxWithConstraints` threshold branching, ADR-037) with golden coverage — landed in **#222**. Android-specific validation warnings (touch targets, missing `contentDescription`) split to **#315**. |
 | — | Image → multiplatform resources | `Image` codegen migrates to the Compose Multiplatform `Res.drawable` API for the KMP export so images render on Android; assets ship into `commonMain/composeResources` (ADR-021) — landed in **#223** (the desktop-only export keeps `painterResource(String)`, so the compile gate is unchanged). |
-| M15 | **Phase 2 complete** | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. (Remaining before declaring complete: a real KMP build with zero manual fixes, the user's toolchain.) |
+| M15 | **Phase 2 complete** ✅ | All Phase-2 exit criteria met; the same project runs on Desktop and Android; canvas Android preview matches a device within tolerance. Shipped as **v0.3.0-alpha-1** (2026-08-31). |
+| — | **v0.3.0-alpha-1 release** | Cut `release/v0.3.0-alpha-1`, run `RELEASE_QA.md`, tag, publish installers + checksums, back-merge to `main`. |
+| M16 | wasmJs exporter (Phase 4) | `WasmTarget` + `ComposeEntryPoints.wasmJsMain()` (`CanvasBasedWindow`); `MultiplatformExporter` emits `wasmJsMain/Main.kt` + `index.html`; browser preview profiles in the frame selector. (PR #377, #374) |
+| M17 | Wasm CI smoke gate (Phase 4) | `wasm-smoke` workflow: export `WasmFixtureExporter` → `wasmJsBrowserDistribution` (Forgejo build gate) + `wasmJsBrowserTest` Karma/Chrome (GitHub). (PR #378, #375) |
+| M18 | **Phase 4 complete** | All Phase-4 exit criteria met; wasm-smoke CI green; browser export verified end-to-end. Release as **v0.4.0-alpha-1**. |
 
 ---
 

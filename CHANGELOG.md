@@ -9,6 +9,51 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > independently of the application version. Feature IDs in parentheses (e.g. `C5`, `D4`, `G10`) refer to
 > [`_docs/FEATURES.md`](_docs/FEATURES.md).
 
+## [0.4.0-alpha-1] - 2026-09-01
+
+Fourth alpha — **Phase 4: Web (Kotlin/Wasm).** The same `.vforge` project that exports a Compose Desktop and Android app can now also export a **Kotlin/Wasm** web app running in the browser. No schema change (still schema v7).
+
+### Added
+
+**Phase 4 — Web target (Kotlin/Wasm)**
+
+- **`WasmTarget` + wasmJs entry point** (ADR-040, #374) — a new `WasmTarget` definition registers four browser preview
+  profiles (Desktop 1280×800, Laptop 1366×768, Tablet 768×1024, Mobile 390×844). `ComposeEntryPoints.wasmJsMain()`
+  generates a `CanvasBasedWindow` entry point with the required `@OptIn(ExperimentalComposeUiApi::class)` annotation.
+  `MultiplatformScaffold.buildGradle()` now emits the `wasmJs` source-set block and an `indexHtml()` helper produces a
+  minimal `index.html` bootstrap.
+- **`MultiplatformExporter` wasmJs output** (ADR-040, #374) — exporting a multiplatform project now writes
+  `wasmJsMain/Main.kt` (the `CanvasBasedWindow` entry) and `wasmJsMain/resources/index.html` alongside the existing
+  `jvmMain` and `androidMain` outputs.
+- **Wasm CI smoke gate** (ADR-040, #375) — a `WasmFixtureExporter` Gradle task exports a minimal fixture project
+  on-the-fly; the GitHub Actions `wasm-smoke.yml` workflow runs `wasmJsBrowserDistribution` + `wasmJsBrowserTest`
+  (headless Chrome via Karma), making the wasm build+run a required CI gate. The Forgejo-side gate runs the build
+  step only (no browser runner on the homelab).
+
+### Documentation
+
+- **ADR-040** in `_docs/DECISIONS.md` — records the `CanvasBasedWindow` entry strategy, two-tier CI approach, and the
+  rationale for the Forgejo/GitHub gate split.
+- **Phase 4 in `_docs/PROJECT_PLAN.md`** — scope, exit criteria, and milestones M16–M18 documented; Phase 2 marked
+  shipped (v0.3.0-alpha-1), Phase 3 marked skipped (no Apple hardware). README roadmap table updated.
+
+### Fixed
+
+- Canvas empty-area tap no longer collapses an active multi-selection. A guard in `Selection.kt` prevents single-node
+  deselect when a tap lands on the empty frame (#381).
+- Editing a responsive override prop on a multi-selection now fans out the change to all selected nodes.
+  `setResponsiveOverrideShared` and `setPropAtActiveBreakpointShared` apply a `CompositeCommand` per selected node
+  rather than writing to only the primary (#382).
+- The inspector now shows an advisory when a node has a responsive override but no corresponding base value (a
+  "stranded override"). `ComposeAdvisories.forNode` checks the `responsive` map against `props` and surfaces a
+  `MissingResponsiveBase` advisory. The inspector section is renamed from "Accessibility" to "Advisories" (#383).
+- Stranded-override advisories now carry inline clear actions. Each advisory exposes an
+  `AdvisoryFix.ClearResponsiveOverride(breakpointId, propName)` that the inspector renders as a clickable
+  "clear bp: propName" link, which calls the undoable `setResponsiveOverride(..., null)` (#385).
+- Setting a responsive override for a prop that has no base value now auto-fills the base with the same value
+  atomically. The `SetResponsiveOverride` command is wrapped in a `CompositeCommand` that also sets the base prop,
+  so stranded-override state can no longer be created through normal inspector use (#387).
+
 ## [0.3.0-alpha-1] - 2026-08-31
 
 Third alpha — **Phase 2: Android.** The same `.vforge` project that exports a Compose Desktop app now
@@ -275,7 +320,8 @@ exports a non-trivial Compose Desktop screen end to end. Early software — expe
 - Compose targets beyond Desktop (Android/iOS/Web) and dynamic third-party framework packages are later
   phases — see [`_docs/PROJECT_PLAN.md`](_docs/PROJECT_PLAN.md).
 
-[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.3.0-alpha-1...HEAD
+[Unreleased]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.4.0-alpha-1...HEAD
+[0.4.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.3.0-alpha-1...v0.4.0-alpha-1
 [0.3.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.2.0-alpha-1...v0.3.0-alpha-1
 [0.2.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/compare/v0.1.0-alpha-1...v0.2.0-alpha-1
 [0.1.0-alpha-1]: https://github.com/WalrusKing-Software/ViewForge/releases/tag/v0.1.0-alpha-1

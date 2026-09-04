@@ -1,0 +1,57 @@
+# Wasm browser smoke gate (Phase 4, #375): proves the ViewForge wasmJs exporter produces a project
+# that compiles to Wasm AND boots in a real browser (headless Chrome via Karma).
+#
+# Two-step: (1) export a minimal KMP fixture with the ViewForge MultiplatformExporter, then
+# (2) build it with wasmJsBrowserDistribution and run its SmokeTest via wasmJsBrowserTest.
+# This catches exporter regressions that pass structural golden tests but break Kotlin/Wasm
+# compilation or runtime loading.
+#
+# GitHub copy — runs on the GitHub mirror against the GitHub-hosted ubuntu runner that has
+# Chrome pre-installed. The Forgejo copy (.forgejo/workflows/wasm-smoke.yml) runs only the
+# build gate (wasmJsBrowserDistribution) since Chrome is not guaranteed on the homelab runner.
+name: wasm-smoke
+
+on:
+  push:
+    branches: [develop, "release/*", "feature/**"]
+  pull_request:
+    branches: [develop, "release/*", main]
+
+concurrency:
+  group: wasm-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  wasm-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      # Kotlin/Wasm's Karma test launcher looks for CHROME_BIN.  The GitHub Actions ubuntu-latest
+      # runner ships google-chrome-stable; useChromeHeadlessNoSandbox() adds --no-sandbox so it
+      # runs inside the containerised CI environment without setuid privileges.
+      - name: Set CHROME_BIN for Karma
+        run: echo "CHROME_BIN=$(which google-chrome-stable)" >> "$GITHUB_ENV"
+
+      - name: Export wasmJs fixture project
+        run: ./gradlew :packages:compose:exportWasmFixture --no-daemon --stacktrace
+
+      - name: Build Wasm bundle (compile gate)
+        working-directory: packages/compose/build/wasm-fixture
+        run: ./gradlew wasmJsBrowserDistribution --no-daemon --stacktrace
+
+      - name: Browser smoke test (Karma + headless Chrome)
+        working-directory: packages/compose/build/wasm-fixture
+        run: ./gradlew wasmJsBrowserTest --no-daemon --stacktrace

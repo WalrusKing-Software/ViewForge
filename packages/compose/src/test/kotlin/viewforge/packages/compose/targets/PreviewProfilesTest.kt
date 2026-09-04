@@ -6,9 +6,10 @@ import kotlin.test.assertTrue
 
 /**
  * The device preview profiles each Compose target contributes to the editor's frame selector (#220,
- * ADR-026 Phase-2 amendment). The desktop target keeps the plain window sizes (density 1, no chrome); the
- * Android target adds real device frames carrying density and system-bar insets. Ids are self-describing
- * (`<prefix>_<w>x<h>`) so the editor's resolver recovers a size from a forward-compatible id.
+ * ADR-026 Phase-2 amendment; Web added in #373/Phase 4). The desktop target keeps the plain window sizes
+ * (density 1, no chrome); the Android target adds real device frames carrying density and system-bar insets;
+ * the web target adds common browser viewport sizes. Ids are self-describing (`<prefix>_<w>x<h>`) so the
+ * editor's resolver recovers a size from a forward-compatible id.
  */
 class PreviewProfilesTest {
     private val idPattern = Regex("""[a-z_]+_(\d+)x(\d+)""")
@@ -46,9 +47,21 @@ class PreviewProfilesTest {
     }
 
     @Test
-    fun `the package aggregate is desktop then android with unique ids`() {
+    fun `web profiles are plain browser viewports - density 1, no insets, Web Browser group (#373)`() {
+        assertTrue(WasmTarget.previewProfiles.isNotEmpty())
+        WasmTarget.previewProfiles.forEach { p ->
+            assertEquals(1f, p.density, "web density")
+            assertTrue(p.insets.isEmpty, "browser has no system chrome: ${p.id}")
+            assertEquals("Web Browser", p.group)
+            assertTrue(p.id.startsWith("web_"), "web id starts with web_: ${p.id}")
+            assertTrue(idPattern.matches(p.id), "id encodes its size: ${p.id}")
+        }
+    }
+
+    @Test
+    fun `the package aggregate is desktop then android then web with unique ids (#373)`() {
         assertEquals(
-            DesktopTarget.previewProfiles + AndroidTarget.previewProfiles,
+            DesktopTarget.previewProfiles + AndroidTarget.previewProfiles + WasmTarget.previewProfiles,
             COMPOSE_PREVIEW_PROFILES,
         )
         val ids = COMPOSE_PREVIEW_PROFILES.map { it.id }

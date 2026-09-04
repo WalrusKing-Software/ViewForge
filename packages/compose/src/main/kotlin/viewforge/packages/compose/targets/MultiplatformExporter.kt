@@ -14,20 +14,24 @@ import viewforge.spi.GeneratedFile
 
 /**
  * The Compose **KMP multi-target** exporter (G9, M11, ADR-036): turns a [Project] into a single runnable
- * Compose Multiplatform Gradle project that targets **desktop** (`jvm`) and **Android** from shared
- * `commonMain` UI. Added *alongside* [DesktopExporter] (which stays the desktop-only kotlin-jvm export),
- * so a desktop-only user is unaffected.
+ * Compose Multiplatform Gradle project that targets **desktop** (`jvm`), **Android**, and **Web**
+ * (`wasmJs`, Phase 4 #373) from shared `commonMain` UI. Added *alongside* [DesktopExporter] (which stays
+ * the desktop-only kotlin-jvm export), so a desktop-only user is unaffected.
  *
  * The generated screens/components are the same framework-neutral Compose that [DesktopExporter] emits —
  * they are simply routed to `commonMain`; only the per-platform entry points differ (`Main.kt` →
- * `jvmMain`, `MainActivity.kt` + `AndroidManifest.xml` → `androidMain`), placed via each
+ * `jvmMain` / `wasmJsMain`, `MainActivity.kt` + `AndroidManifest.xml` → `androidMain`), placed via each
  * [viewforge.spi.TargetDefinition]'s [sourceSetFor][viewforge.spi.TargetDefinition.sourceSetFor] — the G9
  * routing seam made real for the first time.
  *
+ * The wasmJs target renders via [CanvasBasedWindow][androidx.compose.ui.window.CanvasBasedWindow] into a
+ * ``<canvas>`` element in the generated `src/wasmJsMain/resources/index.html`. The webpack bundle is
+ * configured to output `app.js`, which the `index.html` loads (ADR-040).
+ *
  * Pure by design — returns bytes, never touches disk; writing goes through [viewforge.project.ProjectExporter]
  * with its path guard (CLAUDE.md rule 6). **Image assets** are emitted via the Compose Multiplatform resources
- * API (`Res.drawable.x`, #223, ADR-021) — a `commonMain` API, so an image renders on Android too — with each
- * asset routed into `commonMain/composeResources/drawable/` for the resources plugin to turn into the `Res`
+ * API (`Res.drawable.x`, #223, ADR-021) — a `commonMain` API, so an image renders on Android and web too — with
+ * each asset routed into `commonMain/composeResources/drawable/` for the resources plugin to turn into the `Res`
  * accessor codegen references. [assetBytes] resolves each referenced asset's bytes; an unresolved asset is
  * skipped (its `Res.drawable.x` reference then won't build, exactly as a missing desktop resource wouldn't).
  */
@@ -54,7 +58,7 @@ object MultiplatformExporter {
             gen.generate(project, images, appPackage).forEach { file ->
                 add(TextFile(kotlinPath(COMMON_MAIN, file.path), KotlinFormatter.format(file.content)))
             }
-            // The screen-switching host (ADR-039, #214) → commonMain, so both entry points render App(); only
+            // The screen-switching host (ADR-039, #214) → commonMain, so all three entry points render App(); only
             // when some screen navigates, else the KMP bundle is unchanged.
             if (NavHost.projectNavigates(project)) {
                 add(TextFile(kotlinPath(COMMON_MAIN, NavHost.APP_KT), NavHost.appHost(project, appPackage)))
@@ -84,6 +88,19 @@ object MultiplatformExporter {
             val manifest = GeneratedFile(AndroidTarget.MANIFEST_XML, MultiplatformScaffold.androidManifest(name))
             // Manifest lives at the source-set root, not under kotlin/.
             add(TextFile("src/${AndroidTarget.sourceSetFor(manifest)}/${manifest.path}", manifest.content))
+
+            // Web (wasmJs) entry: CanvasBasedWindow main() → wasmJsMain, index.html → wasmJsMain resources.
+            val wasmMain = GeneratedFile(
+                ComposeEntryPoints.MAIN_WASM_KT,
+                ComposeEntryPoints.wasmJsMain(project, themed, appPackage),
+            )
+            add(TextFile(kotlinPath(WasmTarget.sourceSetFor(wasmMain), wasmMain.path), wasmMain.content))
+            add(
+                TextFile(
+                    "src/${WasmTarget.WASM_JS_MAIN}/resources/index.html",
+                    MultiplatformScaffold.indexHtml(name),
+                ),
+            )
 
             // Build config + the checksum-verified Gradle wrapper (copied verbatim, SECURITY DS-5).
             add(TextFile("build.gradle.kts", MultiplatformScaffold.buildGradle(slug)))

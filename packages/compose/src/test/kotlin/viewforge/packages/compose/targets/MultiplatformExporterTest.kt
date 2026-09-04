@@ -33,22 +33,26 @@ class MultiplatformExporterTest {
 
     @Test
     fun `sourceSetFor routes shared UI to commonMain and each entry point to its own set`() {
-        // Shared UI is commonMain under either target.
+        // Shared UI is commonMain under every target.
         val screen = GeneratedFile("HomeScreen.kt", "")
         assertEquals("commonMain", DesktopTarget.sourceSetFor(screen))
         assertEquals("commonMain", AndroidTarget.sourceSetFor(screen))
+        assertEquals("commonMain", WasmTarget.sourceSetFor(screen))
         // Each entry point is claimed only by its own target.
         assertEquals("jvmMain", DesktopTarget.sourceSetFor(GeneratedFile(ComposeEntryPoints.MAIN_KT, "")))
         assertEquals("androidMain", AndroidTarget.sourceSetFor(GeneratedFile(ComposeEntryPoints.MAIN_ACTIVITY_KT, "")))
         assertEquals("androidMain", AndroidTarget.sourceSetFor(GeneratedFile(AndroidTarget.MANIFEST_XML, "")))
+        assertEquals("wasmJsMain", WasmTarget.sourceSetFor(GeneratedFile(ComposeEntryPoints.MAIN_WASM_KT, "")))
         // A target ignores another target's entry point (routes it to commonMain).
         assertEquals("commonMain", DesktopTarget.sourceSetFor(GeneratedFile(ComposeEntryPoints.MAIN_ACTIVITY_KT, "")))
+        assertEquals("commonMain", AndroidTarget.sourceSetFor(GeneratedFile(ComposeEntryPoints.MAIN_KT, "")))
         assertEquals("desktop", DesktopTarget.id)
         assertEquals("android", AndroidTarget.id)
+        assertEquals("web", WasmTarget.id)
     }
 
     @Test
-    fun `multiplatform project has the expected KMP source-set layout`() {
+    fun `multiplatform project has the expected KMP source-set layout including wasmJs (#373)`() {
         val files = MultiplatformExporter.multiplatformProject(demoProject())
         assertEquals(
             setOf(
@@ -59,6 +63,9 @@ class MultiplatformExporterTest {
                 "src/jvmMain/kotlin/Main.kt",
                 "src/androidMain/kotlin/MainActivity.kt",
                 "src/androidMain/AndroidManifest.xml",
+                // Web (wasmJs) entry point + browser shell page.
+                "src/wasmJsMain/kotlin/Main.kt",
+                "src/wasmJsMain/resources/index.html",
                 // Build config + wrapper.
                 "build.gradle.kts",
                 "settings.gradle.kts",
@@ -86,13 +93,18 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `build script targets desktop and Android and is version-pinned`() {
+    fun `build script targets desktop, Android, and wasmJs and is version-pinned (#373)`() {
         val build = textOf(MultiplatformExporter.multiplatformProject(demoProject()), "build.gradle.kts")
         assertContains(build, "kotlin(\"multiplatform\") version \"${GradleScaffold.KOTLIN_VERSION}\"")
         assertContains(build, "id(\"com.android.application\") version \"${MultiplatformScaffold.AGP_VERSION}\"")
         assertContains(build, "id(\"org.jetbrains.compose\") version \"${GradleScaffold.COMPOSE_VERSION}\"")
         assertContains(build, "jvm()")
         assertContains(build, "androidTarget()")
+        // Phase 4: wasmJs browser target with webpack output name matching the generated index.html.
+        assertContains(build, "wasmJs {")
+        assertContains(build, "browser {")
+        assertContains(build, "outputFileName = \"app.js\"")
+        assertContains(build, "binaries.executable()")
         assertContains(build, "implementation(compose.desktop.currentOs)")
         assertContains(build, "androidx.activity:activity-compose:${MultiplatformScaffold.ACTIVITY_COMPOSE_VERSION}")
         assertContains(build, "compileSdk = ${MultiplatformScaffold.ANDROID_COMPILE_SDK}")
@@ -165,12 +177,13 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `a project with no theme emits no Theme file and entry points use a default MaterialTheme`() {
+    fun `a project with no theme emits no Theme file and all entry points use a default MaterialTheme`() {
         val bare = ProjectCodec.decode(resourceText("/golden/RowBox.vforge")) // empty theme
         val files = MultiplatformExporter.multiplatformProject(bare)
         assertFalse(files.any { it.path == "src/commonMain/kotlin/Theme.kt" })
         assertContains(textOf(files, "src/jvmMain/kotlin/Main.kt"), "MaterialTheme {")
         assertContains(textOf(files, "src/androidMain/kotlin/MainActivity.kt"), "MaterialTheme {")
+        assertContains(textOf(files, "src/wasmJsMain/kotlin/Main.kt"), "MaterialTheme {")
     }
 
     @Test
@@ -218,14 +231,14 @@ class MultiplatformExporterTest {
     }
 
     @Test
-    fun `a navigating project ships the App host in commonMain and renders it from MainActivity (#214)`() {
+    fun `a navigating project ships the App host in commonMain and all entry points render it (#214, #373)`() {
         val nav = ProjectCodec.decode(resourceText("/golden/Navigation.vforge"))
         val files = MultiplatformExporter.multiplatformProject(nav)
-        // The screen-switching host (ADR-039) is emitted to commonMain so both entry points can render it —
-        // without this the generated MainActivity calls App() with no definition and the KMP build fails.
+        // The screen-switching host (ADR-039) is emitted to commonMain so all three entry points can render it.
         assertContains(textOf(files, "src/commonMain/kotlin/App.kt"), "fun App()")
-        // The Android entry point renders the host, not a single screen directly.
+        // Both the Android and Wasm entry points render the host, not a single screen directly.
         assertContains(textOf(files, "src/androidMain/kotlin/MainActivity.kt"), "App()")
+        assertContains(textOf(files, "src/wasmJsMain/kotlin/Main.kt"), "App()")
     }
 
     @Test
@@ -247,5 +260,71 @@ class MultiplatformExporterTest {
         assertContains(readme, "sdk.dir")
         assertContains(readme, "ANDROID_HOME")
         assertContains(readme, "assembleDebug")
+    }
+
+    // --- Phase 4 — Web (Kotlin/Wasm) (#373) ----------------------------------------------------------
+
+    @Test
+    fun `wasmJs entry point uses CanvasBasedWindow and opts in to the experimental API (#373)`() {
+        val main = textOf(MultiplatformExporter.multiplatformProject(demoProject()), "src/wasmJsMain/kotlin/Main.kt")
+        assertContains(main, "import androidx.compose.ui.window.CanvasBasedWindow")
+        assertContains(main, "CanvasBasedWindow(\"Demo\")")
+        // The AppTheme wraps the content (Demo has a theme).
+        assertContains(main, "AppTheme {")
+        assertContains(main, "HomeScreen()")
+        // File-level @OptIn so the generated entry compiles without the caller opting in separately.
+        assertContains(main, "@file:OptIn(ExperimentalComposeUiApi::class)")
+        assertContains(main, "import androidx.compose.ui.ExperimentalComposeUiApi")
+        assertFalse(
+            main.lineSequence().any { it.trimStart().startsWith("public ") },
+            "wasmJs main must omit redundant public",
+        )
+    }
+
+    @Test
+    fun `index html mounts the canvas element that CanvasBasedWindow targets (#373)`() {
+        val html =
+            textOf(MultiplatformExporter.multiplatformProject(demoProject()), "src/wasmJsMain/resources/index.html")
+        // CanvasBasedWindow renders into the element with id "ComposeTarget".
+        assertContains(html, """id="ComposeTarget"""")
+        assertContains(html, "<canvas")
+        // The webpack bundle is referenced by the name configured in build.gradle.kts.
+        assertContains(html, """src="app.js"""")
+        // Title is the project name (XML-escaped).
+        assertContains(html, "<title>Demo</title>")
+    }
+
+    @Test
+    fun `wasmJs entry point uses MaterialTheme for a theme-less project (#373)`() {
+        val bare = ProjectCodec.decode(resourceText("/golden/RowBox.vforge"))
+        val main = textOf(MultiplatformExporter.multiplatformProject(bare), "src/wasmJsMain/kotlin/Main.kt")
+        assertContains(main, "MaterialTheme {")
+        assertFalse("AppTheme" in main, "no AppTheme when the project has no theme")
+    }
+
+    @Test
+    fun `wasmJs preview profiles are in the web browser group with distinct ids (#373)`() {
+        val profiles = WasmTarget.previewProfiles
+        assert(profiles.isNotEmpty())
+        profiles.forEach { p ->
+            assert(p.id.startsWith("web_")) { "profile id must start with web_: ${p.id}" }
+            assert(p.group == "Web Browser") { "profile group must be Web Browser: ${p.group}" }
+            assert(p.density == 1f) { "browser profiles have density 1: ${p.id}" }
+        }
+        // All three targets are included in COMPOSE_PREVIEW_PROFILES.
+        val allIds = COMPOSE_PREVIEW_PROFILES.map { it.id }.toSet()
+        assert(profiles.all { it.id in allIds }) { "WasmTarget profiles must appear in COMPOSE_PREVIEW_PROFILES" }
+        assert(DesktopTarget.previewProfiles.all { it.id in allIds })
+        assert(AndroidTarget.previewProfiles.all { it.id in allIds })
+    }
+
+    @Test
+    fun `the README documents the web run command (#373)`() {
+        val readme = textOf(MultiplatformExporter.multiplatformProject(demoProject()), "README.md")
+        assertContains(readme, "wasmJsBrowserDevelopmentRun")
+        assertContains(readme, "wasmJsBrowserProductionWebpack")
+        // Web section explains the Node.js requirement and the experimental caveat.
+        assertContains(readme, "Node.js")
+        assertContains(readme, "experimental")
     }
 }
